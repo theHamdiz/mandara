@@ -839,9 +839,9 @@ pub enum FontRole {
     Display,
     /// Interface face (Inter).
     Ui,
-    /// Arabic face (Cairo).
+    /// Arabic face (Alexandria by default).
     Arabic,
-    /// Monospace face (JetBrains Mono).
+    /// Monospace face (CaskaydiaCove Nerd Font Mono by default).
     Mono,
     /// A Qur'anic Naskh for scripture (Amiri Quran, then Amiri, Noto Naskh
     /// Arabic or the Arabic face).

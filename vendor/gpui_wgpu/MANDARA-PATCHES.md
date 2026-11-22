@@ -413,6 +413,37 @@ the original shader. Pixel tests cover the legacy transport, clipping,
 atlas uploads and all wallpaper transitions with storage and compute
 extensions disabled; the atlas tests request the same limits as the renderer.
 
+## 19. Device-loss recovery without sleeping (`wgpu_renderer.rs`)
+
+`WgpuRenderer::recover` used to `thread::sleep` 350 ms on the window's event
+loop and had no pacing: with the GPU gone, every frame re-ran the instance and
+adapter enumeration, blocked Wayland dispatch, and re-armed another retry.
+It now never sleeps and returns a `Recovery`: `Recovered`, or `RetryIn(delay)`
+for the caller to wait on a timer. The first attempt after a loss waits 350 ms
+(the old sleep) for the driver; every failure doubles the wait up to 10 s
+(`RecoveryPacing`), so a GPU that stays away costs one attempt per 10 s and
+one that comes back after suspend / resume is still picked up. Windows that
+adopt a context another window already recovered are not delayed.
+
+## 20. Releasing idle GPU memory without a frame (`wgpu_renderer.rs`)
+
+Patches 1 and 16 freed the path textures and the transition resources only
+inside a draw, so a surface whose last frame used them and then drew nothing
+kept them (about 60 MB of path texture at 4K). `WgpuRenderer::idle_release_in`
+says how long until something is due (paths: 1.5 s after the last frame that
+drew any; transitions: `IDLE_RELEASE` after the last use) and
+`release_idle_resources` frees what is due without drawing. The window arms a
+timer after each draw; the draw-time release stays as it was.
+
+## 21. Transition resources outlive path texture changes (`wgpu_renderer.rs`)
+
+`invalidate_intermediate_textures` (path textures growing, shrinking,
+expiring, a resize) also dropped the transition pipeline, noise texture and
+uniform buffer, so a window drawing both paths and a transition rebuilt them
+over and over. It no longer touches them; `release_transitions` clears them
+where they really go stale: a replaced surface, a GPU error that clears the
+atlas, and the idle release.
+
 ## Tests
 
 * New `paths_render_through_bounding_box_textures` (headless renderer): a solid
@@ -426,6 +457,11 @@ extensions disabled; the atlas tests request the same limits as the renderer.
   1024² first texture).
 * New `hardware_on_any_backend_comes_before_software`: the passes are
   hardware then software, and recovery keeps refusing software.
+* New `recovery_waits_for_the_driver_then_backs_off_to_a_cap` and
+  `idle_remaining_counts_down_and_stops_at_zero` (pure), and, in the headless
+  transition tests, that path texture changes keep the transition resources
+  (patch 21) and that `release_idle_resources` frees them without a frame
+  (patch 20).
 * All crate tests pass (65 with patch 17), including naga validation of every shader variant
   and the updated WebGL record strides and fixed quad decoder.
   The cosmic-text tests `include_bytes!` Zed's `assets/`, so run them from a

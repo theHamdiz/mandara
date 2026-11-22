@@ -149,6 +149,17 @@ const STATUS_TEXT_PX: f32 = 13.0;
 const LOADER_TURN: f32 = 4.0;
 const LOADER_BREATH: f32 = 3.0;
 const LOADER_REST: f32 = 0.8;
+/// Avatars are decoded to this many pixels square (sharp at the largest
+/// avatar the designer draws, on a 2× display).
+const AVATAR_PX: u32 = 256;
+/// How often the idle login screen redraws: once it went idle (no input for
+/// `motion.idle_seconds`) with no clip playing and nothing springing, only
+/// slow ambient motion is left (orbs drifting over 30 s or more, the
+/// avatar's turn at 6° a second, the breathing ring), and the clock. Ten
+/// frames a second show all of it smoothly, where every refresh (60 to
+/// 144 Hz) would keep the GPU and CPU busy for as long as the screen sits
+/// unattended. Any input wakes it at once.
+const IDLE_FRAME_INTERVAL: Duration = Duration::from_millis(100);
 /// A dynamic-colour change cross-fades the palette over this long (OKLCH).
 const PALETTE_FADE: Duration = Duration::from_millis(450);
 /// The idle scalloped avatar turns this far per second (none while still).
@@ -186,6 +197,31 @@ const M3_FIELD_ALPHA: f32 = 0.96;
 /// The tonal fill of other controls in the filled style (keyboard pill,
 /// soft buttons), alpha.
 const M3_TONAL_ALPHA: f32 = 0.9;
+
+/// Configured font family names as shared strings, each made once: the view
+/// asks for them every frame, and a family is a name that never changes
+/// while it is configured.
+#[derive(Default)]
+struct Families(RefCell<HashMap<String, SharedString>>);
+
+impl Families {
+    fn get(&self, name: &str) -> SharedString {
+        self.0.borrow_mut().entry(name.to_string()).or_insert_with_key(|name| SharedString::from(name.clone())).clone()
+    }
+}
+
+/// The command for a login when no session is installed: the user's own
+/// login shell (what `/etc/passwd` says, not the greeter's `$SHELL`, which
+/// is the greeter account's), or `/bin/sh` when they have none that can log
+/// in or aren't a listed user.
+fn fallback_session_command(user: Option<&crate::users::User>) -> Vec<String> {
+    const DEFAULT_SHELL: &str = "/bin/sh";
+    let shell = user
+        .map(|u| u.shell.trim())
+        .filter(|s| s.starts_with('/') && !s.ends_with("/nologin") && !s.ends_with("/false"))
+        .unwrap_or(DEFAULT_SHELL);
+    vec![shell.to_string(), "-l".to_string()]
+}
 
 /// The friendly wrong-password messages.
 fn playful_lines() -> [String; 3] {
@@ -363,6 +399,12 @@ pub struct GreeterView {
     clock_second: i64,
     /// One visible-preview deadline; dropped when hidden or animating.
     preview_wake: Option<(bool, gpui::Task<()>)>,
+    /// The next redraw of the idle login screen (see [`IDLE_FRAME_INTERVAL`]);
+    /// dropped as soon as anything needs every frame again.
+    idle_wake: Option<gpui::Task<()>>,
+    families: Families,
+    /// The status lines the glyph warm-up draws, made once.
+    warm_lines: std::cell::OnceCell<Vec<SharedString>>,
     /// Formatted date and the (day, pattern, language) it was made for.
     date_text: Option<((chrono::NaiveDate, String, &'static str), SharedString)>,
     /// Keyboard layout label and the (configured, GPUI) ids it came from.
@@ -403,6 +445,8 @@ pub struct GreeterView {
     last_key: Instant,
     last_escape: Option<Instant>,
     toast: Option<(String, Instant)>,
+    /// A power action is waiting for logind's answer (no second one meanwhile).
+    power_pending: bool,
     exit: bool,
     stats_at: Instant,
     /// Frame pacing (logged by the demo, or with `MANDARA_FRAME_STATS=1`).
@@ -643,8 +687,8 @@ impl GreeterView {
         match AuthWorker::spawn(demo) {
             Ok((worker, events)) => {
                 cx.spawn(async move |this, cx| {
-                    while let Ok(ev) = events.recv().await {
-                        if this.update(cx, |this, cx| this.on_auth(ev, cx)).is_err() {
+                    while let Ok((attempt, ev)) = events.recv().await {
+                        if this.update(cx, |this, cx| this.on_auth(attempt, ev, cx)).is_err() {
                             break;
                         }
                     }
@@ -691,10 +735,15 @@ impl GreeterView {
         if config.user.list == UserList::Manual {
             users.clear();
         }
-        let users: Vec<UserEntry> = users
-            .into_iter()
-            .map(|u| UserEntry { avatar: if config.user.avatar_source == AvatarSource::Auto { load_avatar(&u, 256) } else { None }, user: u })
-            .collect();
+        // Avatars are decoded off the UI thread once the view exists (a
+        // user's picture is untrusted input of any size): the monogram shows
+        // until a picture arrives.
+        let avatars: Vec<(String, gpui::Task<Option<Arc<RenderImage>>>)> = if config.user.avatar_source == AvatarSource::Auto {
+            users.iter().cloned().map(|u| (u.name.clone(), cx.background_executor().spawn(async move { load_avatar(&u, AVATAR_PX) }))).collect()
+        } else {
+            Vec::new()
+        };
+        let users: Vec<UserEntry> = users.into_iter().map(|user| UserEntry { avatar: None, user }).collect();
         let mut sessions = list_sessions(lang.posix());
         if !config.session.x11 {
             sessions.retain(|s| s.kind == SessionKind::Wayland);
@@ -748,6 +797,9 @@ impl GreeterView {
             first_frame_at: None,
             clock_second: i64::MIN,
             preview_wake: None,
+            idle_wake: None,
+            families: Families::default(),
+            warm_lines: std::cell::OnceCell::new(),
             date_text: None,
             kb_layout: None,
             telemetry: None,
@@ -776,6 +828,7 @@ impl GreeterView {
             last_key: Instant::now() - LONG_AGO,
             last_escape: None,
             toast: None,
+            power_pending: false,
             exit: false,
             stats_at: Instant::now(),
             pacing: crate::pacing::Pacing::new(),
@@ -793,6 +846,23 @@ impl GreeterView {
         };
         this.started = Instant::now();
         this.follow_user_wallpaper();
+        if !avatars.is_empty() {
+            cx.spawn(async move |this, cx| {
+                for (name, decoding) in avatars {
+                    let picture = decoding.await;
+                    let shown = this.update(cx, |this, cx| {
+                        if let Some(entry) = this.users.iter_mut().find(|e| e.user.name == name) {
+                            entry.avatar = picture;
+                        }
+                        cx.notify();
+                    });
+                    if shown.is_err() {
+                        break;
+                    }
+                }
+            })
+            .detach();
+        }
         this
     }
 
@@ -1115,7 +1185,14 @@ impl GreeterView {
         cx.notify();
     }
 
-    fn on_auth(&mut self, ev: AuthEvent, cx: &mut Context<Self>) {
+    /// Handles the worker's answer to a command of `attempt`. After Escape
+    /// (or choosing another user) the answer to the abandoned attempt can
+    /// still arrive; it is dropped, so it can't put up a stale prompt, error
+    /// or, worst, start a session the person walked away from.
+    fn on_auth(&mut self, attempt: u64, ev: AuthEvent, cx: &mut Context<Self>) {
+        if !self.auth.as_ref().is_some_and(|a| a.is_current(attempt)) {
+            return;
+        }
         let notes_status = |notes: &Notes| -> Option<Status> {
             notes.errors.last().map(|e| Status::Error(e.clone())).or_else(|| notes.info.last().map(|i| Status::Info(i.clone())))
         };
@@ -1126,7 +1203,11 @@ impl GreeterView {
                 }
                 let (cmd, env) = match self.sessions.get(self.session_ix) {
                     Some(s) => (s.command(), s.env()),
-                    None => (vec![std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into()), "-l".into()], Vec::new()),
+                    None => {
+                        let name = self.username();
+                        let user = name.and_then(|n| self.users.iter().find(|u| u.user.name == n)).map(|u| &u.user);
+                        (fallback_session_command(user), Vec::new())
+                    }
                 };
                 if let Some(auth) = &self.auth {
                     auth.send(AuthCommand::Start { cmd, env });
@@ -1219,13 +1300,27 @@ impl GreeterView {
     }
 
     fn power(&mut self, action: PowerAction, cx: &mut Context<Self>) {
-        if self.is_preview() {
+        if self.is_preview() || self.power_pending {
             return;
         }
-        if self.demo() {
-            self.toast = Some((tl("Power actions are disabled in the demo"), Instant::now()));
-        } else if let Err(e) = action.run(false) {
-            self.toast = Some((e, Instant::now()));
+        match action.start(self.demo()) {
+            Ok(done) => {
+                // logind / polkit may take a while to answer: the screen
+                // keeps running, and a refusal shows up as a toast.
+                self.power_pending = true;
+                cx.spawn(async move |this, cx| {
+                    let result = done.recv().await.unwrap_or_else(|_| Err("power thread crashed".to_string()));
+                    let _ = this.update(cx, |this, cx| {
+                        this.power_pending = false;
+                        if let Err(e) = result {
+                            this.toast = Some((e, Instant::now()));
+                        }
+                        cx.notify();
+                    });
+                })
+                .detach();
+            }
+            Err(e) => self.toast = Some((e, Instant::now())),
         }
         cx.notify();
     }
@@ -1652,8 +1747,8 @@ impl GreeterView {
         // Status lines appear mid-animation (shake + flash on a wrong
         // password), so their glyphs are rasterized up front too.
         let status_k = f.u * self.config.placement(Element::Password).scale;
-        let mut status = div().font_family(f.ui_font.clone()).text_size(px(STATUS_TEXT_PX * status_k)).children(playful_lines());
-        status = status.child(tl("Caps Lock is on"));
+        let lines = self.warm_lines.get_or_init(|| playful_lines().into_iter().chain([tl("Caps Lock is on")]).map(SharedString::from).collect());
+        let status = div().font_family(f.ui_font.clone()).text_size(px(STATUS_TEXT_PX * status_k)).children(lines.iter().cloned());
         Some(
             div()
                 .absolute()
@@ -1678,7 +1773,8 @@ impl GreeterView {
     /// every frame on the login screen and in a visible Studio preview,
     /// where the page around it is cached so a frame costs only the
     /// preview; nothing while the preview is scrolled out of view (moving
-    /// it back re-renders it, which resumes).
+    /// it back re-renders it, which resumes). The one exception is the idle
+    /// login screen, which redraws on a slow timer ([`IDLE_FRAME_INTERVAL`]).
     ///
     /// The preview holds still between changes: it asks for frames only
     /// while something it shows is moving (a Try-it moment, an edit's
@@ -1705,7 +1801,30 @@ impl GreeterView {
             return;
         }
         self.preview_wake = None;
+        if self.idle_calm(Instant::now()) {
+            if self.idle_wake.is_none() {
+                self.idle_wake = Some(cx.spawn_in(window, async move |this, cx| {
+                    cx.background_executor().timer(IDLE_FRAME_INTERVAL).await;
+                    let _ = this.update_in(cx, |this, _, cx| {
+                        this.idle_wake = None;
+                        cx.notify();
+                    });
+                }));
+            }
+            // Restart the clock cleanly after the pause (no catch-up jump).
+            self.clock.idle();
+            return;
+        }
+        self.idle_wake = None;
         window.request_animation_frame();
+    }
+
+    /// Whether the real login screen is idle with only slow ambient motion
+    /// left, so a timer can drive it instead of every refresh: gone idle,
+    /// nothing springing, fading or rolling, no clip playing. The demo keeps
+    /// every frame (its frame statistics measure them).
+    fn idle_calm(&self, now: Instant) -> bool {
+        matches!(self.mode, Mode::Live { demo: false }) && !self.awake && !self.preview_moving(now) && !self.background.has_video()
     }
 
     /// Preview only: whether anything on it is still moving.
@@ -1976,14 +2095,14 @@ impl GreeterView {
         match c.font.trim() {
             "" if c.face == ClockFace::Ruler => f.mono_font.clone(),
             "" => f.display_font.clone(),
-            family => SharedString::from(family.to_string()),
+            family => self.families.get(family),
         }
     }
 
     fn date_el(&self, f: &Frame, k: f32) -> AnyElement {
         let d = &self.config.date;
         let text = self.date_text.as_ref().map(|(_, t)| t.clone()).unwrap_or_default();
-        let font = if d.font.trim().is_empty() { f.ui_font.clone() } else { SharedString::from(d.font.clone()) };
+        let font = if d.font.trim().is_empty() { f.ui_font.clone() } else { self.families.get(&d.font) };
         div().font_family(font).text_size(px(d.size * k)).font_weight(weight(d.weight)).text_color(f.ground.opacity(d.opacity)).child(shadowed(text, 1.5 * k, 0.3)).into_any_element()
     }
 
@@ -3113,7 +3232,7 @@ impl Render for GreeterView {
             ui_font: match self.config.font.trim() {
                 "" if rtl => fonts.arabic.clone(),
                 "" => fonts.ui.clone(),
-                family => SharedString::from(family.to_string()),
+                family => self.families.get(family),
             },
             display_font: fonts.display.clone(),
             mono_font: fonts.mono.clone(),
@@ -3155,7 +3274,12 @@ impl Render for GreeterView {
                 let moved = this.last_pointer.is_some_and(|lp| (f32::from(lp.x - e.position.x)).abs() + (f32::from(lp.y - e.position.y)).abs() > 3.0);
                 this.last_pointer = Some(e.position);
                 if moved {
+                    let was_awake = this.awake;
                     this.activity();
+                    if !was_awake {
+                        // Idle redraws come from a slow timer: wake now.
+                        cx.notify();
+                    }
                 }
                 let (w, h) = (vw.max(1.0), vh.max(1.0));
                 this.pointer.0.set_target((f32::from(e.position.x) / w * 2.0 - 1.0).clamp(-1.0, 1.0));
@@ -3511,6 +3635,25 @@ mod tests {
         // The middle of the screen.
         let (a, ..) = snap_placement((400.0, 250.0, 160.0, 40.0), (960.0, 540.0), 0.5);
         assert_eq!(a, Anchor::Center);
+    }
+
+    #[test]
+    fn the_fallback_session_is_the_users_own_shell() {
+        let user = |shell: &str| crate::users::User { name: "alice".into(), display: "Alice".into(), uid: 1000, home: "/home/alice".into(), shell: shell.into() };
+        assert_eq!(fallback_session_command(Some(&user("/usr/bin/fish"))), ["/usr/bin/fish", "-l"]);
+        for unusable in ["", "fish", "/usr/sbin/nologin", "/bin/false"] {
+            assert_eq!(fallback_session_command(Some(&user(unusable))), ["/bin/sh", "-l"], "{unusable:?}");
+        }
+        assert_eq!(fallback_session_command(None), ["/bin/sh", "-l"]);
+    }
+
+    #[test]
+    fn families_are_made_once() {
+        let f = Families::default();
+        let a = f.get("Inter");
+        assert_eq!(a, f.get("Inter"));
+        assert_ne!(a, f.get("Fira Sans"));
+        assert_eq!(f.0.borrow().len(), 2);
     }
 
     #[test]

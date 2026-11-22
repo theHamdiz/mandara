@@ -601,14 +601,20 @@ fn predictor_transform(px: &[u32], w: usize, h: usize) -> (Vec<u32>, Vec<u32>, u
 /// Largest side a VP8L image may have.
 const MAX_SIDE: usize = 16384;
 
-/// The image is empty, larger than VP8L allows on a side, or its buffer
-/// doesn't match its size.
+/// Largest pixel count the encoder accepts: the 8K area, 7680 × 4320. The
+/// encoder holds the ARGB buffer (4 B per pixel), the matcher's chain
+/// (8 B), the residuals (4 B) and the tokens at once, about 1 GiB at this
+/// size; 16384 × 16384 would need about 5 GiB.
+const MAX_PIXELS: usize = 7680 * 4320;
+
+/// The image is empty, larger than VP8L allows on a side or in total, or
+/// its buffer doesn't match its size.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SizeError;
 
 impl std::fmt::Display for SizeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "WebP images must be 1 to {MAX_SIDE} pixels on each side")
+        write!(f, "WebP images must be 1 to {MAX_SIDE} pixels on each side and at most {MAX_PIXELS} pixels in total")
     }
 }
 
@@ -632,7 +638,7 @@ pub fn encode_rgba(rgba: &[u8], width: u32, height: u32, periods: &[usize]) -> R
 
 fn check_size(width: u32, height: u32, len: usize, channels: usize) -> Result<(usize, usize), SizeError> {
     let (w, h) = (width as usize, height as usize);
-    if w == 0 || h == 0 || w > MAX_SIDE || h > MAX_SIDE || len != w * h * channels {
+    if w == 0 || h == 0 || w > MAX_SIDE || h > MAX_SIDE || w * h > MAX_PIXELS || len != w * h * channels {
         return Err(SizeError);
     }
     Ok((w, h))
@@ -680,6 +686,21 @@ fn encode_argb(px: Vec<u32>, w: usize, h: usize, alpha: bool, periods: &[usize])
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pixel_budget_is_checked_before_allocating() {
+        // Over budget fails on size alone, with no buffer to match.
+        assert_eq!(encode_rgb(&[], 16384, 16384, &[]), Err(SizeError));
+        assert_eq!(encode_rgba(&[], 7681, 4320, &[]), Err(SizeError));
+        // At the budget the size check passes (the buffer length is then what fails).
+        assert!(check_size(7680, 4320, 7680 * 4320 * 3, 3).is_ok());
+        assert!(check_size(7681, 4320, 7681 * 4320 * 3, 3).is_err());
+        // Exactly MAX_PIXELS on a long thin panorama; one more row is over budget.
+        assert!(check_size(16384, 2025, 16384 * 2025 * 3, 3).is_ok());
+        assert!(check_size(16384, 2048, 16384 * 2048 * 3, 3).is_err());
+        // The side limit still applies below the area limit.
+        assert!(check_size(16385, 1, 16385 * 3, 3).is_err());
+    }
 
     #[test]
     fn rgba_round_trips_exactly() {

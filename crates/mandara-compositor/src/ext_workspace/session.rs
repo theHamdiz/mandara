@@ -7,7 +7,6 @@
 
 use std::collections::BTreeMap;
 use std::io::{PipeReader, Read as _};
-use std::time::Instant;
 
 use anyhow::{Context as _, Result, anyhow, bail};
 use wayland_client::globals::{GlobalListContents, registry_queue_init};
@@ -307,33 +306,12 @@ impl Session {
 /// A round trip bounded by [`crate::REQUEST_TIMEOUT`]: a stalled compositor
 /// cannot hold the caller.
 fn roundtrip(conn: &Connection, queue: &mut EventQueue<Wl>, wl: &mut Wl) -> Result<()> {
-    use rustix::event::{PollFd, PollFlags, Timespec, poll};
-    let synced = wl.synced;
-    conn.display().sync(&queue.handle(), ());
-    let deadline = Instant::now() + crate::REQUEST_TIMEOUT;
-    loop {
-        queue.dispatch_pending(wl)?;
-        if wl.synced != synced {
-            return Ok(());
-        }
-        conn.flush()?;
-        let Some(guard) = queue.prepare_read() else { continue };
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        if remaining.is_zero() {
-            bail!("{}", mandara_i18n::t("The compositor did not respond in time"));
-        }
-        let timeout = Timespec { tv_sec: remaining.as_secs() as i64, tv_nsec: i64::from(remaining.subsec_nanos()) };
-        let fd = guard.connection_fd();
-        let mut fds = [PollFd::new(&fd, PollFlags::IN)];
-        match poll(&mut fds, Some(&timeout)) {
-            Ok(0) => bail!("{}", mandara_i18n::t("The compositor did not respond in time")),
-            Ok(_) if fds[0].revents().intersects(PollFlags::ERR | PollFlags::HUP | PollFlags::NVAL) => bail!("{}", mandara_i18n::t("The compositor connection closed")),
-            Ok(_) => {
-                guard.read()?;
-            }
-            Err(rustix::io::Errno::INTR) => continue,
-            Err(err) => return Err(err.into()),
-        }
+    crate::roundtrip::roundtrip(conn, queue, wl)
+}
+
+impl crate::roundtrip::Synced for Wl {
+    fn synced(&self) -> u64 {
+        self.synced
     }
 }
 

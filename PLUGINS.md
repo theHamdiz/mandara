@@ -135,7 +135,7 @@ description = "Tonight's moon: phase, illumination and days to the next full moo
 author = "Your Name"
 version = "0.1.0"            # default "0.0.0"
 zone = "right"               # default bar zone: left | center | right
-entry = "plugin.wasm"        # the component, relative to this folder (default)
+entry = "plugin.wasm"        # the component, relative to this folder (default; no absolute path, no `..`)
 permissions = []             # capabilities it asks for (see Capabilities)
 homepage = "https://github.com/you/mandara-moon-phase"   # "Homepage" button in Studio
 
@@ -1013,7 +1013,8 @@ SHA-256s, plus the patch from the previous release), the patch
 file but `plugin.wasm`, so the manifest, icons and locales stay current)
 and `SHA256SUMS`. `version` in `plugin.toml` names the versions. Releases
 without these still update: Mandara downloads the archive (checked against
-`SHA256SUMS` when present). To try it locally, run `mandara-delta plugin
+`SHA256SUMS` when present; a `SHA256SUMS` that doesn't list the archive is
+refused). To try it locally, run `mandara-delta plugin
 --new new.mandara.tar.gz --old old.mandara.tar.gz --out delta` (or `cargo
 xtask plugin-delta` in Mandara's repository).
 

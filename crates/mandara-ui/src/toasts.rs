@@ -78,6 +78,8 @@ const MEASURE_EPSILON_PX: f32 = 0.5;
 const SIZE_TOLERANCE_PX: f32 = 2.0;
 /// Slack added to expiry wake-ups so the toast is due when we wake.
 const WAKE_SLACK: Duration = Duration::from_millis(30);
+/// A sent `Expire` that changed nothing is sent again after this long.
+const EXPIRE_RESEND: Duration = Duration::from_secs(2);
 const PRESENCE_SPRING: SpringConfig = SpringConfig::new(320.0, 26.0, 1.0);
 /// A speech bubble pops in with a little overshoot.
 const BUBBLE_PRESENCE_SPRING: SpringConfig = SpringConfig::new(360.0, 17.0, 1.0);
@@ -413,7 +415,8 @@ struct Item {
     /// Sideways offset while (or after) it is swiped.
     swipe: Swipe,
     leaving: bool,
-    expired: bool,
+    /// When `Expire` was last sent for it.
+    expired: Option<Instant>,
 }
 
 impl Item {
@@ -426,7 +429,22 @@ impl Item {
         slot.set_instant(reduce);
         let mut swipe = Swipe::default();
         swipe.motion.set_instant(reduce);
-        Item { n, first_shown: now, paused: Duration::ZERO, hovered_since: None, presence, slot, swipe, leaving: false, expired: false }
+        Item { n, first_shown: now, paused: Duration::ZERO, hovered_since: None, presence, slot, swipe, leaving: false, expired: None }
+    }
+
+    /// Whether `n` is new content for this toast (a replacement), not just
+    /// the same notification seen again (read / popup flags changing).
+    fn is_update(&self, n: &Notification) -> bool {
+        let old = &self.n;
+        old.timestamp != n.timestamp || old.summary != n.summary || old.body != n.body || old.icon != n.icon || old.progress != n.progress || old.repeats != n.repeats || old.display_ms != n.display_ms
+    }
+
+    /// Starts the countdown over.
+    fn restart(&mut self, now: Instant) {
+        self.first_shown = now;
+        self.paused = Duration::ZERO;
+        self.hovered_since = self.hovered_since.map(|_| now);
+        self.expired = None;
     }
 
     /// The pointer left: the countdown runs again.
@@ -459,6 +477,11 @@ impl Item {
     }
 
     fn due(&self, now: Instant) -> Option<Instant> {
+        if let Some(sent) = self.expired {
+            // `Expire` is on its way; only look again (once) in case the
+            // service's queue dropped it.
+            return (!self.leaving).then(|| sent + EXPIRE_RESEND);
+        }
         if self.n.display_ms == 0 || self.hovered_since.is_some() || self.leaving {
             return None;
         }
@@ -491,11 +514,16 @@ impl ToastView {
         for item in &mut self.items {
             match popups.iter().find(|n| n.id == item.n.id) {
                 Some(n) => {
+                    if item.is_update(n) {
+                        // Replaced in place (`replaces_id`: volume, progress,
+                        // now playing): a fresh toast with a fresh countdown.
+                        item.restart(now);
+                    }
                     item.n = n.clone();
                     if item.leaving {
                         // Came back (e.g. replaced while leaving).
                         item.leaving = false;
-                        item.expired = false;
+                        item.expired = None;
                         item.presence.set_target(1.0);
                     }
                 }
@@ -545,8 +573,12 @@ impl Render for ToastView {
 
         // Expire due toasts (once each).
         for item in &mut self.items {
-            if !item.leaving && !item.expired && item.elapsed_fraction(now).is_some_and(|f| f >= 1.0) {
-                item.expired = true;
+            let lapsed = match item.expired {
+                None => item.elapsed_fraction(now).is_some_and(|f| f >= 1.0),
+                Some(sent) => now.saturating_duration_since(sent) >= EXPIRE_RESEND,
+            };
+            if !item.leaving && lapsed {
+                item.expired = Some(now);
                 crate::plugins::notifications::send(cx, NotificationCommand::Expire(item.n.id));
             }
         }
@@ -864,7 +896,9 @@ impl Render for ToastView {
                                     let item = v.items.iter_mut().find(|i| i.n.id == id);
                                     let outcome = item.and_then(|i| {
                                         let away = i.release(w);
-                                        i.expired |= away == Some(true);
+                                        if away == Some(true) {
+                                            i.expired = Some(Instant::now());
+                                        }
                                         away
                                     });
                                     if outcome == Some(true) {
@@ -1007,6 +1041,22 @@ mod tests {
         // A short toast keeps its tail inside its height.
         let t = Tail { right: true, bottom: false, scale: 1.0 };
         assert_eq!(t.origin(360.0, 20.0).1, 0.0);
+    }
+
+    #[test]
+    fn a_replacement_restarts_the_countdown_and_an_expired_toast_stops_asking() {
+        let t0 = Instant::now();
+        let note = |body: &str| Notification { summary: "Volume".into(), body: body.into(), display_ms: 1000, ..Notification::default() };
+        let mut item = Item::new(note("40%"), t0, true);
+        assert!(!item.is_update(&note("40%")), "the same content again is no update");
+        assert!(item.is_update(&note("50%")), "new content replaces");
+        // Late in its life the toast expires; the replacement revives it.
+        let late = t0 + Duration::from_millis(900);
+        item.expired = Some(late);
+        assert_eq!(item.due(late), Some(late + EXPIRE_RESEND), "an expired toast only re-checks once");
+        item.restart(late);
+        assert!(item.expired.is_none());
+        assert_eq!(item.due(late), Some(late + Duration::from_millis(1000)), "a full display time again");
     }
 
     #[test]

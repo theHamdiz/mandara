@@ -6,6 +6,258 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Default fonts and opt-in system font sync, plus robustness and performance fixes across the shell, greeter, Studio, compositor drivers and vendored GPUI (Wayland buffer scale, lock screen, config safety, services, idle wake-ups, memory).
+
+### New
+
+- **Default fonts match Studio's Families.** New installs use *Inter*,
+  *Alexandria* (UI display and Arabic) and *CaskaydiaCove Nerd Font Mono*.
+  When that Nerd Font is missing, the shell substitutes another installed
+  Nerd Font mono (or Cascadia / JetBrains Mono). Studio → Maintenance →
+  Mandara fonts warns and can Download / install CaskaydiaCove from the
+  official Nerd Fonts archive into `~/.local/share/fonts/mandara`, then
+  refreshes the font cache.
+
+- **System font sync (opt-in).** Studio → Typography → System fonts can push
+  Mandara's interface and monospace faces to fontconfig (and browsers that
+  follow it), GTK, Qt and KDE, with a master switch and per-target toggles.
+  Off by default; turning a target off restores what Mandara changed.
+
+### Fixed
+
+- Batch-integration review follow-ups: Studio sees monitors again without the
+  shell's overlay map; dim overlays clear after an unplug; `sudo mandara
+  greeter apply-config` accepts public root-owned drafts; a system CaskaydiaCove
+  counts as installed; Qt font sync writes a quoted INI string; audio reconnects
+  as soon as Pulse is back; turning clipboard persistence off deletes the file
+  immediately; font-sync ownership survives unreadable records; polkit, sleep
+  inhibitors, tray registration and notification expiry handle the edge cases
+  CodeRabbit flagged on the review stages. Boot-theme and marketplace installs
+  keep previous versions when a rollback fails; install temp dirs are 0700;
+  GRUB menus publish beside their resolved target; confined tree copies check
+  ownership on every file; FreeBSD builds gate Linux `openat2`; wallpaper size
+  tests match the pixel budget.
+
+- **The bar no longer vanishes for good on Umbriel and other wlroots
+  compositors.** A window with a half-pixel size at a 2× buffer scale made
+  the compositor drop Mandara's connection, taking the bar, wallpaper and
+  lock screen with it. Sizes are now whole pixels, and if the connection is
+  ever lost the shell exits so its supervisor restarts it, instead of
+  spinning at full CPU and flooding the journal.
+
+- Log lines no longer flash on the login screen's console between signing in
+  and the desktop appearing. When Mandara runs on a text console its logs go
+  to the journal instead (`journalctl -t mandara`), and the console is
+  cleared once the session starts. Terminals and pipes still get logs on
+  stderr.
+
+- A tray app, Bluetooth device or sound server that stops answering no longer
+  freezes the tray, the Bluetooth panel or the volume controls: every call has
+  a time limit, and lost connections (Bluetooth agent, polkit agent, sleep and
+  lock watchers, audio, privacy indicators, clipboard history) reconnect with
+  growing delays instead of staying dead or retrying in a tight loop.
+
+- Bluetooth pairing prompts for PIN or passkey display update in place, only
+  an explicit *Accept* confirms a pairing, and the agent re-registers itself
+  when BlueZ restarts. The same goes for the polkit password prompt.
+
+- Opening a link or a drive no longer blocks the shell, and a lock request
+  with no lock screen listening reports an error instead of doing nothing.
+
+- Notification images and the clipboard history are stored private to you,
+  written less often, and old notification images are cleaned up.
+
+- Notifications that expire on their own are now reported as expired to the
+  app that sent them.
+
+- Mandara idles quieter: the power and sleep watchers no longer spin or poll,
+  Bluetooth no longer rebuilds its state on every scan result, and the
+  notification housekeeper sleeps until it has something to do.
+
+- Playing audio in the background no longer stops the screen from locking: with *Stay awake while media plays* on, media holds back turning the screens off and sleeping, but the session still locks.
+
+- A notification that replaces another one (volume, brightness, progress, now playing) stays for its full time instead of vanishing early.
+
+- The fade overlay no longer stays up on compositors that cannot turn screens off, and a fade is cancelled when something starts holding the idle stages back.
+
+- If the idle watcher cannot connect to the compositor, it retries with a growing delay instead of reconnecting on every shell update.
+
+- Links in notes, feeds and clipboard previews open only for `http`, `https` and `mailto` addresses, and opening one no longer freezes the shell while the desktop portal answers. Files with `#`, `?`, `%` or spaces in their name open from the launcher.
+
+- A video wallpaper whose decoder failed once tries again after 30 seconds instead of staying on its poster until you change it. Notification icons that point at a file that is written a moment later now show up. Calendar reloads that overlap no longer let an older result overwrite a newer one. Files dropped on a stash shelf are readable only by you.
+
+- A plugin that answers every reply with a new request is slowed down instead of waking the shell 125 times a second.
+
+- **A frozen shell restarts by itself.** When Mandara is started by its supervisor (the plain `mandara` command, which is what your session runs), it now checks every few seconds that the shell's interface still answers. A shell that spins at full CPU or deadlocks is killed after about 30 seconds and restarted like after a crash, instead of leaving you with a dead bar. Turning off *Restart automatically after a crash* in Studio → General leaves a frozen shell alone.
+
+- Stopping the supervisor (log out, `systemctl stop`, Ctrl-C) no longer hangs on a shell that ignores `SIGTERM`: it is killed after 8 seconds. A stop that arrives while the supervisor is waiting to restart a crashed shell now ends it right away instead of starting one more shell first, and a shell that asks for a restart on every start is slowed down instead of respawning in a tight loop.
+
+- A stuck shell can no longer pile up threads from `mandara msg` or Studio: the control socket serves at most 32 requests at once, refuses oversized or too-slow requests, answers "too busy" or "did not answer in time" instead of waiting forever, and is only accessible to you.
+
+- A second `mandara studio` now brings the open Studio forward even when another client is stuck on its socket, and two Studios started together no longer race for it.
+
+- The idle shell no longer wakes up every 30 seconds to compact its memory unless something freed a meaningful amount of it.
+
+- A wallpaper file name or a community theme name can no longer smuggle extra lines into the app themes Mandara writes (kitty, Neovim, GTK, Qt, Kvantum, Firefox, Vesktop and the rest): line breaks and comment endings in the name are neutralised, so a downloaded wallpaper cannot make another app run code.
+
+- App themes keep a config file's Windows (CRLF) line endings instead of rewriting the whole file on every theme change, and backups of your configs are never written through a symlink someone placed at the backup path.
+
+- Light-only themes no longer get dark-mode OLED black applied when the shell asks for a dark palette, and theme lookups (login screen, menus) re-read your theme folder only when its files change, so they cost far less.
+
+- A wallpaper that crashes the image decoder no longer leaves later theme changes waiting for it, and the message for an interrupted theme write whose backup is gone now names the files involved and how to continue.
+
+- If Mandara is killed in the middle of a two-file shortcut change, the next shortcut edit puts the half-written files back from their recovery copies instead of leaving a mismatched pair.
+
+- **One odd event no longer stalls the bar.** A malformed event or error line from niri or Umbriel is skipped and logged once instead of dropping the connection and reconnecting in a loop. If your Umbriel does not know one of the event families Mandara asks for, Mandara stops asking for it and follows the rest.
+
+- **A stuck compositor command no longer hangs Mandara.** River commands and `umbriel msg` fallbacks give up after two seconds, River's connection setup is bounded the same way, and oversized or endless replies are cut off.
+
+- **niri actions with arguments that are not JSON now say so** instead of silently running with no arguments.
+
+- Dropping something onto a Stash shelf, or dragging one out, can no longer disconnect the whole shell when the other program offers only a move: the drop is just refused. Dragging out to a program that only copies leaves the items on the shelf, even with *Move items out* on, since nothing was moved.
+
+- Dragging a large picture or long text out of a shelf no longer freezes the shell while the other program reads it, and pasting while the compositor is busy no longer crashes it.
+
+- A window whose drawing keeps failing (an output that is switched off, a lost compositor connection) now retries more and more slowly, down to once a second, instead of sixty times a second with an error each time; the shell also shuts down cleanly after a lost connection.
+
+- After a GPU reset the shell keeps answering the compositor while it waits for the GPU to come back, trying again every few seconds instead of freezing for a third of a second per try.
+
+- Idle wallpaper-transition and path-drawing memory is given back about a second and a half after the last frame that used it, even when nothing else redraws, and a transition no longer gets rebuilt whenever the bar's progress rings change size.
+
+- A wallpaper change effect no longer makes every other drawn shape in a frame take half as much memory again.
+
+- **Studio no longer hangs on a stuck helper.** Administrator actions, update
+  jobs, theme downloads and wallpaper jobs give up with a clear error after a
+  deadline instead of waiting forever, and a stuck monitor-brightness write no
+  longer freezes that monitor's slider.
+
+- **Installing the helper from Studio uses the running program.** The root
+  helper is installed from the exact binary that is running, not from a path
+  that could be swapped after you approve the prompt.
+
+- **A failed password no longer leaves a half-made account.** Creating a user
+  whose password can't be set removes the new account again; typed passwords
+  are wiped from memory once used.
+
+- **Boot look and symlinked configs.** A bootloader config that is a symlink
+  (for example one kept in a dotfiles repository) stays a symlink through an
+  apply and a restore. The staged theme folder must belong to the account that
+  asked, and is read without following links. Staging a generated image
+  replaces the splash, GRUB theme and Limine wallpaper together or not at all,
+  and an unpinned theme download gives up after fifteen minutes.
+
+- **Plugin installs are all or nothing.** A failed or interrupted install or
+  update leaves the previous version in place; archives with a huge number of
+  files are refused, and a release whose `SHA256SUMS` doesn't list the archive
+  is refused.
+
+- **Wallpaper generator and WebP renders are capped at 7680×4320 pixels** in
+  total, so a huge custom size can't use several gigabytes of memory; a larger
+  custom size is shortened, and `WxH` over the cap is refused on the command
+  line.
+
+- **Plugins.** A manifest whose `entry` is an absolute path or contains `..`
+  is rejected, and the compiled-plugin cache keeps only the 64 most recently
+  used builds.
+
+- **Language packs are read into memory instead of mapped**, so overwriting a
+  pack file while Mandara runs can no longer crash it.
+
+- **`install.sh`** accepts plain HTTP only for a real loopback mirror, and
+  never builds its work folder from an unset `HOME`.
+
+- **Startup is faster with a wallpaper theme.** The wallpaper's colours are
+  worked out in the background and fade in instead of delaying the first
+  frame, and a compositor that keeps closing the wallpaper surface is retried
+  with growing waits instead of in a tight loop.
+
+- **Plugin folders with spaces or special characters** now open correctly from
+  Studio.
+
+- **Switching to Mandara Login is all-or-nothing.** If enabling greetd fails halfway, the display manager you had is enabled again and the files that were written are put back, instead of leaving a machine with no login screen. Going back to your old manager rolls back the same way.
+
+- **The login screen starts faster and no longer freezes.** Profile pictures are decoded in the background (and oversized or odd files are ignored), and Shut down, Restart, Suspend and Hibernate no longer lock the screen while the command runs; a failure shows a message.
+
+- **The login screen rests when idle.** After the idle time it redraws about ten times a second instead of every frame, using far less power until you touch the mouse or keyboard.
+
+- **A stuck login service can't hang the login screen.** A greetd that stops answering ends in an error after two minutes and the next attempt starts on a fresh connection; pressing Escape during sign-in discards the abandoned attempt's late answer; passwords are wiped from more of the buffers they pass through.
+
+- **Installing a login-screen design from Studio is safer.** The root helper only reads a draft you own, never follows a link to a file you can't read, and refuses oversized or special files; the draft is saved atomically, and typing in a text field saves once you pause instead of on every keystroke.
+
+- **The restore-previous-manager record is protected.** It is kept in the root-only backup folder and validated before use.
+
+- **The no-session fallback uses your own login shell** instead of the login screen's.
+
+- **Importing settings can no longer grant plugin permissions.** An imported
+  file, a full profile or a hand-made profile now keeps the plugin
+  permissions and the on/off state of plugins you already have; permissions
+  are only given in Studio → Plugins.
+
+- **A settings file with one bad value no longer resets everything.** Mandara
+  keeps every value it can read, puts the others back to their defaults, tells
+  you which ones, and keeps your original file next to it
+  (`config.toml.invalid-…`). Settings a newer version added are kept when an
+  older one saves.
+
+- **A settings change that can't be saved is no longer lost silently.** Mandara
+  retries, and if it still fails it shows a notification that opens Studio.
+
+- **Import, profiles and backups are safer.** Studio no longer freezes while
+  importing a settings file or writing the support report; two profiles whose
+  names look alike (“Work” and “work!”) can't overwrite or delete each other;
+  backups follow symlinked dotfiles, skip regenerated files and keep only the
+  last 20; Maintenance repair, restore and factory reset check the file the
+  way the shell does and write it under the same lock as a save.
+
+- **Fixing your compositor config is safer.** Retiring conflicting lines
+  changes all files or none, keeps Windows line endings, refuses lines that
+  changed since the scan and no longer waits forever for a stuck checker; the
+  include line is only taken back if you haven't edited the file meanwhile;
+  Config doctor reports a rollback that failed instead of claiming success
+  and keeps 20 backups.
+
+- **Downloaded fonts are checked.** Studio installs fonts from a pinned
+  release and refuses a file whose checksum differs.
+
+- **Smaller fixes.** Setting a default app or an autostart entry no longer
+  replaces a file Mandara couldn't read; autostart ids can't point outside
+  the autostart folder; with no home folder Mandara writes nowhere instead of
+  into `/tmp`; saving no longer waits forever on another process's lock;
+  the theme list is read once instead of on every lookup.
+
+- **The lock screen can no longer get stuck on "Checking…".** If the password
+  check hangs, the lock screen gives up after 30 seconds and says so, and
+  you can press Esc to cancel a check that is taking too long. If the check
+  itself crashes, you get a clear message and can try again.
+
+- **The screen locks at once.** The lock is requested before the lock
+  screen's look (wallpaper, widgets, fonts) is loaded, so a slow disk or a
+  broken wallpaper can no longer delay it. Until the look is ready the screen
+  is plain black.
+
+- **A lock screen that keeps crashing is replaced by a plain one.** After
+  five crashes in a minute Mandara starts a bare lock screen with the default
+  look instead of leaving the screen without one. If that fails too, the
+  session stays locked and `mandara msg lock` from a TTY starts a new one.
+
+- **The lock screen clock shows seconds on time and no longer wakes the
+  computer every second for nothing.** The idle lock screen now wakes only
+  when the clock changes: once a minute, or every second when the clock or a
+  widget shows seconds.
+
+- **Restarting the shell while the screen is locked no longer forgets the
+  lock.** Video wallpapers and widgets stay stopped behind the lock screen,
+  and the unlock is noticed when you enter your password.
+
+- **Your password is wiped from memory more thoroughly,** on the lock screen
+  and in the authentication dialog, including characters you typed and then
+  deleted.
+
+- **The lock screen uses less memory and CPU.** Outputs that stay black no
+  longer build a copy of the wallpaper, text is no longer copied on every
+  frame, a stalled keyboard no longer replays a burst of repeated keys, and
+  unplugged keyboards and mice are released properly.
+
 ## 0.37.0 — 2026-11-22
 
 Mandara speaks Italian: Studio, the shell and Mandara Login all follow

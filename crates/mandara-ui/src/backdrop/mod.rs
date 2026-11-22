@@ -382,7 +382,23 @@ pub fn init_on(layer: CanvasLayer, fallback: impl FnOnce(&mut App) + 'static, cx
     let masks = crate::depth::masks(cx);
     cx.observe(&masks, |_, cx| refresh(cx)).detach();
     if let Some(hub) = cx.try_global::<crate::hub::GlobalHub>().map(|g| g.0.clone()) {
-        cx.observe(&hub, |_, cx| refresh(cx)).detach();
+        // Only the sources a scene reads rebuild it: windows (visibility,
+        // playback), media, weather and notifications (widgets). Volume,
+        // network, clipboard and keyboard changes leave it as it was.
+        let sources = crate::hub::Domains::MEDIA
+            .union(crate::hub::Domains::WEATHER)
+            .union(crate::hub::Domains::NOTIFICATIONS)
+            .union(crate::hub::Domains::NAVIGATION)
+            .union(crate::hub::Domains::FOCUS)
+            .union(crate::hub::Domains::CLIENTS);
+        let mut seen = hub.read(cx).revision(sources);
+        cx.observe(&hub, move |hub, cx| {
+            let now = hub.read(cx).revision(sources);
+            if now != std::mem::replace(&mut seen, now) {
+                refresh(cx);
+            }
+        })
+        .detach();
     }
     cx.observe_global::<crate::fonts::Fonts>(refresh).detach();
     // Calendar events (the calendar widgets).
@@ -403,10 +419,16 @@ pub fn init_on(layer: CanvasLayer, fallback: impl FnOnce(&mut App) + 'static, cx
     })
     .detach();
     // The date pill changes at minute boundaries (the Hijri day at Maghrib).
+    // A scene with no date and no widgets has nothing that moves with time.
     cx.spawn(async move |cx| {
         loop {
             cx.background_executor().timer(until_next_minute()).await;
-            cx.update(refresh);
+            cx.update(|cx| {
+                let timed = cx.try_global::<GlobalBackdrop>().is_some_and(|g| g.0.borrow().last.as_ref().is_some_and(|s| s.date.is_some() || !s.widgets.items.is_empty()));
+                if timed {
+                    refresh(cx);
+                }
+            });
         }
     })
     .detach();
@@ -1774,6 +1796,10 @@ impl Renderer {
         let mut wake: Option<Duration> = None;
         let mut at = |d: Duration| wake = Some(wake.map_or(d, |w| w.min(d)));
         if let Some(d) = self.videos.next_wake(now) {
+            at(d);
+        }
+        // A canvas the compositor closed is made again after a wait.
+        if let Some(d) = host.next_canvas_retry(now) {
             at(d);
         }
         for out in &self.outs {

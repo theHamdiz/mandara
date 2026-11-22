@@ -17,7 +17,7 @@
 //! Translations are written in `locales/<code>.toml` as
 //! `"English" = "Translation"` pairs. They are **not** compiled into the
 //! binary: releases ship them as language packs ([`pack`], `.mlang`), one
-//! file per language and Mandara version, memory-mapped and read in place
+//! file per language and Mandara version, read into memory once
 //! ([`packs`] says where they live and how a missing one is downloaded).
 //! Debug builds without a pack read the source catalogs instead. Placeholders
 //! are `{name}` and must survive translation unchanged (checked by the

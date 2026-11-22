@@ -12,12 +12,13 @@ pub(super) struct Catalog {
 }
 
 impl Catalog {
+    /// The listing of the repository `path` was installed from (`repo_by_dir`).
     pub fn installed(
         &self,
         path: &std::path::Path,
-        origins: &std::collections::HashMap<String, (std::path::PathBuf, String)>,
+        repo_by_dir: &std::collections::HashMap<std::path::PathBuf, String>,
     ) -> Option<Arc<Listing>> {
-        let (repo, _) = origins.iter().find(|(_, (dir, _))| dir == path)?;
+        let repo = repo_by_dir.get(path)?;
         self.items.iter().find(|l| l.full_name == *repo).cloned()
     }
     /// Preserve existing positions and shared records; append new repositories.
@@ -154,8 +155,7 @@ mod tests {
             total: 1,
         });
         let path = std::path::Path::new("/plugins/picker");
-        let origins =
-            std::collections::HashMap::from([("a/picker".into(), (path.into(), "v0.1.0".into()))]);
+        let origins = std::collections::HashMap::from([(path.to_path_buf(), "a/picker".to_string())]);
         assert!(
             Arc::ptr_eq(
                 &catalog.items[0],
@@ -169,8 +169,7 @@ mod tests {
                 .is_none(),
             "a development copy with the same id is a separate plugin"
         );
-        let moved =
-            std::collections::HashMap::from([("b/picker".into(), (path.into(), "v0.1.0".into()))]);
+        let moved = std::collections::HashMap::from([(path.to_path_buf(), "b/picker".to_string())]);
         assert!(
             catalog.installed(path, &moved).is_none(),
             "a different publisher cannot replace a listing by reusing its id"

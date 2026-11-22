@@ -6,10 +6,17 @@
 //! (`PowerOff`, `Suspend`, `Inhibit`, `PrepareForSleep`…) and session
 //! `Lock` signal under its own names, which [`bus`] picks.
 
+use std::sync::Arc;
+
 use futures::StreamExt as _;
 use zbus::zvariant::OwnedObjectPath;
 
 use crate::actor::proxy;
+
+/// First retry when the session or bus is not ready yet; grows up to [`LOCK_RETRY_MAX`].
+const LOCK_RETRY_MIN: std::time::Duration = std::time::Duration::from_secs(2);
+/// Cap on logind lock-watch reconnect backoff (session may appear late at login).
+const LOCK_RETRY_MAX: std::time::Duration = std::time::Duration::from_secs(120);
 
 /// The login manager's D-Bus names: logind, or ConsoleKit2 on FreeBSD.
 pub mod bus {
@@ -80,26 +87,49 @@ pub async fn session_id(conn: &zbus::Connection) -> zbus::Result<String> {
     let session = proxy(conn, DEST, path.as_str(), "org.freedesktop.login1.Session").await?;
     session.get_property::<String>("Id").await}
 
+/// Whether [`watch_lock_requests`] is currently subscribed to logind's
+/// `Lock` signal, i.e. whether a lock request would be answered.
+static LOCK_LISTENING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Whether a logind lock request would reach [`watch_lock_requests`]'s callback.
+pub fn lock_requests_handled() -> bool {
+    LOCK_LISTENING.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+async fn lock_session(on_lock: &Arc<dyn Fn() + Send + Sync>, backoff: &mut crate::runtime::Backoff) -> zbus::Result<()> {
+    let conn = crate::runtime::system().await?;
+    let path = session_path(&conn).await?;
+    let session = proxy(&conn, bus::DEST, path.as_str(), bus::SESSION).await?;
+    let mut locks = session.receive_signal("Lock").await?;
+    backoff.reset();
+    LOCK_LISTENING.store(true, std::sync::atomic::Ordering::Relaxed);
+    tracing::info!("lock screen: answering logind lock requests for {}", path.as_str());
+    while locks.next().await.is_some() {
+        let f = on_lock.clone();
+        crate::runtime::unblock(move || f()).await;
+    }
+    LOCK_LISTENING.store(false, std::sync::atomic::Ordering::Relaxed);
+    Ok(())
+}
+
 /// Calls `on_lock` (on the blocking pool: it may spawn the locker)
-/// whenever logind asks this session to lock. Runs until the process exits.
+/// whenever logind asks this session to lock. Runs until the process exits;
+/// a session or bus that is not ready yet is retried with backoff.
 pub fn watch_lock_requests(on_lock: impl Fn() + Send + Sync + 'static) {
-    let on_lock = std::sync::Arc::new(on_lock);
+    let on_lock: Arc<dyn Fn() + Send + Sync> = Arc::new(on_lock);
     crate::runtime::spawn("logind-lock", async move {
-        let result: zbus::Result<()> = async {
-            let conn = crate::runtime::system().await?;
-            let path = session_path(&conn).await?;
-            let session = proxy(&conn, bus::DEST, path.as_str(), bus::SESSION).await?;
-            let mut locks = session.receive_signal("Lock").await?;
-            tracing::info!("lock screen: answering logind lock requests for {}", path.as_str());
-            while locks.next().await.is_some() {
-                let f = on_lock.clone();
-                crate::runtime::unblock(move || f()).await;
+        let mut backoff = crate::runtime::Backoff::new(LOCK_RETRY_MIN, LOCK_RETRY_MAX);
+        let mut warned = false;
+        loop {
+            if let Err(err) = lock_session(&on_lock, &mut backoff).await {
+                if warned {
+                    tracing::debug!("lock screen: not listening for logind lock requests: {err}");
+                } else {
+                    warned = true;
+                    tracing::warn!("lock screen: not listening for logind lock requests: {err}");
+                }
             }
-            Ok(())
-        }
-        .await;
-        if let Err(err) = result {
-            tracing::warn!("lock screen: not listening for logind lock requests: {err}");
+            crate::runtime::sleep(backoff.next_delay()).await;
         }
     });
 }

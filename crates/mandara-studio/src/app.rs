@@ -32,6 +32,7 @@ pub(crate) use store_page::{HIDDEN_PLUGINS, PLUGIN_CATEGORIES, plugin_art_cache_
 mod about_links;
 mod about_page;
 mod admin_run;
+mod ddc_writes;
 mod bars_page;
 mod designer;
 mod feeds_editor;
@@ -198,6 +199,10 @@ pub struct StudioView {
     feeds: feeds_editor::Editor,
     /// Each language card's download fill (Studio → General → Language).
     lang_fills: mandara_ui::progress_fill::LanguageFills,
+    /// When the language cards' repaint timer fires, while one is live: a
+    /// frame schedules another only for an earlier moment, so repeated
+    /// renders never stack timer chains.
+    lang_wake: Option<std::time::Instant>,
     /// Plugins page: the plugin detail / settings modal.
     modal: plugin_modal::PluginModal,
     /// Plugins page tab (Installed / Marketplace / Local).
@@ -295,7 +300,7 @@ impl StudioView {
         });
         Self { agent_page: None, motion_preview: None, section: Section::Home, bars_tab: Default::default(), recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None,
             app_templates: Default::default(),
-            icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, shortcuts_tab: Default::default(), auth_tab: Default::default(), native_shortcuts: Default::default(), focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), lock_designs: None, credentials: Default::default(), feeds: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: cx.try_global::<crate::ui_state::UiState>().cloned().unwrap_or_default(), fold_keys: Vec::new(), lang_fills: Default::default(), component_preview: component_designs::PREVIEW_VALUE, components: Default::default(), themes_tab: Default::default(), studio_looks: Default::default(), desktop_tab: Default::default(), stash_edges: Default::default() }
+            icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, shortcuts_tab: Default::default(), auth_tab: Default::default(), native_shortcuts: Default::default(), focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), lock_designs: None, credentials: Default::default(), feeds: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: cx.try_global::<crate::ui_state::UiState>().cloned().unwrap_or_default(), fold_keys: Vec::new(), lang_fills: Default::default(), lang_wake: None, component_preview: component_designs::PREVIEW_VALUE, components: Default::default(), themes_tab: Default::default(), studio_looks: Default::default(), desktop_tab: Default::default(), stash_edges: Default::default() }
     }
 
     /// Navigates to a section. Entering a page drops what it cached from
@@ -686,12 +691,7 @@ impl StudioView {
                 .child(mandara_ui::bidi::paragraph(tr(button)))
                 .on_click(move |_: &ClickEvent, _, cx| {
                     if let Some(ipc) = cx.try_global::<perf::ShellIpc>().cloned() {
-                        let words: Vec<String> = args.iter().map(|s| s.to_string()).collect();
-                        std::thread::spawn(move || {
-                            if let Err(err) = (ipc.0)(words.clone()) {
-                                tracing::warn!("`{}` failed: {err}", words.join(" "));
-                            }
-                        });
+                        ipc.fire(args.iter().map(|s| s.to_string()).collect());
                     }
                 })
                 .into_any_element(),
@@ -1462,9 +1462,19 @@ impl StudioView {
         let mut wakes = Vec::new();
         let visuals = self.lang_fills.frame(cfg.motion.reduced(mandara_core::spring::system_reduced_motion()), window, |after| wakes.push(after));
         for after in wakes {
+            let due = std::time::Instant::now() + after;
+            if self.lang_wake.is_some_and(|live| live <= due) {
+                continue;
+            }
+            self.lang_wake = Some(due);
             cx.spawn(async move |this, cx| {
                 cx.background_executor().timer(after).await;
-                let _ = this.update(cx, |_, cx| cx.notify());
+                let _ = this.update(cx, |view, cx| {
+                    if view.lang_wake == Some(due) {
+                        view.lang_wake = None;
+                    }
+                    cx.notify();
+                });
             })
             .detach();
         }
@@ -1676,12 +1686,7 @@ impl StudioView {
                 .child(label)
                 .on_click(move |_, _, cx| {
                     if let Some(ipc) = cx.try_global::<crate::perf::ShellIpc>().cloned() {
-                        let args: Vec<String> = args.iter().map(|a| a.to_string()).collect();
-                        std::thread::spawn(move || {
-                            if let Err(err) = (ipc.0)(args) {
-                                tracing::warn!("shell command failed: {err}");
-                            }
-                        });
+                        ipc.fire(args.iter().map(|a| a.to_string()).collect());
                     }
                 })
         };

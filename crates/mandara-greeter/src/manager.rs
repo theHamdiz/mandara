@@ -53,7 +53,7 @@ pub const BACKUP_DIR: &str = "/var/lib/mandara-greeter-backups";
 pub const LEGACY_BACKUP_DIR: &str = "/var/lib/mandara-greeter/backups";
 /// Readable like the system files the backups copy, so a dry-run restore
 /// shows its plan without sudo; only root writes.
-const BACKUP_DIR_MODE: u32 = 0o755;
+pub(crate) const BACKUP_DIR_MODE: u32 = 0o755;
 pub const MANIFEST: &str = "manifest.toml";
 /// `MANDARA_GREETER_DRY_RUN=1` forces `use` / `restore` (and Studio's
 /// "Use" button) to only print the plan.
@@ -1181,7 +1181,7 @@ fn backup_dirs(root: &SysRoot) -> Vec<(String, PathBuf)> {
 /// Whether `path` itself (not a link's target) belongs to root or to the
 /// user running this (root, for a real restore), and only its owner may
 /// write it.
-fn owned_by_us(path: &Path) -> bool {
+pub(crate) fn owned_by_us(path: &Path) -> bool {
     use std::os::unix::fs::MetadataExt as _;
     // SAFETY: geteuid has no preconditions.
     let me = unsafe { libc::geteuid() };
@@ -1191,7 +1191,15 @@ fn owned_by_us(path: &Path) -> bool {
 /// A unit name a switch can record: `<name>.service` in systemd's unit
 /// name alphabet, no path and no leading `-` (never read as an option).
 fn plain_unit(unit: &str) -> bool {
-    unit.strip_suffix(UNIT_SUFFIX).is_some_and(|stem| !stem.is_empty() && !stem.starts_with('-') && stem.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '@' | ':')))
+    unit.strip_suffix(UNIT_SUFFIX).is_some_and(plain_unit_stem)
+}
+
+/// A service name (a unit without `.service`, an rc script name) that can
+/// become part of a root `systemctl` / `sysrc` argument: systemd's unit
+/// name alphabet, so no path separator, and no leading `-` (never read as
+/// an option).
+pub(crate) fn plain_unit_stem(stem: &str) -> bool {
+    !stem.is_empty() && !stem.starts_with('-') && stem.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '@' | ':'))
 }
 
 /// A value an rc variable can be put back to (`YES`, `NO`, `onestart`…).

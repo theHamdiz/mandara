@@ -213,8 +213,8 @@ The rest of what's built in.
   → sleep with separate mains and battery timeouts, read from the
   compositor (`ext-idle-notify-v1`, so a fullscreen video's inhibitor
   counts) and switched with `wlr-output-power-management` (Niri / Hyprland / Umbriel / Sway
-  IPC as fallback). Playing media and *Keep awake* (also for N minutes) hold
-  it back; screens go dark sooner on the lock screen; your own commands run
+  IPC as fallback). *Keep awake* (also for N minutes) holds it all back; playing
+  media holds back screens-off and sleep but never the lock; screens go dark sooner on the lock screen; your own commands run
   after N idle seconds with a resume command. Lock before sleeping (a logind
   delay inhibitor waits until the lock is really up), on lid close, at
   login, with an optional grace period after automatic locks. Sleep can be

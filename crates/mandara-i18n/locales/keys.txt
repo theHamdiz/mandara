@@ -710,6 +710,7 @@ Applies instantly
 Applies live on {compositor}; apps started from now on use it too.
 Applies now; reverts after {seconds} s unless you keep it
 Apply
+Apply Mandara fonts to the desktop
 Apply a Studio window design without changing the desktop Look
 Apply a look, built-in or yours (your setup is saved first so it can be restored)
 Apply a motion preset: its spring and choreography (accessibility and surface speeds stay yours)
@@ -718,6 +719,7 @@ Apply a ready-made launcher look: its layout and style settings change together 
 Apply a saved display profile
 Apply app themes now
 Apply changes instantly without springs
+Apply or restore Mandara's system font sync (typography.sync) now
 Apply preference edits without replacing unrelated settings
 Apply profiles automatically
 Apply the color scheme to KDE apps and notify running apps.
@@ -2847,6 +2849,7 @@ Follows the desktop's transition (Fit & effects)
 Follows which window has focus
 Follows your desktop
 Font
+Fontconfig
 Fonts and text sizes everywhere
 For Liquid glass
 For developers
@@ -2984,7 +2987,9 @@ GPU {n} temp
 GRAPHICS
 GRUB's menu is hidden on this system (GRUB_TIMEOUT_STYLE=hidden or GRUB_TIMEOUT=0): the theme shows when you hold Shift or press Esc while it starts.
 GTK
+GTK & gsettings
 GTK 3 / 4 & libadwaita
+GTK 3 / 4 settings.ini and the GNOME interface font keys
 Gabriel García Márquez
 Gabriela Mistral
 Gallery
@@ -3011,6 +3016,7 @@ Gateway, e.g. 192.168.1.1
 Gauges
 Gave up after {n} tries: {why}
 General
+General and fixed fonts when qt5ct or qt6ct is already set up
 Generate
 Generate a wallpaper (the current recipe, random, a variation or a style) and save it; JSON with the path, size and time
 Generate loop
@@ -3639,7 +3645,7 @@ Instrumental
 Integrated
 Integration
 Intensity
-Inter, Cairo, Alexandria and JetBrains Mono are installed
+Inter, Alexandria and CaskaydiaCove Nerd Font Mono are installed
 Interactive cards stay upright: they can't be turned or mirrored.
 Interface
 Interface font
@@ -3762,6 +3768,7 @@ Just the essentials, nothing else
 Just the glyph, or the glyph with today's reference
 Juz {n}
 KB
+KDE
 KDE / Plasma
 KDE Breeze cursors, refined and extended with more shapes
 KDE Connect did not respond in time
@@ -4529,6 +4536,7 @@ Mirrored bars
 Missing
 Missing argument #{position}
 Missing file
+Missing {fonts} — another Nerd Font or JetBrains Mono is substituted until you Download
 Missing {fonts} — fallbacks in use
 Mistakes: {count}
 Mix matching copies into every search
@@ -4661,7 +4669,7 @@ Muqaddimah
 Murasaki Shikibu
 Music
 Music & visualizers
-Music or video playing over MPRIS holds every idle stage back
+Music or video playing over MPRIS holds back screen-off and sleep, never the lock
 Music, screenshots, color and ambient sound
 Muslim
 Mute
@@ -5429,6 +5437,7 @@ Open Mandara Studio, optionally on a section
 Open PLUGINS.md
 Open Reddit's app page
 Open Reddit's app page and choose “create another app”.
+Open Studio
 Open Studio to download the required models
 Open a community or a post in the Reddit panel
 Open a copied image in your image editor (`[clipboard] image_command`)
@@ -5521,6 +5530,7 @@ Opens updates that need your decision, and every update when they run in a termi
 Opposite the sidebar
 Opt-in
 Opt-in: a fresh wallpaper every few hours. Missed runs never pile up; older files are cleaned up.
+Opt-in: push the Families above to fontconfig, GTK, Qt, KDE and browsers. Off restores what Mandara changed
 Optical drive
 Optimism
 Optimism is the faith that leads to achievement; nothing can be done without hope.
@@ -6048,6 +6058,7 @@ Puzzles to play in the bar or right on the desktop
 Pywal-style colors.json and userChrome.css in ~/.cache/mandara/themes/firefox (see the README)
 Qaitbay Citadel
 Qibla
+Qt (qt5ct / qt6ct)
 Qt 5 / 6 (qt6ct, qt5ct)
 Quality
 Quarter past {hour}
@@ -6663,6 +6674,7 @@ Sahih al-Bukhari
 Same as items
 Same as the bar
 Same as the desktop
+Same fontconfig aliases browsers use for page text on Linux
 Same time
 Sample levels — play something to see it live
 Samuel Johnson
@@ -6673,6 +6685,7 @@ Sandboxed
 Sandboxed WebAssembly plugins from the marketplace, your plugin folders or your distribution.
 Sandstone ramparts at golden hour, harbour water and terracotta.
 Sans
+Sans / serif / monospace aliases in ~/.config/fontconfig/conf.d
 Sat
 Saturation
 Saturday
@@ -7314,6 +7327,7 @@ Solved!
 Some clouds, some sun. Easy weather.
 Some compositor shortcuts cannot be resolved safely. Edit them in their source configuration first.
 Some folders
+Some of your settings were reset
 Something went wrong while installing. The details say what.
 Somewhere in your config
 Soothing pastel cursors in the Catppuccin flavors and accents
@@ -7642,6 +7656,7 @@ System clock
 System connection
 System default
 System folders come from $XDG_DATA_DIRS: distribution packages create them, and they're opt-in and read-only.
+System fonts
 System gauges
 System meters
 System monitor
@@ -7845,6 +7860,7 @@ The Little Prince
 The Lua configuration has a tokenization error.
 The Mediterranean horizon with waves and sun glitter
 The Narrow Road to the Interior
+The Nerd Fonts archive had no CaskaydiaCove Mono faces
 The OPML file
 The Plymouth theme's folder and its .plymouth file have different names
 The Pomodoro timer; click to start or pause
@@ -7880,6 +7896,7 @@ The adhan is playing
 The adhan isn't downloaded
 The adhan isn't downloaded: turn it on in Studio, or run `prayer adhan download`
 The adhan: whether it is on, downloaded or playing, and where it comes from
+The administrator action took too long and was stopped
 The ancient lighthouse: a luminous beam across deep night navy and harbour lights.
 The app and tool tiles wear a Kufic word instead of their geometric pattern
 The app each kind of file or link opens in, for every app that asks the system (mimeapps.list).
@@ -8150,6 +8167,8 @@ The package manager needs a decision from you (a conflict or broken dependency).
 The package servers couldn't be reached. Check your connection and try again.
 The panel is not visible
 The panel that drops from the bar item, or none.
+The password check failed — try again
+The password check took too long — try again
 The password dialog was cancelled, so the AUR packages weren't installed.
 The password is empty
 The password needs 8–63 characters
@@ -8506,6 +8525,7 @@ This tab is empty
 This text is too large to send to a phone
 This theme has no sound for that
 This thread is very long; open it on Reddit to read the rest
+This took too long, so Studio stopped waiting for it
 This update wasn't checked against Mandara's signature; check for updates again
 This username is already in use
 This version ({version}) isn't recommended: {class}: {reason}
@@ -8719,6 +8739,7 @@ Turn it on to see nearby networks
 Turn off
 Turn off for now
 Turn on
+Turn on Apply Mandara fonts to the desktop first
 Turn on Custom spring first
 Turn on Feeds
 Turn on Item capsules first
@@ -9202,6 +9223,7 @@ Weather unavailable
 Weather, prayer times, world clocks and more at a glance
 Web & shortcuts
 Web addresses as colourful tiles
+Web browsers
 WebAssembly component
 WebM holds AV1 video only: pick AV1, or MP4 or MKV
 WebP
@@ -9528,6 +9550,7 @@ Your kernel command line has no splash option, so the splash won't show until yo
 Your keyring may ask you to unlock it
 Your keys
 Your khatm as a ring, with the surah you're reading and a click to continue
+Your latest changes are not saved yet ({error}).
 Your local repositories at a glance: branch, uncommitted changes, unpushed commits
 Your location
 Your logo or picture at boot
@@ -9552,6 +9575,7 @@ Your recent notes as tabs on the screen's edge
 Your saved verses and hadith, newest first
 Your session starts these (systemd's xdg-autostart).
 Your session's units
+Your settings couldn't be saved
 Your shell at a glance
 Your sound theme
 Your status (empty: Online / Do not disturb)
@@ -9746,6 +9770,7 @@ folder name or path of the repository
 folder path, name or index
 folder to write into (made if missing)
 follow, or a language code: en, ar, fa, ur, es, fr, de, tr, ru, hi, bn, id, zh, ja, ko
+font archive member has no name
 found twice
 fps
 front
@@ -9811,6 +9836,7 @@ its name (default: the parent's name · Custom)
 job id from apps jobs
 journalctl failed
 just now
+kdeglobals General font keys
 keep yours
 kernel {kernel}
 key=value pairs, or a TOML recipe
@@ -10059,6 +10085,7 @@ the compositor returned an unexpected frame size
 the compositor's own hot corner
 the count for clean
 the feed's structure is broken
+the file doesn't match its checksum
 the file to share
 the installed copy isn't the published {version} build
 the new name
@@ -10100,6 +10127,7 @@ unit name (.service may be omitted)
 unknown model
 unloading…
 unloads in {span}
+unpack failed: {error}
 until a long break
 until a short break
 until {time}
@@ -10514,6 +10542,7 @@ your default
 {running} of {count} running
 {running} running · {finished} finished
 {seconds}s timer
+{settings} fell back to their defaults. Your original file is kept as {file}.
 {setting} must be a number
 {size} MB
 {size} in {secs} s · first byte {ms} ms

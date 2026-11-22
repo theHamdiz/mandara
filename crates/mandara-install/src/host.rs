@@ -228,10 +228,25 @@ impl Host for SystemHost {
             Io::Quiet => c.stdout(Stdio::null()).stderr(Stdio::null()),
         };
         let mut child = c.spawn()?;
-        if let (Some(bytes), Some(mut stdin)) = (&cmd.stdin, child.stdin.take()) {
-            stdin.write_all(bytes)?;
+        // Written on its own thread while the output is read: a child that
+        // fills its stdout pipe before it reads stdin can't deadlock, and the
+        // child is always waited for, even when the write fails.
+        let (out, written) = std::thread::scope(|scope| {
+            let writer = match (&cmd.stdin, child.stdin.take()) {
+                (Some(bytes), Some(mut stdin)) => Some(scope.spawn(move || stdin.write_all(bytes))),
+                _ => None,
+            };
+            let out = child.wait_with_output();
+            let written = writer.map_or(Ok(()), |w| w.join().unwrap_or_else(|_| Err(std::io::Error::other("stdin writer panicked"))));
+            (out, written)
+        });
+        let out = out?;
+        // A child that exits without reading all of stdin closes the pipe:
+        // its exit status says what happened.
+        match written {
+            Err(e) if e.kind() != std::io::ErrorKind::BrokenPipe => return Err(e),
+            _ => {}
         }
-        let out = child.wait_with_output()?;
         Ok(Output { success: out.status.success(), code: out.status.code(), stdout: String::from_utf8_lossy(&out.stdout).into_owned(), stderr: String::from_utf8_lossy(&out.stderr).into_owned() })
     }
 
@@ -501,29 +516,25 @@ impl Drop for RawMode {
     }
 }
 
-/// A private temporary folder, removed on drop.
-pub struct TempDir(PathBuf);
+/// A private temporary folder (mode 0700, a random unique name, retried on
+/// collision), removed on drop.
+pub struct TempDir(tempfile::TempDir);
 
 impl TempDir {
     pub fn new() -> std::io::Result<TempDir> {
-        use std::os::unix::fs::DirBuilderExt as _;
-        /// Owner-only: downloads are verified there before use.
-        const MODE: u32 = 0o700;
-        let base = std::env::temp_dir();
-        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.subsec_nanos()).unwrap_or_default();
-        let dir = base.join(format!("mandara-install.{}.{nanos}", std::process::id()));
-        std::fs::DirBuilder::new().mode(MODE).create(&dir)?;
-        Ok(TempDir(dir))
+        use std::os::unix::fs::PermissionsExt as _;
+        // tempfile's default mode is 0777 before umask (often 0755). Mandara
+        // install scratch must stay owner-only from creation, with no window
+        // where another local user can traverse it.
+        tempfile::Builder::new()
+            .prefix("mandara-install.")
+            .permissions(std::fs::Permissions::from_mode(0o700))
+            .tempdir()
+            .map(TempDir)
     }
 
     pub fn path(&self) -> &Path {
-        &self.0
-    }
-}
-
-impl Drop for TempDir {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
+        self.0.path()
     }
 }
 
@@ -604,6 +615,24 @@ mod tests {
         assert!(out.stdout.lines().any(|l| l == "MANDARA_INSTALL_TEST=1"));
         assert!(!host.run(&Cmd::new(&["false"]).io(Io::Quiet)).unwrap().success);
         assert!(host.run(&Cmd::new::<&str>(&[])).is_err());
+    }
+
+    #[test]
+    fn large_stdin_does_not_deadlock_a_child_that_echoes_it() {
+        /// Far beyond any pipe buffer, so `cat` blocks on a full stdout before it has read everything.
+        const BYTES: usize = 4 * 1024 * 1024;
+        let mut host = SystemHost { color: false };
+        let out = host.run(&Cmd::new(&["cat"]).stdin("x".repeat(BYTES)).io(Io::Capture)).unwrap();
+        assert!(out.success);
+        assert_eq!(out.stdout.len(), BYTES);
+    }
+
+    #[test]
+    fn a_child_that_ignores_stdin_is_still_reaped_and_reported() {
+        const BYTES: usize = 4 * 1024 * 1024;
+        let mut host = SystemHost { color: false };
+        let out = host.run(&Cmd::new(&["sh", "-c", "exit 3"]).stdin("x".repeat(BYTES)).io(Io::Capture)).unwrap();
+        assert_eq!(out.code, Some(3));
     }
 
     #[test]

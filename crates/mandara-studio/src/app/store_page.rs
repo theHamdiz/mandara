@@ -1581,7 +1581,7 @@ impl StudioView {
         let folder_btn = |id: &'static str, label: &'static str, dir: PathBuf| {
             pill(id, Some("folder"), label, Tone::Glass, ButtonSize::Small, p).on_click(move |_, _, _| {
                 let _ = std::fs::create_dir_all(&dir);
-                let _ = mandara_services::session::open_uri(&format!("file://{}", dir.display()));
+                let _ = mandara_services::session::open_uri(&format!("file://{}", mandara_services::app_uninstall::percent_encode(&dir)));
             })
         };
         div()

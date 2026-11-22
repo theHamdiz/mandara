@@ -462,7 +462,9 @@ pub fn nixos_tree(root: &Path) -> std::io::Result<NixPaths> {
 
 fn set_link_time(link: &Path, when: std::time::SystemTime) -> std::io::Result<()> {
     use std::os::unix::ffi::OsStrExt as _;
-    let secs = when.duration_since(std::time::UNIX_EPOCH).map_err(std::io::Error::other)?.as_secs() as libc::time_t;
+    // Avoid deprecated `libc::time_t` on musl; `tv_sec` still takes the same width via `as _`.
+    let secs = i64::try_from(when.duration_since(std::time::UNIX_EPOCH).map_err(std::io::Error::other)?.as_secs())
+        .unwrap_or(i64::MAX) as _;
     let times = [libc::timespec { tv_sec: secs, tv_nsec: 0 }, libc::timespec { tv_sec: secs, tv_nsec: 0 }];
     let c = std::ffi::CString::new(link.as_os_str().as_bytes()).map_err(std::io::Error::other)?;
     // SAFETY: a valid C path and two timespecs; AT_SYMLINK_NOFOLLOW sets

@@ -3,11 +3,13 @@
 //! GPUI derives display bounds from `wl_output`'s integer scale, which is
 //! wrong under fractional scaling (a 4K panel at 1.5× reports 1920 px instead
 //! of its true 2560 logical px). Layer surfaces must be sized in logical
-//! pixels, so we ask the compositor directly with a short-lived connection.
+//! pixels, so we ask the compositor directly over a connection of our own.
+
+use std::sync::Mutex;
 
 use wayland_client::globals::{GlobalListContents, registry_queue_init};
 use wayland_client::protocol::{wl_output, wl_registry};
-use wayland_client::{Connection, Dispatch, Proxy, QueueHandle};
+use wayland_client::{Connection, Dispatch, EventQueue, Proxy, QueueHandle};
 use wayland_protocols::xdg::xdg_output::zv1::client::{zxdg_output_manager_v1, zxdg_output_v1};
 
 /// Logical geometry of one output.
@@ -27,13 +29,76 @@ impl OutputGeometry {
     }
 }
 
+/// One `wl_output` global and what is known of it. The proxies are `None`
+/// only for the entries unit tests build.
+struct Tracked {
+    /// The registry name, which identifies the output until it goes away.
+    global: u32,
+    proxies: Option<(wl_output::WlOutput, zxdg_output_v1::ZxdgOutputV1)>,
+    geometry: OutputGeometry,
+}
+
 #[derive(Default)]
 struct State {
-    outputs: Vec<(wl_output::WlOutput, OutputGeometry)>,
+    manager: Option<zxdg_output_manager_v1::ZxdgOutputManagerV1>,
+    outputs: Vec<Tracked>,
+    /// An output was bound since this was last cleared: its first events
+    /// are still to come.
+    bound: bool,
+}
+
+impl State {
+    /// Folds one xdg-output event into output `global`.
+    fn on_xdg(&mut self, global: u32, event: zxdg_output_v1::Event) {
+        let Some(geo) = self.outputs.iter_mut().find(|o| o.global == global).map(|o| &mut o.geometry) else { return };
+        match event {
+            zxdg_output_v1::Event::LogicalPosition { x, y } => {
+                geo.x = x;
+                geo.y = y;
+            }
+            zxdg_output_v1::Event::LogicalSize { width, height } => {
+                geo.width = width;
+                geo.height = height;
+            }
+            zxdg_output_v1::Event::Name { name } => geo.name = name,
+            _ => {}
+        }
+    }
+
+    /// Forgets output `global` (unplugged), releasing what was bound for it.
+    fn remove(&mut self, global: u32) {
+        let Some(i) = self.outputs.iter().position(|o| o.global == global) else { return };
+        if let Some((output, xdg)) = self.outputs.remove(i).proxies {
+            xdg.destroy();
+            if output.version() >= 3 {
+                output.release();
+            }
+        }
+    }
+
+    /// Binds output `name` and asks for its logical geometry.
+    fn bind(&mut self, registry: &wl_registry::WlRegistry, name: u32, version: u32, qh: &QueueHandle<Self>) {
+        let Some(manager) = &self.manager else { return };
+        let output: wl_output::WlOutput = registry.bind(name, version.min(4), qh, ());
+        let xdg = manager.get_xdg_output(&output, qh, name);
+        self.outputs.push(Tracked { global: name, proxies: Some((output, xdg)), geometry: OutputGeometry::default() });
+        self.bound = true;
+    }
+
+    /// Every output that has a logical size, in the order they appeared.
+    fn geometries(&self) -> Vec<OutputGeometry> {
+        self.outputs.iter().map(|o| o.geometry.clone()).filter(OutputGeometry::has_size).collect()
+    }
 }
 
 impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
-    fn event(_: &mut Self, _: &wl_registry::WlRegistry, _: wl_registry::Event, _: &GlobalListContents, _: &Connection, _: &QueueHandle<Self>) {}
+    fn event(state: &mut Self, registry: &wl_registry::WlRegistry, event: wl_registry::Event, _: &GlobalListContents, _: &Connection, qh: &QueueHandle<Self>) {
+        match event {
+            wl_registry::Event::Global { name, interface, version } if interface == wl_output::WlOutput::interface().name => state.bind(registry, name, version, qh),
+            wl_registry::Event::GlobalRemove { name } => state.remove(name),
+            _ => {}
+        }
+    }
 }
 
 impl Dispatch<wl_output::WlOutput, ()> for State {
@@ -52,30 +117,54 @@ impl Dispatch<zxdg_output_manager_v1::ZxdgOutputManagerV1, ()> for State {
     }
 }
 
-impl Dispatch<zxdg_output_v1::ZxdgOutputV1, usize> for State {
-    fn event(
-        state: &mut Self,
-        _: &zxdg_output_v1::ZxdgOutputV1,
-        event: zxdg_output_v1::Event,
-        index: &usize,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-        let Some((_, geo)) = state.outputs.get_mut(*index) else { return };
-        match event {
-            zxdg_output_v1::Event::LogicalPosition { x, y } => {
-                geo.x = x;
-                geo.y = y;
-            }
-            zxdg_output_v1::Event::LogicalSize { width, height } => {
-                geo.width = width;
-                geo.height = height;
-            }
-            zxdg_output_v1::Event::Name { name } => geo.name = name,
-            _ => {}
-        }
+impl Dispatch<zxdg_output_v1::ZxdgOutputV1, u32> for State {
+    fn event(state: &mut Self, _: &zxdg_output_v1::ZxdgOutputV1, event: zxdg_output_v1::Event, global: &u32, _: &Connection, _: &QueueHandle<Self>) {
+        state.on_xdg(*global, event);
     }
 }
+
+/// A connection kept for [`query_outputs`]: the registry keeps it informed
+/// of outputs plugged and unplugged, so a query only waits for the events
+/// of whatever appeared since the last one.
+struct Session {
+    _conn: Connection,
+    queue: EventQueue<State>,
+    state: State,
+}
+
+impl Session {
+    /// A connection with every current output bound and its geometry read.
+    fn open() -> anyhow::Result<Self> {
+        let conn = Connection::connect_to_env()?;
+        let (globals, queue) = registry_queue_init::<State>(&conn)?;
+        let qh = queue.handle();
+        let mut state = State { manager: globals.bind(&qh, 1..=3, ()).ok(), ..State::default() };
+        let existing: Vec<_> = globals.contents().with_list(|list| list.iter().filter(|g| g.interface == wl_output::WlOutput::interface().name).cloned().collect());
+        for global in existing {
+            state.bind(globals.registry(), global.name, global.version, &qh);
+        }
+        let mut session = Self { _conn: conn, queue, state };
+        session.settle()?;
+        Ok(session)
+    }
+
+    /// Round trips until nothing new was bound, so what a previous round's
+    /// outputs announced has arrived (bounded: a compositor adding outputs
+    /// without end is not worth waiting for).
+    fn settle(&mut self) -> anyhow::Result<()> {
+        for _ in 0..MAX_ROUNDS {
+            self.state.bound = false;
+            self.queue.roundtrip(&mut self.state)?;
+            if !self.state.bound {
+                break;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Most round trips one query waits for newly appearing outputs.
+const MAX_ROUNDS: usize = 8;
 
 /// The GPUI display id of a [`OutputGeometry`] by name. GPUI derives a
 /// display's [`gpui::PlatformDisplay::uuid`] from its `wl_output` name
@@ -131,30 +220,25 @@ pub fn pair_displays(displays: &[DisplayKey], outputs: &[OutputGeometry]) -> Vec
     displays.iter().map(|d| d.id).zip(paired).collect()
 }
 
-/// Queries every output's logical geometry, in registry order. Returns an
-/// empty list if the compositor lacks `zxdg_output_manager_v1`.
+/// Queries every output's logical geometry, in the order they appeared.
+/// Returns an empty list if the compositor lacks `zxdg_output_manager_v1`.
+///
+/// The connection is kept between calls (every caller shares it), and a
+/// query costs one round trip. One that failed is dropped, and the next
+/// call, or this one when the connection had been idle, connects afresh.
 pub fn query_outputs() -> anyhow::Result<Vec<OutputGeometry>> {
-    let conn = Connection::connect_to_env()?;
-    let (globals, mut queue) = registry_queue_init::<State>(&conn)?;
-    let qh = queue.handle();
-    let mut state = State::default();
-
-    let manager: zxdg_output_manager_v1::ZxdgOutputManagerV1 = match globals.bind(&qh, 1..=3, ()) {
-        Ok(manager) => manager,
-        Err(_) => return Ok(Vec::new()),
-    };
-    let output_globals: Vec<_> = globals.contents().with_list(|list| {
-        list.iter().filter(|g| g.interface == wl_output::WlOutput::interface().name).cloned().collect()
-    });
-    for global in output_globals {
-        let output: wl_output::WlOutput = globals.registry().bind(global.name, global.version.min(4), &qh, ());
-        let index = state.outputs.len();
-        manager.get_xdg_output(&output, &qh, index);
-        state.outputs.push((output, OutputGeometry::default()));
+    static SESSION: Mutex<Option<Session>> = Mutex::new(None);
+    let mut slot = SESSION.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(session) = slot.as_mut() {
+        match session.settle() {
+            Ok(()) => return Ok(session.state.geometries()),
+            // The compositor went away or restarted: this connection is
+            // dead, so try a new one before giving up.
+            Err(_) => *slot = None,
+        }
     }
-    queue.roundtrip(&mut state)?;
-    queue.roundtrip(&mut state)?;
-    Ok(state.outputs.into_iter().map(|(_, geo)| geo).filter(OutputGeometry::has_size).collect())
+    let session = slot.insert(Session::open()?);
+    Ok(session.state.geometries())
 }
 
 #[cfg(test)]
@@ -167,6 +251,39 @@ mod tests {
 
     fn display(id: u64, name: Option<&str>, origin: (i32, i32)) -> DisplayKey {
         DisplayKey { id: gpui::DisplayId::new(id), uuid: name.map(output_uuid), origin }
+    }
+
+    fn tracked(global: u32) -> Tracked {
+        Tracked { global, proxies: None, geometry: OutputGeometry::default() }
+    }
+
+    #[test]
+    fn xdg_events_land_on_their_own_output_and_survive_an_unplug() {
+        let mut state = State::default();
+        state.outputs.extend([tracked(10), tracked(11), tracked(12)]);
+        for (global, name, x, w) in [(10, "eDP-1", 0, 1366), (11, "HDMI-A-1", 1366, 1920), (12, "DP-2", 3286, 2560)] {
+            state.on_xdg(global, zxdg_output_v1::Event::Name { name: name.into() });
+            state.on_xdg(global, zxdg_output_v1::Event::LogicalPosition { x, y: 0 });
+            state.on_xdg(global, zxdg_output_v1::Event::LogicalSize { width: w, height: 1080 });
+        }
+        // An event for an output already gone changes nothing.
+        state.on_xdg(99, zxdg_output_v1::Event::LogicalSize { width: 1, height: 1 });
+        state.remove(11);
+        state.remove(11);
+        // The next output keeps its own geometry, not the removed one's slot.
+        state.on_xdg(12, zxdg_output_v1::Event::LogicalSize { width: 3840, height: 2160 });
+        let names: Vec<_> = state.geometries().into_iter().map(|g| (g.name, g.width)).collect();
+        assert_eq!(names, [("eDP-1".to_string(), 1366), ("DP-2".to_string(), 3840)]);
+    }
+
+    #[test]
+    fn an_output_without_a_size_yet_is_not_listed() {
+        let mut state = State::default();
+        state.outputs.push(tracked(5));
+        state.on_xdg(5, zxdg_output_v1::Event::LogicalSize { width: 2560, height: 0 });
+        assert!(state.geometries().is_empty());
+        state.on_xdg(5, zxdg_output_v1::Event::LogicalSize { width: 2560, height: 1440 });
+        assert_eq!(state.geometries().len(), 1);
     }
 
     #[test]

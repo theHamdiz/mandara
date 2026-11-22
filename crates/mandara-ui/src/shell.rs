@@ -104,6 +104,12 @@ pub struct ShellView {
     /// Drops the sidebar's cards once it stayed closed for
     /// [`crate::sidebar_tabs::RELEASE_AFTER`] (cancelled when it opens).
     sidebar_release: Option<gpui::Task<()>>,
+    /// A panel showed since the frame buffers were last shrunk: their room
+    /// (layout nodes, scene lists, dispatch tree) grew for its largest frame.
+    frames_grew: bool,
+    /// Gives that room back once the panel stayed closed for
+    /// [`crate::sidebar_tabs::RELEASE_AFTER`] (cancelled when one shows again).
+    frames_release: Option<gpui::Task<()>>,
     /// The main menu panel (right-click on empty bar space).
     menu: Option<(PanelSpec, PanelCx)>,
     /// The detached panel's plugin id and instance (see [`DETACHED_SLOT`]).
@@ -518,6 +524,8 @@ impl ShellView {
             sides: [side_bars::SideBar::new(false), side_bars::SideBar::new(true)],
             origin: None,
             sidebar_release: None,
+            frames_grew: false,
+            frames_release: None,
             tabs: crate::sidebar_tabs::SidebarTabs::new(),
             menu: None,
             detached: None,
@@ -1163,6 +1171,34 @@ impl ShellView {
         animating
     }
 
+    /// A panel's frames (a calendar, a process list) grow this window's layout
+    /// tree, scene lists and dispatch tree to their largest size, and those
+    /// stay at it for the bar's tiny frames afterwards (~2 MiB per output
+    /// measured after opening the Clock, Language and Resources panels).
+    /// Gives the room back once no panel shows and the sidebar is closed,
+    /// [`crate::sidebar_tabs::RELEASE_AFTER`] after the panel finished
+    /// closing, so a quick reopen keeps it; the next opening grows it again.
+    fn release_panel_frames(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.panel_visible {
+            self.frames_grew = true;
+            self.frames_release = None;
+        } else if self.frames_grew && self.frames_release.is_none() {
+            self.frames_grew = false;
+            self.frames_release = Some(cx.spawn_in(window, async move |this, cx| {
+                cx.background_executor().timer(crate::sidebar_tabs::RELEASE_AFTER).await;
+                let _ = this.update_in(cx, |this, window, cx| {
+                    this.frames_release = None;
+                    if this.panel_visible || this.sidebar.value() > HIDDEN_EPSILON {
+                        // Still in use: the next frame without a panel tries again.
+                        this.frames_grew = true;
+                    } else {
+                        window.shrink_frame_buffers(cx);
+                    }
+                });
+            }));
+        }
+    }
+
     /// Closes the panel shortly after the pointer leaves, unless it comes
     /// back. Losing the hover is not proof of leaving: GPUI drops it after
     /// any key press until the pointer moves again, under a child that
@@ -1644,6 +1680,7 @@ impl Render for ShellView {
         // no focus change either — the sidebar would stay open.
         // A pinned panel lets clicks through to your windows.
         let catcher_active = (panel_open && !shell_state.panel_pinned) || (cfg.sidebar_active() && shell_state.sidebar_visible_on(&self.monitor) && !cfg.sidebar.pinned());
+        self.release_panel_frames(window, cx);
         if catcher_active {
             root = root.child(
                 div()

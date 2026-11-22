@@ -23,6 +23,16 @@ use zbus::{Connection, MatchRule, Message, MessageStream, fdo, interface};
 use crate::actor::{Envelope, Reply, ServiceHandle, proxy, reply};
 
 /// dbusmenu layout updates are coalesced for this long (protocol chatter).
+/// How long one tray app gets to answer a D-Bus call; a hung app must not
+/// freeze every other item, menu and registration.
+const ITEM_TIMEOUT: Duration = Duration::from_secs(5);
+/// Times an item whose first read timed out is read again (a busy app
+/// starting up) before it is left out.
+const ITEM_READ_RETRIES: u32 = 3;
+/// Wait before reading a slow item again.
+const ITEM_RETRY_DELAY: Duration = Duration::from_secs(10);
+/// Most items the watcher keeps (a runaway client cannot grow the list).
+const MAX_ITEMS: usize = 256;
 const MENU_SETTLE: Duration = Duration::from_millis(120);
 
 const WATCHER_NAME: &str = "org.kde.StatusNotifierWatcher";
@@ -320,6 +330,14 @@ fn item_address(service: &str, sender: &str) -> String {
     }
 }
 
+/// Whether the bus name of an item address is valid and has an owner.
+async fn item_exists(conn: &Connection, address: &str) -> bool {
+    let (service, _) = split_address(address);
+    let Ok(name) = BusName::try_from(service.as_str()) else { return false };
+    let Ok(dbus) = fdo::DBusProxy::new(conn).await else { return false };
+    dbus.name_has_owner(name).await.unwrap_or(false)
+}
+
 /// Splits a `service/path` address.
 fn split_address(address: &str) -> (String, String) {
     match address.find('/') {
@@ -333,9 +351,15 @@ impl Watcher {
     async fn register_status_notifier_item(&self, service: &str, #[zbus(header)] header: Header<'_>, #[zbus(signal_emitter)] emitter: SignalEmitter<'_>) {
         let sender = header.sender().map(|s| s.to_string()).unwrap_or_default();
         let address = item_address(service, &sender);
+        // Only names that exist: a bogus one never gets a NameOwnerChanged,
+        // so it would stay in the list (replayed to every host) forever.
+        if !item_exists(emitter.connection(), &address).await {
+            tracing::debug!("tray: ignoring registration of {address}: no such name on the bus");
+            return;
+        }
         let fresh = {
             let mut items = self.core.items.lock();
-            let fresh = !items.contains(&address);
+            let fresh = !items.contains(&address) && items.len() < MAX_ITEMS;
             if fresh {
                 items.push(address.clone());
             }
@@ -570,6 +594,8 @@ struct Actor {
     menu_dirty: bool,
     deadline: Option<Instant>,
     serving: bool,
+    /// Addresses whose first read timed out, and how often it has.
+    read_retries: HashMap<String, u32>,
 }
 
 impl Actor {
@@ -642,30 +668,53 @@ impl Actor {
     }
 
     /// Adds (or refreshes) the item at `address`. Returns whether it exists.
+    /// An item too slow to answer is read again later, a few times, while
+    /// its name still has an owner.
     async fn add_item(&mut self, address: &str) -> bool {
+        let read = self.add_item_once(address).await;
+        if read != ItemRead::TimedOut {
+            self.read_retries.remove(address);
+            return read == ItemRead::Found;
+        }
+        let attempts = self.read_retries.entry(address.to_string()).or_insert(0);
+        *attempts += 1;
+        if *attempts > ITEM_READ_RETRIES {
+            self.read_retries.remove(address);
+            tracing::debug!("tray: {address} never answered; giving up");
+            return true;
+        }
+        let (tx, address) = (self.registered_tx.clone(), address.to_string());
+        crate::runtime::spawn("tray-reread", async move {
+            crate::runtime::sleep(ITEM_RETRY_DELAY).await;
+            let _ = tx.send(address).await;
+        });
+        true
+    }
+
+    async fn add_item_once(&mut self, address: &str) -> ItemRead {
         let (service, path) = split_address(address);
         let owner = if service.starts_with(':') {
             service.clone()
         } else {
-            let Ok(name) = BusName::try_from(service.as_str()) else { return false };
+            let Ok(name) = BusName::try_from(service.as_str()) else { return ItemRead::Missing };
             match self.dbus.get_name_owner(name).await {
                 Ok(o) => o.to_string(),
-                Err(_) => return false,
+                Err(_) => return ItemRead::Missing,
             }
         };
         // The same object may be known by its well-known and unique name.
         if let Some(existing) = self.state.items.iter().find(|i| i.owner == owner && i.path == path) {
             let key = existing.key.clone();
             self.mark_dirty(key);
-            return true;
+            return ItemRead::Found;
         }
         let mut item = TrayItem { key: format!("{service}{path}"), service, path, owner, ..Default::default() };
-        if !read_item(&self.conn, &mut item).await {
-            return false;
+        let read = read_item(&self.conn, &mut item).await;
+        if read == ItemRead::Found {
+            tracing::debug!("tray: + {} ({})", item.display_name(), item.key);
+            self.state.items.push(item);
         }
-        tracing::debug!("tray: + {} ({})", item.display_name(), item.key);
-        self.state.items.push(item);
-        true
+        read
     }
 
     fn remove_where(&mut self, pred: impl Fn(&TrayItem) -> bool) -> Vec<TrayItem> {
@@ -777,7 +826,7 @@ impl Actor {
         for key in std::mem::take(&mut self.dirty) {
             let Some(pos) = self.state.items.iter().position(|i| i.key == key) else { continue };
             let mut item = self.state.items[pos].clone();
-            if read_item(&self.conn, &mut item).await {
+            if read_item(&self.conn, &mut item).await == ItemRead::Found {
                 self.state.items[pos] = item;
             }
         }
@@ -794,7 +843,7 @@ impl Actor {
 
     async fn item_call(&self, item: &TrayItem, method: &str, args: &(impl serde::Serialize + zbus::zvariant::DynamicType + Sync)) -> Result<(), String> {
         let p = proxy(&self.conn, &item.owner, &item.path, item.iface).await.map_err(|e| e.to_string())?;
-        let result: zbus::Result<()> = p.call(method, args).await;
+        let result: zbus::Result<()> = timed(p.call(method, args)).await?;
         result.map_err(|e| e.to_string())
     }
 
@@ -853,7 +902,7 @@ impl Actor {
                 let label = menu.root.find(id).map(|n| n.label.clone()).ok_or_else(|| mandara_i18n::tf("No menu entry {id}", &[("id", &id)]))?;
                 let path = Self::menu_path(&item)?;
                 let p = proxy(&self.conn, &item.owner, &path, DBUSMENU).await.map_err(|e| e.to_string())?;
-                let r: zbus::Result<()> = p.call("Event", &(id, "clicked", Value::from(0i32), 0u32)).await;
+                let r: zbus::Result<()> = timed(p.call("Event", &(id, "clicked", Value::from(0i32), 0u32))).await?;
                 r.map_err(|e| e.to_string())?;
                 // Apps update check / radio state right after a click.
                 self.menu_dirty = true;
@@ -865,7 +914,7 @@ impl Actor {
                 let item = self.item(&menu.key)?;
                 let path = Self::menu_path(&item)?;
                 let p = proxy(&self.conn, &item.owner, &path, DBUSMENU).await.map_err(|e| e.to_string())?;
-                let r: zbus::Result<bool> = p.call("AboutToShow", &(id,)).await;
+                let r: zbus::Result<bool> = timed(p.call("AboutToShow", &(id,))).await?;
                 menu_event(&self.conn, &item, id, "opened").await;
                 if r.unwrap_or(false) {
                     self.state.menu = Some(fetch_menu(&self.conn, &item).await?);
@@ -874,6 +923,11 @@ impl Actor {
             }
         }
     }
+}
+
+/// Bounds one call to a tray app by [`ITEM_TIMEOUT`].
+async fn timed<T>(call: impl std::future::Future<Output = T>) -> Result<T, String> {
+    crate::runtime::timeout(ITEM_TIMEOUT, call).await.ok_or_else(|| "the tray app did not answer in time".to_string())
 }
 
 /// Indented `id  label` listing of a menu tree (CLI output).
@@ -901,7 +955,7 @@ fn outline(node: &MenuNode, depth: usize, out: &mut String) {
 async fn menu_event(conn: &Connection, item: &TrayItem, id: i32, event: &str) {
     let Some(path) = item.menu.as_deref() else { return };
     if let Ok(p) = proxy(conn, &item.owner, path, DBUSMENU).await {
-        let _: zbus::Result<()> = p.call("Event", &(id, event, Value::from(0i32), 0u32)).await;
+        let _ = timed(p.call::<_, _, ()>("Event", &(id, event, Value::from(0i32), 0u32))).await;
     }
 }
 
@@ -909,14 +963,34 @@ async fn menu_event(conn: &Connection, item: &TrayItem, id: i32, event: &str) {
 async fn fetch_menu(conn: &Connection, item: &TrayItem) -> Result<TrayMenu, String> {
     let path = item.menu.clone().ok_or_else(|| mandara_i18n::t("This item has no menu").to_string())?;
     let p = proxy(conn, &item.owner, &path, DBUSMENU).await.map_err(|e| e.to_string())?;
-    let _: zbus::Result<bool> = p.call("AboutToShow", &(0i32,)).await;
-    let (revision, (id, props, children)): Layout = p.call("GetLayout", &(0i32, -1i32, Vec::<String>::new())).await.map_err(|e| e.to_string())?;
+    let _ = timed(p.call::<_, _, bool>("AboutToShow", &(0i32,))).await;
+    let (revision, (id, props, children)): Layout = timed(p.call("GetLayout", &(0i32, -1i32, Vec::<String>::new()))).await?.map_err(|e: zbus::Error| e.to_string())?;
     Ok(TrayMenu { key: item.key.clone(), revision, root: parse_node(id, &props, &children) })
 }
 
-/// Reads every property of `item`. Returns `false` if the object doesn't
-/// answer at all (not an item, or already gone).
-async fn read_item(conn: &Connection, item: &mut TrayItem) -> bool {
+/// What reading an item's properties found.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ItemRead {
+    Found,
+    /// The object doesn't answer as an item (not one, or already gone).
+    Missing,
+    /// The app took longer than [`ITEM_TIMEOUT`]: it may still be starting.
+    TimedOut,
+}
+
+/// Reads every property of `item`.
+async fn read_item(conn: &Connection, item: &mut TrayItem) -> ItemRead {
+    match timed(read_item_inner(conn, item)).await {
+        Ok(true) => ItemRead::Found,
+        Ok(false) => ItemRead::Missing,
+        Err(err) => {
+            tracing::debug!("tray: reading {}: {err}", item.key);
+            ItemRead::TimedOut
+        }
+    }
+}
+
+async fn read_item_inner(conn: &Connection, item: &mut TrayItem) -> bool {
     let Ok(props_proxy) = proxy(conn, &item.owner, &item.path, "org.freedesktop.DBus.Properties").await else { return false };
     let mut props: HashMap<String, OwnedValue> = HashMap::new();
     let ifaces: &[&'static str] = if item.iface.is_empty() { &[KDE_ITEM, FDO_ITEM] } else if item.iface == KDE_ITEM { &[KDE_ITEM] } else { &[FDO_ITEM] };
@@ -935,8 +1009,13 @@ async fn read_item(conn: &Connection, item: &mut TrayItem) -> bool {
         // Some implementations (Chromium) fail GetAll when one property is
         // missing; read them one by one.
         for i in ifaces {
-            for name in ["Id", "Title", "Category", "Status", "IconName", "IconThemePath", "IconPixmap", "AttentionIconName", "AttentionIconPixmap", "OverlayIconName", "ToolTip", "Menu", "ItemIsMenu"] {
-                let v: zbus::Result<OwnedValue> = props_proxy.call("Get", &(*i, name)).await;
+            const NAMES: [&str; 13] = ["Id", "Title", "Category", "Status", "IconName", "IconThemePath", "IconPixmap", "AttentionIconName", "AttentionIconPixmap", "OverlayIconName", "ToolTip", "Menu", "ItemIsMenu"];
+            // One round trip's worth of waiting instead of thirteen.
+            let reads = NAMES.map(|name| {
+                let props_proxy = &props_proxy;
+                async move { (name, props_proxy.call::<_, _, OwnedValue>("Get", &(*i, name)).await) }
+            });
+            for (name, v) in futures::future::join_all(reads).await {
                 if let Ok(v) = v {
                     props.insert(name.to_string(), v);
                 }
@@ -1012,6 +1091,7 @@ async fn run(tx: async_channel::Sender<TrayState>, rx: async_channel::Receiver<E
         menu_dirty: false,
         deadline: None,
         serving: false,
+        read_retries: HashMap::new(),
     };
     actor.claim_role().await;
     let mut last: Option<TrayState> = None;

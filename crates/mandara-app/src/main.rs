@@ -25,6 +25,7 @@ mod plugin_relay;
 mod journal;
 mod logging;
 mod setup_cli;
+mod supervisor;
 mod surfaces;
 mod update_cli;
 
@@ -226,11 +227,14 @@ fn run() -> Result<()> {
     }
     use tracing_subscriber::util::SubscriberInitExt as _;
     let long = Box::leak(mandara_version::long_version().into_boxed_str()) as &'static str;
+    let journal = journal::Journal::connect(long);
+    let route = logging::route(logging::stderr_is_vt(), journal.is_some());
     logging::subscriber(
         std::io::stderr,
-        journal::Journal::connect(long),
+        journal,
         tracing_subscriber::EnvFilter::try_from_default_env()
             .unwrap_or_else(|_| "info,naga=warn,wgpu=warn,wgpu_hal=error,blade=warn".into()),
+        route,
     )
         .init();
     mandara_plugins::install_panic_hook();
@@ -351,102 +355,7 @@ fn run() -> Result<()> {
             Ok(())
         }
         Some(Cmd::DepthWorker { model, image, out }) => std::process::exit(mandara_services::depth_model::worker_main(&model, &image, &out)),
-        None => supervise(),
-    }
-}
-
-/// Runs `mandara run` as a child and restarts it whenever it exits
-/// abnormally (panic that escaped, signal, GPU loss…). A clean exit
-/// (`mandara msg quit`) ends supervision; too many crashes in a short time
-/// stop restarts so a broken build can't spin forever.
-fn supervise() -> Result<()> {
-    use std::os::unix::process::{CommandExt as _, ExitStatusExt as _};
-    use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
-    use std::time::Instant;
-
-    static STOP: AtomicBool = AtomicBool::new(false);
-    /// The running shell's pid (0 between runs), for the signal handler.
-    static CHILD: AtomicI32 = AtomicI32::new(0);
-    extern "C" fn on_signal(_: libc::c_int) {
-        STOP.store(true, Ordering::SeqCst);
-        let pid = CHILD.load(Ordering::SeqCst);
-        if pid > 0 {
-            // SAFETY: kill(2) is async-signal-safe; the pid is our own child.
-            unsafe {
-                libc::kill(pid, libc::SIGTERM);
-            }
-        }
-    }
-    // SAFETY: the handler only stores to an atomic (async-signal-safe).
-    unsafe {
-        libc::signal(libc::SIGTERM, on_signal as *const () as libc::sighandler_t);
-        libc::signal(libc::SIGINT, on_signal as *const () as libc::sighandler_t);
-        libc::signal(libc::SIGHUP, on_signal as *const () as libc::sighandler_t);
-    }
-    let exe = paths::self_exe();
-    let mut crashes: Vec<Instant> = Vec::new();
-    loop {
-        let mut cmd = std::process::Command::new(&exe);
-        cmd.arg("run").env("MANDARA_SUPERVISED", "1");
-        // SAFETY: prctl/procctl in the forked child before exec; no allocation.
-        unsafe {
-            cmd.pre_exec(|| {
-                // The shell dies with its supervisor.
-                #[cfg(target_os = "linux")]
-                libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM);
-                #[cfg(target_os = "freebsd")]
-                {
-                    let mut signal = libc::SIGTERM;
-                    libc::procctl(libc::P_PID, 0, libc::PROC_PDEATHSIG_CTL, (&raw mut signal).cast());
-                }
-                Ok(())
-            });
-        }
-        let mut child = cmd.spawn().context("starting the shell")?;
-        let pid = libc::pid_t::try_from(child.id()).context("shell pid out of range")?;
-        CHILD.store(pid, Ordering::SeqCst);
-        // A signal that landed before the pid was published.
-        if STOP.load(Ordering::SeqCst) {
-            // SAFETY: plain kill(2) on our own child's pid.
-            unsafe {
-                libc::kill(pid, libc::SIGTERM);
-            }
-        }
-        // Blocks without polling: the signal handler forwards SIGTERM to
-        // the shell, and its exit ends the wait.
-        let status = child.wait().context("waiting for the shell")?;
-        CHILD.store(0, Ordering::SeqCst);
-        if STOP.load(Ordering::SeqCst) {
-            return Ok(());
-        }
-        if status.success() {
-            return Ok(());
-        }
-        // `mandara msg restart`: come straight back, not counted as a crash.
-        if status.code() == Some(RESTART_CODE) {
-            continue;
-        }
-        let auto_restart = ConfigStore::open_default().map(|s| s.get().general.auto_restart).unwrap_or(true);
-        if !auto_restart {
-            tracing::warn!("Mandara exited abnormally; auto-restart is off (Studio → General), so it stays stopped");
-            return Ok(());
-        }
-        let why = match (status.code(), status.signal()) {
-            (_, Some(sig)) => format!("signal {sig}"),
-            (Some(code), _) => format!("exit code {code}"),
-            _ => "unknown reason".into(),
-        };
-        let now = Instant::now();
-        crashes.retain(|t| now.duration_since(*t) < CRASH_WINDOW);
-        crashes.push(now);
-        if crashes.len() > MAX_CRASHES {
-            tracing::error!("Mandara crashed {} times in a minute ({why}); not restarting. Run `mandara run` to see the error.", crashes.len());
-            anyhow::bail!("shell crash loop");
-        }
-        let doublings = u32::try_from(crashes.len().saturating_sub(1)).unwrap_or(u32::MAX);
-        let backoff = BACKOFF_FIRST.saturating_mul(2u32.saturating_pow(doublings)).min(BACKOFF_MAX);
-        tracing::warn!("Mandara exited ({why}); restarting in {} ms", backoff.as_millis());
-        std::thread::sleep(backoff);
+        None => supervisor::supervise(),
     }
 }
 
@@ -564,18 +473,11 @@ mod affinity {
     }
 }
 
-/// Exit code a shell uses to ask its supervisor for an immediate restart.
-pub const RESTART_CODE: i32 = 75;
-/// Crashes are counted over this window…
-const CRASH_WINDOW: Duration = Duration::from_secs(60);
-/// …and supervision gives up after more than this many in it.
-const MAX_CRASHES: usize = 6;
-/// Restart delay after the first crash; it doubles with each further one…
-const BACKOFF_FIRST: Duration = Duration::from_millis(250);
-/// …up to this.
-const BACKOFF_MAX: Duration = Duration::from_secs(5);
 /// Debounce of the config file watcher.
 const CONFIG_WATCH_DEBOUNCE: Duration = Duration::from_millis(150);
+/// How long after startup a "settings were reset" notice waits, so the
+/// notification service of the session is up to show it.
+const REPAIRED_NOTICE_DELAY: Duration = Duration::from_secs(5);
 
 /// Every shipped plugin and command.
 fn build_registry() -> PluginRegistry {
@@ -593,6 +495,7 @@ fn run_shell() -> Result<()> {
     let outputs = std::thread::Builder::new().name("mandara-outputs".into()).spawn(mandara_core::query_outputs).context("spawning the output query")?;
     let store = ConfigStore::open_default().context("opening config")?;
     tracing::info!("config: {} (allocator: {})", store.path().display(), alloc::NAME);
+    let repaired = store.repaired().cloned();
     alloc::start_upkeep();
     // A new Studio icon reaches installs the updater only swapped the binary of.
     let _ = std::thread::Builder::new().name("mandara-icon".into()).spawn(|| {
@@ -630,6 +533,13 @@ fn run_shell() -> Result<()> {
         cx.set_global(Fonts::resolve(&cfg.typography, cx));
         cx.set_global(build_registry());
         let (config, _shell) = mandara_ui::init_state(store, cx);
+        if let Some(repaired) = repaired {
+            cx.spawn(async move |cx| {
+                cx.background_executor().timer(REPAIRED_NOTICE_DELAY).await;
+                cx.update(|cx| mandara_ui::state::announce_repaired_config(&repaired, cx));
+            })
+            .detach();
+        }
         mandara_ui::hub::init_hub(cx);
         cx.set_global(mandara_ui::overlays::Outputs(outputs.clone()));
         mandara_ui::overlays::init_overlays(cx);
@@ -697,6 +607,12 @@ fn run_shell() -> Result<()> {
         // results without blocking the UI.
         cx.spawn(async move |cx| {
             while let Ok(Request { args, reply }) = requests.recv().await {
+                // The supervisor's liveness probe: answering from this
+                // foreground task proves the UI thread is running.
+                if ipc::is_watchdog(&args) {
+                    let _ = reply.try_send(WireResponse::ok(serde_json::Value::from("alive")));
+                    continue;
+                }
                 let output = cx.update(|cx| {
                     if args.first().map(String::as_str) == Some("commands") {
                         return Ok(mandara_plugins::Output::Value(cx.global::<PluginRegistry>().commands.catalog_json()));
@@ -749,9 +665,24 @@ fn studio_socket() -> std::path::PathBuf {
     paths::ipc_socket().with_file_name("mandara-studio.sock")
 }
 
+/// Longest Studio section request.
+const STUDIO_REQUEST_BYTES: usize = 4096;
+/// A Studio client has this long, in total, to send its section.
+const STUDIO_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+/// A second Studio waits this long for the first to start listening.
+const STUDIO_STARTUP_WAIT: Duration = Duration::from_secs(5);
+
+/// Hands `section` to a Studio that is already listening; false if none is.
+fn send_to_running_studio(sock: &std::path::Path, section: &str) -> bool {
+    use std::io::Write as _;
+    let Ok(mut stream) = std::os::unix::net::UnixStream::connect(sock) else { return false };
+    let _ = stream.set_write_timeout(Some(STUDIO_REQUEST_TIMEOUT));
+    stream.write_all(format!("{section}\n").as_bytes()).is_ok()
+}
+
 fn run_studio(section: Option<String>) -> Result<()> {
-    use std::io::{BufRead as _, Write as _};
-    use std::os::unix::net::{UnixListener, UnixStream};
+    use std::os::unix::fs::PermissionsExt as _;
+    use std::os::unix::net::UnixListener;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -760,17 +691,40 @@ fn run_studio(section: Option<String>) -> Result<()> {
     }
     // Single instance: hand the section to a running Studio and exit.
     let sock = studio_socket();
-    if let Ok(mut stream) = UnixStream::connect(&sock) {
-        writeln!(stream, "{}", section.unwrap_or_default())?;
+    if send_to_running_studio(&sock, section.as_deref().unwrap_or_default()) {
         return Ok(());
+    }
+    // Only the holder of this lock removes and binds the socket, so two
+    // Studios starting together cannot both bind it. It is held until exit.
+    let lock_path = sock.with_extension("lock");
+    let lock = std::fs::OpenOptions::new().create(true).truncate(false).write(true).open(&lock_path).with_context(|| format!("opening {}", lock_path.display()))?;
+    if lock.try_lock().is_err() {
+        // Another Studio is starting up: it takes the section once it listens.
+        let deadline = std::time::Instant::now() + STUDIO_STARTUP_WAIT;
+        while std::time::Instant::now() < deadline {
+            if send_to_running_studio(&sock, section.as_deref().unwrap_or_default()) {
+                return Ok(());
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        anyhow::bail!("another Mandara Studio is starting but is not answering ({})", sock.display());
     }
     let _ = std::fs::remove_file(&sock);
     let listener = UnixListener::bind(&sock).with_context(|| format!("binding {}", sock.display()))?;
+    std::fs::set_permissions(&sock, std::fs::Permissions::from_mode(0o600)).with_context(|| format!("restricting {}", sock.display()))?;
     let (show_tx, show_rx) = async_channel::unbounded::<String>();
     std::thread::Builder::new().name("mandara-studio-ipc".into()).spawn(move || {
         for stream in listener.incoming().flatten() {
-            let mut line = String::new();
-            if std::io::BufReader::new(stream).read_line(&mut line).is_ok() && show_tx.send_blocking(line.trim().to_string()).is_err() {
+            // A client that never finishes its line loses its turn, it does
+            // not hold up the next `mandara studio <section>`.
+            let section = match ipc::read_line_bounded(&stream, STUDIO_REQUEST_BYTES, STUDIO_REQUEST_TIMEOUT) {
+                Ok(section) => section,
+                Err(err) => {
+                    tracing::debug!("studio ipc client: {err:#}");
+                    continue;
+                }
+            };
+            if show_tx.send_blocking(section.trim().to_string()).is_err() {
                 break;
             }
         }

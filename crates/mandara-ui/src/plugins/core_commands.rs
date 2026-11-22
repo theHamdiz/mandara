@@ -492,6 +492,29 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         core,
+        CommandSpec::new_output("fonts sync", mandara_i18n::tk("Apply or restore Mandara's system font sync (typography.sync) now"), |_, cx| {
+            let cfg = config(cx).read(cx).get().clone();
+            let (tx, rx) = async_channel::bounded(1);
+            let _ = std::thread::Builder::new().name("mandara-fonts-sync-cmd".into()).spawn(move || {
+                // Same ordered worker as automatic sync — never races the ownership record.
+                let result = crate::font_sync::reconcile_wait(cfg.clone()).map(|report| {
+                    let env = mandara_services::font_sync::ApplyEnv::current();
+                    json!({
+                        "enabled": cfg.typography.sync.enabled,
+                        "active": mandara_services::font_sync::active(&env),
+                        "changed": report.changed,
+                        "kept": report.kept,
+                    })
+                    .to_string()
+                });
+                let _ = tx.send_blocking(result);
+            });
+            Ok(mandara_plugins::Output::Pending(rx))
+        })
+        .example("fonts sync"),
+    );
+    r.command(
+        core,
         CommandSpec::new("theme current", mandara_i18n::tk("Describe the active theme"), |_, cx| {
             let cfg = config(cx).read(cx).snapshot();
             let theme = mandara_core::theme_entity(cx);

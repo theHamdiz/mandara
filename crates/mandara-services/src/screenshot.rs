@@ -87,7 +87,6 @@ pub fn encode(img: &image::RgbaImage, format: mandara_config::workflow::ShotForm
 
 /// Feeds `png` to `command`'s stdin (e.g. `satty -f -`), detached.
 pub fn pipe_to(command: &str, png: Vec<u8>) -> Result<(), String> {
-    use std::io::Write as _;
     use std::os::unix::process::CommandExt as _;
     let mut child = std::process::Command::new("sh")
         .arg("-c")
@@ -98,12 +97,44 @@ pub fn pipe_to(command: &str, png: Vec<u8>) -> Result<(), String> {
         .process_group(0)
         .spawn()
         .map_err(|e| format!("{command}: {e}"))?;
-    let mut stdin = child.stdin.take().ok_or("no stdin")?;
+    let stdin = child.stdin.take().ok_or("no stdin")?;
     std::thread::spawn(move || {
-        let _ = stdin.write_all(&png);
+        if let Err(e) = write_before(&stdin, &png, PIPE_WRITE_TIMEOUT) {
+            // The consumer never read its input: don't leave it waiting.
+            tracing::warn!("screenshot pipe: {e}; stopping the command");
+            let _ = child.kill();
+        }
         drop(stdin);
         let _ = child.wait();
     });
+    Ok(())
+}
+
+/// How long a piped command gets to take the whole image.
+const PIPE_WRITE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// Writes `bytes` to `pipe` (made non-blocking) within `timeout`.
+fn write_before(pipe: &std::process::ChildStdin, bytes: &[u8], timeout: std::time::Duration) -> std::io::Result<()> {
+    use rustix::event::{PollFd, PollFlags, Timespec, poll};
+    use rustix::fs::{OFlags, fcntl_getfl, fcntl_setfl};
+    fcntl_setfl(pipe, fcntl_getfl(pipe)? | OFlags::NONBLOCK)?;
+    let deadline = std::time::Instant::now() + timeout;
+    let mut rest = bytes;
+    while !rest.is_empty() {
+        match rustix::io::write(pipe, rest) {
+            Ok(n) => rest = &rest[n..],
+            Err(rustix::io::Errno::INTR) => {}
+            Err(rustix::io::Errno::AGAIN) => {
+                let left = deadline.saturating_duration_since(std::time::Instant::now());
+                if left.is_zero() {
+                    return Err(std::io::ErrorKind::TimedOut.into());
+                }
+                let wait = Timespec { tv_sec: left.as_secs() as i64, tv_nsec: i64::from(left.subsec_nanos()) };
+                poll(&mut [PollFd::new(pipe, PollFlags::OUT)], Some(&wait))?;
+            }
+            Err(e) => return Err(e.into()),
+        }
+    }
     Ok(())
 }
 
@@ -144,6 +175,21 @@ pub fn describe(r: &CaptureResult) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_pipe_nobody_reads_times_out_and_a_reader_gets_everything() {
+        let spawn = |cmd: &str| std::process::Command::new("sh").arg("-c").arg(cmd).stdin(std::process::Stdio::piped()).spawn().unwrap();
+        let big = vec![7u8; 4 << 20];
+        let mut stuck = spawn("sleep 30");
+        let err = super::write_before(stuck.stdin.as_ref().unwrap(), &big, std::time::Duration::from_millis(100)).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::TimedOut);
+        let _ = stuck.kill();
+        let _ = stuck.wait();
+        let mut reader = spawn("cat > /dev/null");
+        super::write_before(reader.stdin.as_ref().unwrap(), &big, std::time::Duration::from_secs(20)).unwrap();
+        drop(reader.stdin.take());
+        assert!(reader.wait().unwrap().success());
+    }
+
     use super::*;
 
     #[test]

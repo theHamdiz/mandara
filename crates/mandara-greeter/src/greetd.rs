@@ -13,7 +13,7 @@
 
 use std::io::{self, Read, Write};
 use std::os::unix::net::UnixStream;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -55,10 +55,13 @@ const MAX_MESSAGE: u32 = 1 << 20;
 
 /// Frames a message: native-endian length + JSON.
 pub fn encode(req: &Request) -> io::Result<Vec<u8>> {
-    let body = serde_json::to_vec(req).map_err(io::Error::other)?;
+    // The JSON holds the password: wipe this copy once it is framed (the
+    // caller wipes the framed one).
+    let mut body = serde_json::to_vec(req).map_err(io::Error::other)?;
     let mut out = Vec::with_capacity(body.len() + 4);
     out.extend_from_slice(&(body.len() as u32).to_ne_bytes());
     out.extend_from_slice(&body);
+    wipe_bytes(&mut body);
     Ok(out)
 }
 
@@ -80,14 +83,38 @@ pub trait Transport: Send {
     fn roundtrip(&mut self, req: &Request) -> io::Result<Response>;
 }
 
-/// The real daemon.
+/// How long the daemon may take to answer one request. Longer than any
+/// PAM step a person waits through (a fingerprint reader gives up after
+/// 30 s, a slow directory login takes a few seconds), short enough that a
+/// hung daemon ends in an error on screen instead of a login that never
+/// finishes.
+const GREETD_IO_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// The real daemon. A failed request leaves the connection out of step with
+/// greetd (a late answer would be read as the reply to the next request),
+/// so it is dropped and the next request connects afresh.
 pub struct GreetdSocket {
-    stream: UnixStream,
+    path: PathBuf,
+    timeout: std::time::Duration,
+    stream: Option<UnixStream>,
 }
 
 impl GreetdSocket {
     pub fn connect(path: &Path) -> io::Result<Self> {
-        Ok(Self { stream: UnixStream::connect(path)? })
+        Self::connect_with_timeout(path, GREETD_IO_TIMEOUT)
+    }
+
+    fn connect_with_timeout(path: &Path, timeout: std::time::Duration) -> io::Result<Self> {
+        let mut socket = Self { path: path.to_path_buf(), timeout, stream: None };
+        socket.stream = Some(socket.open()?);
+        Ok(socket)
+    }
+
+    fn open(&self) -> io::Result<UnixStream> {
+        let stream = UnixStream::connect(&self.path)?;
+        stream.set_read_timeout(Some(self.timeout))?;
+        stream.set_write_timeout(Some(self.timeout))?;
+        Ok(stream)
     }
 
     /// Connects to `$GREETD_SOCK`.
@@ -99,10 +126,22 @@ impl GreetdSocket {
 
 impl Transport for GreetdSocket {
     fn roundtrip(&mut self, req: &Request) -> io::Result<Response> {
+        let mut stream = match self.stream.take() {
+            Some(stream) => stream,
+            None => self.open()?,
+        };
         let mut msg = encode(req)?;
-        let res = self.stream.write_all(&msg).and_then(|_| read_response(&mut self.stream));
+        let res = stream.write_all(&msg).and_then(|_| read_response(&mut stream));
         wipe_bytes(&mut msg);
-        res
+        match res {
+            Ok(res) => {
+                self.stream = Some(stream);
+                Ok(res)
+            }
+            // A socket read that timed out reports "would block"; say what happened.
+            Err(e) if matches!(e.kind(), io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut) => Err(io::ErrorKind::TimedOut.into()),
+            Err(e) => Err(e),
+        }
     }
 }
 
@@ -195,7 +234,7 @@ impl<T: Transport> Conversation<T> {
 
     /// Answers the pending prompt.
     pub fn respond(&mut self, answer: Option<String>) -> (Step, Notes) {
-        let res = self.transport.roundtrip(&Request::PostAuthMessageResponse { response: answer });
+        let res = self.answer(answer);
         self.drive(res, None)
     }
 
@@ -204,6 +243,7 @@ impl<T: Transport> Conversation<T> {
         match self.transport.roundtrip(&Request::StartSession { cmd, env }) {
             Ok(Response::Success) => {
                 self.active = false;
+                clear_console();
                 Ok(())
             }
             Ok(Response::Error { description, .. }) => {
@@ -224,7 +264,27 @@ impl<T: Transport> Conversation<T> {
         }
     }
 
-    fn drive(&mut self, mut res: io::Result<Response>, mut secret: Option<String>) -> (Step, Notes) {
+    /// Sends the answer to a prompt and wipes the request (it is the
+    /// password) once the daemon has replied.
+    fn answer(&mut self, response: Option<String>) -> io::Result<Response> {
+        let mut req = Request::PostAuthMessageResponse { response };
+        let res = self.transport.roundtrip(&req);
+        if let Request::PostAuthMessageResponse { response: Some(r) } = &mut req {
+            wipe(r);
+        }
+        res
+    }
+
+    /// Runs the conversation, then wipes the password if no prompt took it.
+    fn drive(&mut self, res: io::Result<Response>, mut secret: Option<String>) -> (Step, Notes) {
+        let out = self.drive_prompts(res, &mut secret);
+        if let Some(s) = secret.as_mut() {
+            wipe(s);
+        }
+        out
+    }
+
+    fn drive_prompts(&mut self, mut res: io::Result<Response>, secret: &mut Option<String>) -> (Step, Notes) {
         let mut notes = Notes::default();
         // A PAM stack may interleave many info/error messages; bound it.
         for _ in 0..64 {
@@ -248,10 +308,10 @@ impl<T: Transport> Conversation<T> {
                         if !text.is_empty() {
                             if auth_message_type == AuthMessageType::Info { notes.info.push(text) } else { notes.errors.push(text) }
                         }
-                        res = self.transport.roundtrip(&Request::PostAuthMessageResponse { response: None });
+                        res = self.answer(None);
                     }
                     AuthMessageType::Secret if secret.is_some() => {
-                        res = self.transport.roundtrip(&Request::PostAuthMessageResponse { response: secret.take() });
+                        res = self.answer(secret.take());
                     }
                     kind => {
                         return (Step::Prompt { secret: kind == AuthMessageType::Secret, message: auth_message.trim().to_string() }, notes);
@@ -284,6 +344,21 @@ pub fn wipe(s: &mut String) {
     // SAFETY: zero bytes are valid UTF-8.
     wipe_bytes(unsafe { s.as_bytes_mut() });
     s.clear();
+}
+
+/// Blanks the login VT and hides its cursor so nothing shows on it between
+/// the greeter and the desktop. Best effort: only a real VT is touched.
+fn clear_console() {
+    use std::io::Write as _;
+    let Ok(mut tty) = std::fs::OpenOptions::new().write(true).open("/dev/tty") else { return };
+    // Skip ptys: only a Linux VT has the KD ioctls.
+    let mut mode: libc::c_int = 0;
+    // SAFETY: KDGETMODE writes one int through the valid pointer.
+    use std::os::fd::AsRawFd as _;
+    if unsafe { libc::ioctl(tty.as_raw_fd(), 0x4B3B, &mut mode) } != 0 {
+        return;
+    }
+    let _ = tty.write_all(b"\x1b[H\x1b[2J\x1b[3J\x1b[?25l");
 }
 
 #[cfg(test)]
@@ -355,6 +430,42 @@ mod tests {
         let mut sock = GreetdSocket::connect(&path).unwrap();
         let res = sock.roundtrip(&Request::CreateSession { username: "alice".into() }).unwrap();
         assert!(matches!(res, Response::AuthMessage { auth_message_type: AuthMessageType::Secret, .. }));
+        server.join().unwrap();
+    }
+
+    /// A daemon that stops answering ends the request with an error after
+    /// the timeout, and the next request uses a new connection instead of
+    /// the one a late reply would have confused.
+    #[test]
+    fn a_silent_daemon_times_out_and_the_next_request_reconnects() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("greetd.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&path).unwrap();
+        let (done_tx, done_rx) = std::sync::mpsc::channel::<()>();
+        let server = std::thread::spawn(move || {
+            let read_request = |s: &mut UnixStream| {
+                let mut len = [0u8; 4];
+                s.read_exact(&mut len).unwrap();
+                let mut body = vec![0u8; u32::from_ne_bytes(len) as usize];
+                s.read_exact(&mut body).unwrap();
+            };
+            // First connection: takes the request, never answers.
+            let (mut silent, _) = listener.accept().unwrap();
+            read_request(&mut silent);
+            // The retry arrives on a second connection, which does answer.
+            let (mut live, _) = listener.accept().unwrap();
+            read_request(&mut live);
+            let reply = br#"{"type":"success"}"#;
+            live.write_all(&(reply.len() as u32).to_ne_bytes()).unwrap();
+            live.write_all(reply).unwrap();
+            done_rx.recv().unwrap();
+            drop(silent);
+        });
+        let mut sock = GreetdSocket::connect_with_timeout(&path, std::time::Duration::from_millis(100)).unwrap();
+        let err = sock.roundtrip(&Request::CancelSession).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::TimedOut);
+        assert_eq!(sock.roundtrip(&Request::CancelSession).unwrap(), Response::Success);
+        done_tx.send(()).unwrap();
         server.join().unwrap();
     }
 

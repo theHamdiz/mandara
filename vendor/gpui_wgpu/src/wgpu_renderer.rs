@@ -269,6 +269,13 @@ impl WgpuResources {
         self.path_intermediate_view = None;
         self.path_msaa_texture = None;
         self.path_msaa_view = None;
+    }
+
+    /// Mandara patch 21: drops the transition pipeline and its buffers. They
+    /// belong to the device and the surface's format, not to the path
+    /// textures, so only a replaced surface or a GPU error clears them (and
+    /// the idle release, after [`crate::transition::IDLE_RELEASE`]).
+    fn release_transitions(&mut self) {
         self.transitions = None;
     }
 }
@@ -298,6 +305,55 @@ struct PathTextureUsage {
     /// When the current run of path-less / oversized frames began.
     without_paths_since: Option<std::time::Instant>,
     oversized_since: Option<std::time::Instant>,
+    /// Mandara patch 20: when a frame last drew paths, for releasing the
+    /// textures of a surface that then goes idle (see
+    /// [`WgpuRenderer::idle_release_in`]).
+    last_path_frame: Option<std::time::Instant>,
+}
+
+impl WgpuRendererCore {
+    /// Mandara patch 20: how long until the path textures or the transition
+    /// resources are due for release, `None` when there is nothing to free.
+    fn idle_release_in(&self) -> Option<std::time::Duration> {
+        let now = std::time::Instant::now();
+        let paths = self
+            .resources
+            .path_intermediate_texture
+            .as_ref()
+            .and_then(|_| {
+                idle_remaining(self.path_texture_usage.last_path_frame, PATH_TEXTURE_IDLE_TIME, now)
+            });
+        let transitions = self.resources.transitions.as_ref().and_then(|t| {
+            idle_remaining(Some(t.last_used), crate::transition::IDLE_RELEASE, now)
+        });
+        [paths, transitions].into_iter().flatten().min()
+    }
+
+    /// Mandara patch 20: frees whatever has been idle long enough, without
+    /// drawing a frame.
+    fn release_idle(&mut self) {
+        let now = std::time::Instant::now();
+        let paths_idle = idle_remaining(
+            self.path_texture_usage.last_path_frame,
+            PATH_TEXTURE_IDLE_TIME,
+            now,
+        )
+        .is_some_and(|left| left.is_zero());
+        if paths_idle && self.resources.path_intermediate_texture.is_some() {
+            log::debug!("path textures released after {PATH_TEXTURE_IDLE_TIME:?} without paths");
+            // Dropping (not destroying) keeps in-flight submissions valid.
+            self.resources.invalidate_intermediate_textures();
+            self.path_texture_usage = PathTextureUsage::default();
+        }
+        if self
+            .resources
+            .transitions
+            .as_ref()
+            .is_some_and(|t| t.last_used.elapsed() >= crate::transition::IDLE_RELEASE)
+        {
+            self.resources.release_transitions();
+        }
+    }
 }
 
 impl PathTextureUsage {
@@ -305,6 +361,64 @@ impl PathTextureUsage {
     fn expired(frames: u32, since: Option<std::time::Instant>) -> bool {
         frames >= PATH_TEXTURE_IDLE_FRAMES || since.is_some_and(|t| t.elapsed() >= PATH_TEXTURE_IDLE_TIME)
     }
+}
+
+/// Mandara patch 20: how long until `last_used` is `limit` old, `None` when
+/// it never was used.
+fn idle_remaining(
+    last_used: Option<std::time::Instant>,
+    limit: std::time::Duration,
+    now: std::time::Instant,
+) -> Option<std::time::Duration> {
+    last_used.map(|used| limit.saturating_sub(now.saturating_duration_since(used)))
+}
+
+/// Mandara patch 19: when GPU device-loss recovery may try again. The
+/// first attempt waits [`Self::SETTLE`] for the driver, every failure doubles
+/// the wait up to [`Self::MAX_DELAY`]. The waits are the caller's timers, not
+/// sleeps: recovery runs on the window's event loop.
+#[derive(Default)]
+struct RecoveryPacing {
+    failures: u32,
+    not_before: Option<std::time::Instant>,
+}
+
+impl RecoveryPacing {
+    /// The driver gets this long to stabilise after a device loss.
+    const SETTLE: std::time::Duration = std::time::Duration::from_millis(350);
+    const MAX_DELAY: std::time::Duration = std::time::Duration::from_secs(10);
+
+    /// How long to wait before the next attempt, `None` when it is due. The
+    /// first call after a loss starts the settle period.
+    fn wait(&mut self, now: std::time::Instant) -> Option<std::time::Duration> {
+        match self.not_before {
+            None => {
+                self.not_before = Some(now + Self::SETTLE);
+                Some(Self::SETTLE)
+            }
+            Some(at) if now < at => Some(at - now),
+            Some(_) => None,
+        }
+    }
+
+    /// Records a failed attempt; returns how long to wait for the next.
+    fn failed(&mut self, now: std::time::Instant) -> std::time::Duration {
+        self.failures = self.failures.saturating_add(1);
+        let delay = Self::SETTLE
+            .saturating_mul(1u32 << self.failures.min(8))
+            .min(Self::MAX_DELAY);
+        self.not_before = Some(now + delay);
+        delay
+    }
+}
+
+/// Mandara patch 19: what one step of [`WgpuRenderer::recover`] did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Recovery {
+    /// The renderer works again.
+    Recovered,
+    /// Not recovered; call `recover` again after this long.
+    RetryIn(std::time::Duration),
 }
 
 struct WgpuRendererCore {
@@ -360,6 +474,8 @@ pub struct WgpuRenderer {
     observed_error_generation: u64,
     last_surface_error: Option<String>,
     needs_redraw: bool,
+    /// Mandara patch 19: when device-loss recovery may try again.
+    recovery: RecoveryPacing,
 }
 
 impl WgpuRenderer {
@@ -585,6 +701,7 @@ impl WgpuRenderer {
             observed_error_generation: 0,
             last_surface_error: None,
             needs_redraw: false,
+            recovery: RecoveryPacing::default(),
         })
     }
 }
@@ -1249,6 +1366,7 @@ impl WgpuRenderer {
                 panic!("Too many consecutive GPU errors. Last error: {error}");
             } else if self.failed_frame_count > 5 {
                 core.resources.invalidate_intermediate_textures();
+                core.resources.release_transitions();
                 self.atlas.clear();
                 self.needs_redraw = true;
                 self.failed_frame_count = 0;
@@ -1517,6 +1635,7 @@ impl WgpuRendererCore {
         };
         self.path_texture_usage.frames_without_paths = 0;
         self.path_texture_usage.without_paths_since = None;
+        self.path_texture_usage.last_path_frame = Some(std::time::Instant::now());
 
         let round_up = |extent: u32, limit: i32| {
             extent
@@ -1935,7 +2054,7 @@ impl WgpuRendererCore {
                 .as_ref()
                 .is_some_and(|t| t.last_used.elapsed() >= crate::transition::IDLE_RELEASE)
             {
-                self.resources.transitions = None;
+                self.resources.release_transitions();
             }
             return 0;
         }
@@ -2489,6 +2608,7 @@ impl WgpuRenderer {
         };
         surface.configure(&core.resources.device, &self.surface_config);
         core.resources.invalidate_intermediate_textures();
+        core.resources.release_transitions();
         self.state = RendererState::Ready { surface, core };
 
         Ok(())
@@ -2505,6 +2625,25 @@ impl WgpuRenderer {
         self.device_errors.device_lost()
     }
 
+    /// Mandara patch 20: how long until idle GPU memory (path textures,
+    /// transition resources) is due for [`release_idle_resources`], `None`
+    /// when there is none. A surface that draws nothing more would otherwise
+    /// keep it until its next frame.
+    ///
+    /// [`release_idle_resources`]: Self::release_idle_resources
+    pub fn idle_release_in(&self) -> Option<std::time::Duration> {
+        self.core().and_then(WgpuRendererCore::idle_release_in)
+    }
+
+    /// Mandara patch 20: frees whatever has been idle long enough, without
+    /// drawing. Call it when [`idle_release_in`](Self::idle_release_in) has
+    /// elapsed.
+    pub fn release_idle_resources(&mut self) {
+        if let Some(core) = self.core_mut() {
+            core.release_idle();
+        }
+    }
+
     /// Returns true if a redraw is needed because GPU state was cleared.
     /// Calling this method clears the flag.
     pub fn needs_redraw(&mut self) -> bool {
@@ -2518,8 +2657,15 @@ impl WgpuRenderer {
     /// This method coordinates recovery across multiple windows:
     /// - The first window to call this will recreate the shared context
     /// - Subsequent windows will adopt the already-recovered context
+    ///
+    /// Mandara patch 19: never sleeps and never gives up. A step that is
+    /// not due, or that fails, returns [`Recovery::RetryIn`] with how long
+    /// the caller should wait (a timer, not the event loop's thread) before
+    /// calling again: 350 ms for the driver to settle, then doubling up to
+    /// 10 s, so a GPU that stays away costs one attempt per 10 s and one that
+    /// comes back (suspend / resume) is picked up.
     #[cfg(not(target_family = "wasm"))]
-    pub fn recover<W>(&mut self, window: &W) -> anyhow::Result<()>
+    pub fn recover<W>(&mut self, window: &W) -> Recovery
     where
         W: HasWindowHandle + HasDisplayHandle + std::fmt::Debug + Send + Sync + Clone + 'static,
     {
@@ -2530,6 +2676,27 @@ impl WgpuRenderer {
             .borrow()
             .as_ref()
             .is_none_or(|ctx| ctx.device_lost());
+
+        let now = std::time::Instant::now();
+        if needs_new_context && let Some(wait) = self.recovery.wait(now) {
+            return Recovery::RetryIn(wait);
+        }
+        match self.try_recover(window, needs_new_context) {
+            Ok(()) => Recovery::Recovered,
+            Err(err) => {
+                let delay = self.recovery.failed(now);
+                log::warn!("GPU recovery failed, retrying in {delay:?}: {err:#}");
+                Recovery::RetryIn(delay)
+            }
+        }
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    fn try_recover<W>(&mut self, window: &W, needs_new_context: bool) -> anyhow::Result<()>
+    where
+        W: HasWindowHandle + HasDisplayHandle + std::fmt::Debug + Send + Sync + Clone + 'static,
+    {
+        let gpu_context = self.context.as_ref().expect("recover requires gpu_context");
 
         let window_handle = window
             .window_handle()
@@ -2542,12 +2709,10 @@ impl WgpuRenderer {
             self.state = RendererState::Released;
             *gpu_context.borrow_mut() = None;
 
-            // Wait briefly for the GPU driver to stabilize, then try to
-            // recreate the context without software renderers. If this fails
-            // the caller should request another frame and retry — the real GPU
-            // may need more time to come back (e.g. after suspend/resume).
-            std::thread::sleep(std::time::Duration::from_millis(350));
-
+            // Recreate the context without software renderers. If this
+            // fails the caller retries after `recovery`'s delay (the real GPU
+            // may need more time to come back, e.g. after suspend/resume); the
+            // driver already had its settle period.
             let (new_context, surface) =
                 new_context_and_surface(window, window_handle.as_raw(), self.compositor_gpu, true)?;
             *gpu_context.borrow_mut() = Some(new_context);
@@ -3005,6 +3170,46 @@ mod tests {
     #[cfg(target_os = "linux")]
     use gpui::{DevicePixels, PlatformHeadlessRenderer, Scene};
 
+    #[test]
+    fn recovery_waits_for_the_driver_then_backs_off_to_a_cap() {
+        use std::time::{Duration, Instant};
+        let start = Instant::now();
+        let mut pacing = RecoveryPacing::default();
+        // The first call after a loss starts the settle period, which then runs out.
+        assert_eq!(pacing.wait(start), Some(RecoveryPacing::SETTLE));
+        assert_eq!(
+            pacing.wait(start + Duration::from_millis(100)),
+            Some(Duration::from_millis(250))
+        );
+        assert_eq!(pacing.wait(start + RecoveryPacing::SETTLE), None);
+        // Each failure doubles the wait, up to the cap, and no attempt is due before it.
+        let mut now = start + RecoveryPacing::SETTLE;
+        let mut previous = RecoveryPacing::SETTLE;
+        for _ in 0..12 {
+            let delay = pacing.failed(now);
+            assert!(delay >= previous && delay <= RecoveryPacing::MAX_DELAY);
+            assert_eq!(pacing.wait(now), Some(delay));
+            assert_eq!(pacing.wait(now + delay), None);
+            previous = delay;
+            now += delay;
+        }
+        assert_eq!(previous, RecoveryPacing::MAX_DELAY);
+    }
+
+    #[test]
+    fn idle_remaining_counts_down_and_stops_at_zero() {
+        use std::time::{Duration, Instant};
+        let now = Instant::now();
+        let limit = Duration::from_millis(1500);
+        assert_eq!(idle_remaining(None, limit, now), None);
+        assert_eq!(idle_remaining(Some(now), limit, now), Some(limit));
+        assert_eq!(
+            idle_remaining(Some(now), limit, now + Duration::from_millis(500)),
+            Some(Duration::from_millis(1000))
+        );
+        assert_eq!(idle_remaining(Some(now), limit, now + limit * 2), Some(Duration::ZERO));
+    }
+
     #[cfg(target_os = "linux")]
     fn device_size(width: i32, height: i32) -> Size<DevicePixels> {
         Size {
@@ -3424,6 +3629,9 @@ mod tests {
             assert!(changed > 0, "kind {kind}: something of the new image shows at 70 %");
         }
         assert!(renderer.core.resources.transitions.is_some());
+        // Mandara patch 21: path textures coming and going leave them alone.
+        renderer.core.resources.invalidate_intermediate_textures();
+        assert!(renderer.core.resources.transitions.is_some(), "kept across path texture changes");
         // A frame without transitions keeps them for a moment, then frees them.
         renderer.render_scene_to_image(&Scene::default(), device_size(8, 8))?;
         assert!(renderer.core.resources.transitions.is_some());
@@ -3432,6 +3640,32 @@ mod tests {
         }
         renderer.render_scene_to_image(&Scene::default(), device_size(8, 8))?;
         assert!(renderer.core.resources.transitions.is_none(), "released after the idle period");
+        Ok(())
+    }
+
+    /// Mandara patch 20: idle transition resources are released by
+    /// `release_idle_resources`, without another frame.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn idle_transition_resources_are_released_without_a_frame() -> anyhow::Result<()> {
+        let mut renderer = WgpuHeadlessRenderer::new()?;
+        let from = solid_image(&mut renderer, 1, (8, 8), [0, 0, 255, 255])?;
+        let to = solid_image(&mut renderer, 2, (8, 8), [255, 0, 0, 255])?;
+        assert!(renderer.core.idle_release_in().is_none(), "nothing to release yet");
+        let mut scene = Scene::default();
+        scene.insert_primitive(transition(from, to, gpui::TRANSITION_KIND_FADE, 0.5, (8.0, 8.0)));
+        scene.finish();
+        renderer.render_scene_to_image(&scene, device_size(8, 8))?;
+        assert!(renderer.core.idle_release_in().is_some_and(|left| left <= crate::transition::IDLE_RELEASE));
+        renderer.core.release_idle();
+        assert!(renderer.core.resources.transitions.is_some(), "not idle long enough yet");
+        if let Some(t) = renderer.core.resources.transitions.as_mut() {
+            t.last_used -= crate::transition::IDLE_RELEASE;
+        }
+        assert_eq!(renderer.core.idle_release_in(), Some(std::time::Duration::ZERO));
+        renderer.core.release_idle();
+        assert!(renderer.core.resources.transitions.is_none());
+        assert!(renderer.core.idle_release_in().is_none());
         Ok(())
     }
 

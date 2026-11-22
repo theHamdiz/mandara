@@ -68,6 +68,10 @@ pub struct Market {
     /// Installed marketplace plugins (repository → folder, tag), read with
     /// every search and after every install / removal — not per row per frame.
     installed: Rc<HashMap<String, (std::path::PathBuf, String)>>,
+    /// `installed` the other way round, built with it: folder → repository.
+    repo_by_dir: Rc<HashMap<std::path::PathBuf, String>>,
+    /// Plugin id (the folder's name) → repository, built with `installed`.
+    repo_by_id: Rc<HashMap<String, String>>,
     /// The query of the last search (empty = the whole marketplace).
     searched: String,
     /// Releases that failed the compliance check (repository → flag), read
@@ -97,6 +101,8 @@ impl Market {
 
     fn apply_local(&mut self, revision: u64, installed: HashMap<String, (std::path::PathBuf, String)>, flags: BTreeMap<String, Flag>) -> bool {
         if revision != self.local_revision { return false; }
+        self.repo_by_dir = Rc::new(installed.iter().map(|(repo, (dir, _))| (dir.clone(), repo.clone())).collect());
+        self.repo_by_id = Rc::new(installed.iter().filter_map(|(repo, (dir, _))| Some((dir.file_name()?.to_str()?.to_string(), repo.clone()))).collect());
         self.installed = Rc::new(installed);
         self.flags = Rc::new(flags);
         self.local_primed = true;
@@ -147,7 +153,7 @@ impl StudioView {
     /// Match the installer-owned origin record, never a publisher-supplied URL.
     pub(super) fn marketplace_listing(&self, manifest: &mandara_plugins::PluginManifest) -> Option<Arc<Listing>> {
         let mandara_plugins::PluginOrigin::ThirdParty { path } = &manifest.origin else { return None; };
-        self.market.cached.get("")?.installed(path, &self.market.installed)
+        self.market.cached.get("")?.installed(path, &self.market.repo_by_dir)
     }
     /// Installation waits for background discovery before opening the existing
     /// focus-trapped modal. Grants stay off until the person chooses them.
@@ -280,7 +286,8 @@ impl StudioView {
     /// The flag of installed plugin `id`, when the installed release is
     /// the flagged one (installed anyway).
     pub(super) fn installed_flag(&self, id: &str) -> Option<Flag> {
-        let (repo, (_, tag)) = self.market.installed.iter().find(|(_, (dir, _))| dir.file_name().is_some_and(|n| n == id))?;
+        let repo = self.market.repo_by_id.get(id)?;
+        let (_, tag) = self.market.installed.get(repo)?;
         self.market.flags.get(repo).filter(|f| f.tag == *tag).cloned()
     }
 
@@ -305,7 +312,7 @@ impl StudioView {
     /// The marketplace repository (`owner/repo`) a plugin folder was
     /// installed from, if it came from the marketplace.
     pub(super) fn market_repo_of(&self, dir: &std::path::Path) -> Option<String> {
-        self.market.installed.iter().find(|(_, (folder, _))| folder == dir).map(|(repo, _)| repo.clone())
+        self.market.repo_by_dir.get(dir).cloned()
     }
 
     fn market_job(&mut self, repo: String, install: bool, force: bool, cx: &mut Context<Self>) {
@@ -628,7 +635,7 @@ impl StudioView {
             .iter()
             .filter_map(|(_, m)| {
                 let mandara_plugins::PluginOrigin::ThirdParty { path } = &m.origin else { return None };
-                self.market.installed.iter().find(|(_, (dir, _))| dir == path).map(|(repo, _)| repo.clone())
+                self.market.repo_by_dir.get(path).cloned()
             })
             .collect();
         // Prefer a listing card (Get/Update/Remove) when the current search or
@@ -637,13 +644,17 @@ impl StudioView {
             Some(Ok(found)) => found.items.iter().cloned().collect(),
             _ => Vec::new(),
         };
+        // One lookup table per render: the current search wins over the
+        // whole-marketplace cache.
+        let cached_listings = self.market.cached.get("").map(|c| c.items.clone()).unwrap_or_default();
+        let listing_of: HashMap<&str, &Arc<Listing>> = cached_listings.iter().chain(current_listings.iter()).map(|l| (l.full_name.as_str(), l)).collect();
         let local_cards: Vec<AnyElement> = local
             .iter()
             .map(|(on, m)| {
                 let listing = (|| {
                     let mandara_plugins::PluginOrigin::ThirdParty { path } = &m.origin else { return None };
-                    let repo = self.market.installed.iter().find(|(_, (dir, _))| dir == path)?.0.as_str();
-                    current_listings.iter().find(|l| l.full_name == repo).cloned().or_else(|| self.marketplace_listing(m))
+                    let repo = self.market.repo_by_dir.get(path)?;
+                    listing_of.get(repo.as_str()).map(|l| (*l).clone())
                 })();
                 match listing {
                     Some(l) => self.listing_card("market-local", &l, fit.card_w, p, cx),

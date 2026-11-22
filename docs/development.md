@@ -14,7 +14,13 @@ system programs it starts are MangoWM, `dbus-daemon`, `bwrap`, PipeWire
 Start `mandara` to use its restart supervisor; `mandara run` runs the shell
 directly. An explicit `mandara msg quit` stops both. A display event loop
 that stops without that request exits as a failure, so the supervisor can
-restart it under General's auto-restart setting and crash-loop limit.
+restart it under General's auto-restart setting and crash-loop limit. The
+supervisor also probes the shell every five seconds (`mandara msg watchdog`
+does the same by hand; the foreground UI thread answers it). A shell that
+misses three probes in a row, after its ninety-second start-up grace, is
+killed with `SIGKILL` and restarted like a crash; with auto-restart off it is
+left running. On `SIGTERM`, `SIGINT` or `SIGHUP` the supervisor forwards
+`SIGTERM` and kills a shell still running eight seconds later.
 
 On systems with journald, warnings and errors include the build identity
 in the journal even when a compositor redirects stderr to `/dev/null`:

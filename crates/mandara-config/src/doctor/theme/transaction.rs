@@ -5,10 +5,10 @@ use mandara_i18n::{t, tf};
 use mandara_theme::templates::{FileStamp, WriteLock};
 use std::{borrow::Cow, path::Path};
 
-use super::LiveCheck;
+use super::{LiveCheck, journal::{self, Journal}};
 
 /// A shortcut transaction changes the native source and, at most, one drop-in.
-const MAX_FILES: usize = 2;
+pub(super) const MAX_FILES: usize = 2;
 
 pub struct FileEdit<'a> {
     pub lock: &'a WriteLock,
@@ -65,6 +65,11 @@ fn guarded_batch_using(
         !edits.is_empty() && edits.len() <= MAX_FILES,
         "invalid shortcut transaction size"
     );
+    // A crash or an incomplete rollback of an earlier transaction can leave
+    // half of it published; put that back before building on these files. The
+    // caller's `before` snapshots were read earlier, so the stamp checks below
+    // report "changed" and the edit is simply retried.
+    journal::recover_interrupted(edits[0].lock.path())?;
     let mut original = [None; MAX_FILES];
     let mut written = [None; MAX_FILES];
     let mut recovery = [None, None];
@@ -106,6 +111,20 @@ fn guarded_batch_using(
         }
     }
 
+    let mut journal = Journal::begin(
+        edits[0].lock.path(),
+        edits
+            .iter()
+            .enumerate()
+            .map(|(index, edit)| {
+                (
+                    edit.lock.path().to_path_buf(),
+                    recovery[index].clone(),
+                    original[index].map(|_| journal::hash(edit.before.as_bytes())),
+                )
+            })
+            .collect(),
+    )?;
     let result = (|| -> Result<()> {
         for intermediate in [true, false] {
             for (index, edit) in edits.iter().enumerate() {
@@ -130,6 +149,7 @@ fn guarded_batch_using(
                 if body == current[index] {
                     continue;
                 }
+                journal.will_publish(index, body.as_bytes())?;
                 let previous = written[index].or(original[index]);
                 match publish(edit.lock, previous, &body) {
                     Ok(stamp) => {
@@ -160,7 +180,9 @@ fn guarded_batch_using(
         Ok(())
     })();
     let Err(mut error) = result else {
-        return Ok(());
+        // The journal is the commit point: left behind, it would make the next
+        // transaction undo what just succeeded.
+        return journal.finish().context("the shortcuts were applied, but their transaction journal could not be removed");
     };
     let mut restored = true;
     for (index, edit) in edits.iter().enumerate().rev() {
@@ -191,6 +213,9 @@ fn guarded_batch_using(
             "The files were restored, but the compositor could not reload them: {error}",
             &[("error", &format!("{restore:#}"))],
         ));
+    }
+    if restored && let Err(journal) = journal.finish() {
+        error = error.context(format!("{journal:#}"));
     }
     Err(error)
 }
@@ -503,5 +528,83 @@ mod tests {
         assert_eq!(fs::read_to_string(&native).unwrap(), "external edit");
         assert_eq!(fs::read_to_string(&generated).unwrap(), "old generated");
         assert!(!check.restored.get());
+    }
+
+    fn pair_edits<'a>(first: &'a WriteLock, second: &'a WriteLock) -> [FileEdit<'a>; 2] {
+        [
+            FileEdit { lock: first, before: "old native", after: "new native", intermediate: None },
+            FileEdit { lock: second, before: "old generated", after: "new generated", intermediate: None },
+        ]
+    }
+
+    #[test]
+    fn a_batch_killed_after_publishing_one_file_is_undone_by_the_next() {
+        let dir = tempfile::tempdir().unwrap();
+        let native = dir.path().join("native");
+        let generated = dir.path().join("generated");
+        fs::write(&native, "old native").unwrap();
+        fs::write(&generated, "old generated").unwrap();
+        let (first, second) = WriteLock::pair(&native, Some(&generated)).unwrap();
+        let second = second.unwrap();
+        let check = Check { native: &native, generated: &generated, reject: false, live_failure: false, foreign: false, restored: Cell::new(false) };
+        let edits = pair_edits(&first, &second);
+        // The process dies right after the native file is published.
+        let killed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = guarded_batch_using(&edits, &check, None, |lock, stamp, body| {
+                crate::store::write_atomic_checked(lock, stamp, body.as_bytes())?;
+                panic!("killed");
+            });
+        }));
+        assert!(killed.is_err());
+        assert_eq!(fs::read_to_string(&native).unwrap(), "new native");
+        assert_eq!(fs::read_to_string(&generated).unwrap(), "old generated");
+        assert!(super::super::journal::journal_path(&native).exists());
+        // The next batch first puts the pair back, then applies its own edit.
+        guarded_batch(&edits, &check).unwrap();
+        assert_eq!(fs::read_to_string(&native).unwrap(), "new native");
+        assert_eq!(fs::read_to_string(&generated).unwrap(), "new generated");
+        assert!(!super::super::journal::journal_path(&native).exists(), "a finished batch leaves no journal");
+    }
+
+    #[test]
+    fn startup_recovery_restores_a_killed_batch_without_a_new_edit() {
+        let dir = tempfile::tempdir().unwrap();
+        let native = dir.path().join("native");
+        let generated = dir.path().join("generated");
+        fs::write(&native, "old native").unwrap();
+        fs::write(&generated, "old generated").unwrap();
+        let (first, second) = WriteLock::pair(&native, Some(&generated)).unwrap();
+        let second = second.unwrap();
+        let check = Check { native: &native, generated: &generated, reject: false, live_failure: false, foreign: false, restored: Cell::new(false) };
+        let edits = pair_edits(&first, &second);
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = guarded_batch_using(&edits, &check, None, |lock, stamp, body| {
+                crate::store::write_atomic_checked(lock, stamp, body.as_bytes())?;
+                panic!("killed");
+            });
+        }));
+        assert!(super::super::recover_interrupted(&native).unwrap());
+        assert_eq!(fs::read_to_string(&native).unwrap(), "old native");
+        assert_eq!(fs::read_to_string(&generated).unwrap(), "old generated");
+        assert!(!super::super::recover_interrupted(&native).unwrap());
+    }
+
+    #[test]
+    fn a_completed_rollback_leaves_no_journal_and_a_failed_one_keeps_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let native = dir.path().join("native");
+        let generated = dir.path().join("generated");
+        for foreign in [false, true] {
+            fs::write(&native, "old native").unwrap();
+            fs::write(&generated, "old generated").unwrap();
+            let (first, second) = WriteLock::pair(&native, Some(&generated)).unwrap();
+            let second = second.unwrap();
+            let check = Check { native: &native, generated: &generated, reject: true, live_failure: false, foreign, restored: Cell::new(false) };
+            assert!(guarded_batch(&pair_edits(&first, &second), &check).is_err());
+            assert_eq!(super::super::journal::journal_path(&native).exists(), foreign);
+            // Whoever's edit remains, the next recovery leaves it alone and clears the journal.
+            assert!(!super::super::recover_interrupted(&native).unwrap());
+            assert!(!super::super::journal::journal_path(&native).exists());
+        }
     }
 }

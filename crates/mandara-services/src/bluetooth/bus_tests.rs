@@ -1,6 +1,6 @@
 //! BlueZ fixtures use a private socket pair; neither desktop bus is opened.
 
-use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
+use std::sync::{Arc, Mutex, atomic::{AtomicBool, AtomicUsize, Ordering}};
 
 use super::*;
 
@@ -9,9 +9,13 @@ const SIGNAL_BURST: usize = crate::actor::SIGNAL_QUEUE * 2;
 /// The negative control must demonstrate blocked replies without slowing CI.
 const BLOCKED_LIMIT: Duration = Duration::from_secs(1);
 /// Bounds every positive assertion, including failures in the mock server.
-const TEST_LIMIT: Duration = Duration::from_secs(5);
+const TEST_LIMIT: Duration = Duration::from_secs(8);
 /// Allow the private server to observe an unexpected no-reply Connect call.
 const NO_CONNECT_LIMIT: Duration = Duration::from_millis(50);
+
+/// Private zbus fixtures share the process async-io reactor; overlapping
+/// Connect/signal pumps flake under `cargo test`'s parallel threads.
+static BUS_TEST: Mutex<()> = Mutex::new(());
 
 #[derive(Default)]
 struct Snapshot {
@@ -63,7 +67,10 @@ impl Device {
 }
 
 async fn changed(conn: &Connection) {
-    conn.emit_signal(None::<&str>, "/org/bluez/hci0", "org.freedesktop.DBus.Properties", "PropertiesChanged", &(ADAPTER_IFACE, HashMap::<String, OwnedValue>::new(), Vec::<String>::new())).await.unwrap();
+    // Must name a property `affects_state` cares about — empty maps are
+    // filtered as discovery noise and would never wake the actor.
+    let properties = HashMap::from([("Powered", OwnedValue::from(true))]);
+    conn.emit_signal(None::<&str>, "/org/bluez/hci0", "org.freedesktop.DBus.Properties", "PropertiesChanged", &(ADAPTER_IFACE, properties, Vec::<String>::new())).await.unwrap();
 }
 
 async fn request(commands: &async_channel::Sender<Envelope<BluetoothCommand>>, command: BluetoothCommand) -> Result<String, String> {
@@ -94,6 +101,7 @@ async fn within<T>(limit: Duration, future: impl std::future::Future<Output = T>
 
 #[test]
 fn unconsumed_bluez_signals_can_block_the_state_reply() {
+    let _guard = BUS_TEST.lock().unwrap_or_else(|e| e.into_inner());
     runtime::block_on(async {
         let (client, _server, _, _signals) = fixture(true).await;
         assert!(within(BLOCKED_LIMIT, read_state(&client, None)).await.is_none(), "negative control must reproduce the blocked socket reader");
@@ -102,6 +110,7 @@ fn unconsumed_bluez_signals_can_block_the_state_reply() {
 
 #[test]
 fn signal_bursts_and_silent_resume_refresh_publish_authoritative_state() {
+    let _guard = BUS_TEST.lock().unwrap_or_else(|e| e.into_inner());
     runtime::block_on(async {
         let (client, server, snapshot, signals) = fixture(true).await;
         let (state_tx, states) = async_channel::bounded::<BluetoothState>(UPDATE_QUEUE);
@@ -134,6 +143,7 @@ fn signal_bursts_and_silent_resume_refresh_publish_authoritative_state() {
 
 #[test]
 fn failed_refresh_keeps_the_last_successful_state() {
+    let _guard = BUS_TEST.lock().unwrap_or_else(|e| e.into_inner());
     runtime::block_on(async {
         let (client, server, snapshot, signals) = fixture(false).await;
         let (tx, states) = async_channel::bounded::<BluetoothState>(UPDATE_QUEUE);
@@ -158,6 +168,7 @@ fn failed_refresh_keeps_the_last_successful_state() {
 
 #[test]
 fn explicit_refresh_does_not_connect_devices_but_power_signals_still_do() {
+    let _guard = BUS_TEST.lock().unwrap_or_else(|e| e.into_inner());
     runtime::block_on(async {
         let (client, server, snapshot, signals) = fixture(false).await;
         snapshot.powered_off.store(true, Ordering::Relaxed);

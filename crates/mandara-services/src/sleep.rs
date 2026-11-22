@@ -36,8 +36,16 @@ const UPOWER_PATH: &str = "/org/freedesktop/UPower";
 const PROPERTIES_IFACE: &str = "org.freedesktop.DBus.Properties";
 /// Environment switch for dry runs.
 const DRY_RUN_ENV: &str = "MANDARA_POWER_DRY_RUN";
-/// How often [`watch_sleep`] re-checks whether the inhibitor is wanted.
-const ENABLED_POLL: std::time::Duration = std::time::Duration::from_secs(5);
+/// Delays between [`watch_sleep`]'s reconnect attempts.
+const RECONNECT_MIN: std::time::Duration = std::time::Duration::from_secs(2);
+const RECONNECT_MAX: std::time::Duration = std::time::Duration::from_secs(120);
+/// Retries of a failed sleep `Inhibit` before waiting for the next signal
+/// or re-check (logind may be briefly busy right after a resume).
+const INHIBIT_RETRIES: u32 = 6;
+/// First delay between those retries; each one doubles it.
+const INHIBIT_RETRY_MIN: std::time::Duration = std::time::Duration::from_secs(2);
+/// Longest delay between those retries.
+const INHIBIT_RETRY_MAX: std::time::Duration = std::time::Duration::from_secs(60);
 /// Who holds the inhibitor, as `systemd-inhibit --list` shows it.
 const INHIBITOR_WHO: &str = "Mandara Shell";
 
@@ -80,7 +88,8 @@ async fn call_interactive(method: &'static str) -> Result<(), String> {
     result.map_err(bus_error)
 }
 
-/// Sleeps the computer the way `mode` says (polkit may prompt).
+/// Sleeps the computer the way `mode` says (polkit may prompt). Blocks the
+/// calling thread until logind answers: call it off the UI thread.
 pub fn sleep(mode: SuspendMode) -> Result<(), String> {
     crate::runtime::block_on(call_interactive(mode.logind_method())).map_err(|e| tf("Could not sleep ({mode}): {error}", &[("mode", &mode.id()), ("error", &e)]))
 }
@@ -171,58 +180,73 @@ pub fn soft_reboot() -> Result<(), String> {
     if status.success() { Ok(()) } else { Err(tf("systemctl soft-reboot failed ({status})", &[("status", &status)])) }
 }
 
+/// Wakes [`watch_sleep`] to re-check whether its inhibitor is wanted.
+static RECHECK: std::sync::LazyLock<(async_channel::Sender<()>, async_channel::Receiver<()>)> = std::sync::LazyLock::new(|| async_channel::bounded(1));
+
+/// Tells [`watch_sleep`] that the `enabled` setting may have changed: it
+/// takes or releases the inhibitor now instead of on a timer.
+pub fn recheck() {
+    let _ = RECHECK.0.try_send(());
+}
+
+/// Whether the "no delay inhibitor" warning was already logged since the
+/// last successful one (a denied `Inhibit` repeats on every re-check).
+static INHIBIT_WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// Takes a logind delay inhibitor for `what` (`sleep`, `shutdown`).
 async fn delay_inhibitor(m: &zbus::Proxy<'_>, what: &str, why: &str) -> Option<std::os::fd::OwnedFd> {
     match m.call::<_, _, zbus::zvariant::OwnedFd>("Inhibit", &(what, INHIBITOR_WHO, why, "delay")).await {
-        Ok(fd) => Some(fd.into()),
+        Ok(fd) => {
+            INHIBIT_WARNED.store(false, std::sync::atomic::Ordering::Relaxed);
+            Some(fd.into())
+        }
         Err(e) => {
             // FreeBSD without ConsoleKit2 has no login manager to ask; say
             // so once rather than on every re-check.
-            #[cfg(target_os = "freebsd")]
-            {
-                static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-                if WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
-                    tracing::debug!("ConsoleKit: no {what} delay inhibitor: {e}");
-                } else {
-                    tracing::warn!("ConsoleKit: no {what} delay inhibitor: {e}");
-                }
+            let manager = if cfg!(target_os = "freebsd") { "ConsoleKit" } else { "logind" };
+            if INHIBIT_WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                tracing::debug!("{manager}: no {what} delay inhibitor: {e}");
+            } else {
+                tracing::warn!("{manager}: no {what} delay inhibitor: {e}");
             }
-            #[cfg(not(target_os = "freebsd"))]
-            tracing::warn!("logind: no {what} delay inhibitor: {e}");
             None
         }
     }
 }
 
-/// Runs `before` when the machine is about to sleep (holding the sleep
-/// back until it returns, within logind's `InhibitDelayMaxUSec`) and
-/// `after` once it woke up. `enabled()` is asked each time: while it is
-/// false no inhibitor is held and `before` is skipped.
-pub fn watch_sleep(enabled: impl Fn() -> bool + Send + Sync + 'static, before: impl Fn() + Send + Sync + 'static, after: impl Fn() + Send + Sync + 'static) {
-    let (enabled, before, after) = (Arc::new(enabled), Arc::new(before), Arc::new(after));
-    crate::runtime::spawn("logind-sleep", async move {
-        let result: zbus::Result<()> = async {
-            let conn = crate::runtime::system().await?;
-            let m = manager(&conn).await?;
-            let mut signals = m.receive_signal("PrepareForSleep").await?;
-            let why = t("Lock the screen before sleeping");
-            let mut held = if enabled() { delay_inhibitor(&m, "sleep", why).await } else { None };
-            loop {
-                use futures::FutureExt as _;
-                let next = futures::select! {
-                    msg = signals.next().fuse() => msg,
-                    _ = futures::FutureExt::fuse(async_io::Timer::after(ENABLED_POLL)) => {
-                        // Follow the setting: hold the inhibitor only while wanted.
-                        match (enabled(), held.is_some()) {
-                            (true, false) => held = delay_inhibitor(&m, "sleep", why).await,
-                            (false, true) => held = None,
-                            _ => {}
-                        }
-                        continue;
-                    }
-                };
-                let Some(msg) = next else { break };
+type Check = Arc<dyn Fn() -> bool + Send + Sync>;
+type Hook = Arc<dyn Fn() + Send + Sync>;
+
+/// One connection's worth of [`watch_sleep`]; returns when logind's signal
+/// stream ends.
+async fn sleep_session(enabled: &Check, before: &Hook, after: &Hook, backoff: &mut crate::runtime::Backoff) -> zbus::Result<()> {
+    use futures::FutureExt as _;
+    let conn = crate::runtime::system().await?;
+    let m = manager(&conn).await?;
+    let mut signals = m.receive_signal("PrepareForSleep").await?;
+    backoff.reset();
+    let why = t("Lock the screen before sleeping");
+    let mut held = if enabled() { delay_inhibitor(&m, "sleep", why).await } else { None };
+    // A failed `Inhibit` is retried a few times, further apart each time,
+    // while the inhibitor is wanted; each signal or re-check starts over.
+    let mut retry = crate::runtime::Backoff::new(INHIBIT_RETRY_MIN, INHIBIT_RETRY_MAX);
+    let mut retries_left = INHIBIT_RETRIES;
+    let mut suspending = false;
+    loop {
+        let wait = (held.is_none() && !suspending && retries_left > 0 && enabled()).then(|| retry.next_delay());
+        let retry_timer = async {
+            match wait {
+                Some(delay) => crate::runtime::sleep(delay).await,
+                None => futures::future::pending().await,
+            }
+        };
+        futures::select! {
+            msg = signals.next().fuse() => {
+                let Some(msg) = msg else { return Ok(()) };
                 let starting: bool = msg.body().deserialize().unwrap_or(false);
+                suspending = starting;
+                retry.reset();
+                retries_left = INHIBIT_RETRIES;
                 if starting {
                     if enabled() {
                         let f = before.clone();
@@ -238,12 +262,46 @@ pub fn watch_sleep(enabled: impl Fn() -> bool + Send + Sync + 'static, before: i
                     crate::runtime::unblock(move || f()).await;
                 }
             }
-            drop(held);
-            Ok(())
+            _ = RECHECK.1.recv().fuse() => {
+                retry.reset();
+                retries_left = INHIBIT_RETRIES;
+                // Follow the setting: hold the inhibitor only while wanted.
+                match (enabled(), held.is_some()) {
+                    (true, false) => held = delay_inhibitor(&m, "sleep", why).await,
+                    (false, true) => held = None,
+                    _ => {}
+                }
+            }
+            _ = retry_timer.fuse() => {
+                retries_left -= 1;
+                if held.is_none() && enabled() {
+                    held = delay_inhibitor(&m, "sleep", why).await;
+                }
+            }
         }
-        .await;
-        if let Err(err) = result {
-            tracing::warn!("logind: not watching for sleep: {err}");
+    }
+}
+
+/// Runs `before` when the machine is about to sleep (holding the sleep
+/// back until it returns, within logind's `InhibitDelayMaxUSec`) and
+/// `after` once it woke up. `enabled()` is asked each time: while it is
+/// false no inhibitor is held and `before` is skipped. Call [`recheck`]
+/// when the setting changes. Reconnects with backoff if logind goes away.
+pub fn watch_sleep(enabled: impl Fn() -> bool + Send + Sync + 'static, before: impl Fn() + Send + Sync + 'static, after: impl Fn() + Send + Sync + 'static) {
+    let (enabled, before, after): (Check, Hook, Hook) = (Arc::new(enabled), Arc::new(before), Arc::new(after));
+    crate::runtime::spawn("logind-sleep", async move {
+        let mut backoff = crate::runtime::Backoff::new(RECONNECT_MIN, RECONNECT_MAX);
+        let mut warned = false;
+        loop {
+            match sleep_session(&enabled, &before, &after, &mut backoff).await {
+                Ok(()) => tracing::debug!("logind: the sleep signal stream ended; reconnecting"),
+                Err(err) if !warned => {
+                    warned = true;
+                    tracing::warn!("logind: not watching for sleep: {err}");
+                }
+                Err(err) => tracing::debug!("logind: not watching for sleep: {err}"),
+            }
+            crate::runtime::sleep(backoff.next_delay()).await;
         }
     });
 }

@@ -517,6 +517,38 @@ fn download_directories_prefer_the_home_cache_and_respect_explicit_tmpdir() {
 }
 
 #[test]
+fn plain_http_is_accepted_only_for_a_real_loopback_authority() {
+    let functions = SCRIPT.strip_suffix("main \"$@\"\n").unwrap();
+    let accepts = |url: &str| Command::new("sh").args(["-c", &format!("{functions}\nis_loopback_http \"$1\"")]).arg("sh").arg(url).status().unwrap().success();
+    for good in ["http://127.0.0.1", "http://127.0.0.1:8080", "http://127.0.0.1:8080/releases", "http://localhost:9/", "http://localhost"] {
+        assert!(accepts(good), "{good}");
+    }
+    for bad in [
+        "http://127.0.0.1:1@evil.example/x",
+        "http://127.0.0.1@evil.example",
+        "http://127.0.0.1.evil.example/",
+        "http://localhost.evil.example:80",
+        "http://127.0.0.1:80x/",
+        "http://127.0.0.1:/",
+        "http://127.0.0.1?x=1",
+        "http://example.org:80",
+        "https://127.0.0.1",
+    ] {
+        assert!(!accepts(bad), "{bad}");
+    }
+}
+
+#[test]
+fn without_home_the_download_directory_is_a_unique_private_tmp_dir() {
+    let functions = SCRIPT.strip_suffix("main \"$@\"\n").unwrap();
+    let code = format!("{functions}\ndownload_directory\nprintf '%s' \"$work\"\nrmdir \"$work\"\n");
+    let output = Command::new("sh").args(["-c", &code]).env_remove("HOME").env_remove("XDG_CACHE_HOME").env_remove("TMPDIR").output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let work = std::path::PathBuf::from(String::from_utf8(output.stdout).unwrap());
+    assert_eq!(work.parent(), Some(Path::new("/tmp")), "no fixed /tmp/.cache fallback");
+}
+
+#[test]
 fn the_public_command_refuses_plain_http_and_removes_its_script() {
     let dir = tempfile::tempdir().unwrap();
     let guide = std::fs::read_to_string(crate::root().join("docs/install.md")).unwrap();

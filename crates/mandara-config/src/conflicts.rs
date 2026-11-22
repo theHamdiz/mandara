@@ -741,66 +741,99 @@ pub fn retire(target: Target, conflicts: &[Conflict]) -> Result<PathBuf> {
 
 /// [`retire`] with its backups under `root`. Folder names carry the time in
 /// nanoseconds, so two retires in the same second never share a folder.
+///
+/// All or nothing: every file is read and checked against what the scan saw,
+/// every new text is built (and a login script run through `sh -n`) before
+/// anything is written; then the backup with its manifest, and only then
+/// the files. A write that fails half-way puts the earlier files back.
 pub fn retire_into(target: Target, conflicts: &[Conflict], root: &Path) -> Result<PathBuf> {
     if target == Target::River && !conflicts.is_empty() {
         anyhow::bail!("Mandara doesn't edit River's init: remove or comment these lines yourself:\n{}", conflicts.iter().map(|c| format!("  {}:{}: {}", c.file.display(), c.lines.first().map_or(0, |l| l + 1), c.text)).collect::<Vec<_>>().join("\n"));
     }
+    let files: BTreeSet<&PathBuf> = conflicts.iter().map(|c| &c.file).collect();
+    let mut staged: Vec<(&PathBuf, String, String)> = Vec::new();
+    for file in files {
+        let text = std::fs::read_to_string(file).with_context(|| format!("reading {}", file.display()))?;
+        let ours: Vec<&Conflict> = conflicts.iter().filter(|c| &c.file == file).collect();
+        let new = retired_text(target, file, &text, &ours)?;
+        staged.push((file, text, new));
+    }
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
     let dir = root.join(format!("{}-{:09}-{}", now.as_secs(), now.subsec_nanos(), format!("{target:?}").to_lowercase()));
     std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
-    let files: BTreeSet<&PathBuf> = conflicts.iter().map(|c| &c.file).collect();
     let mut manifest = String::new();
-    for (n, file) in files.iter().enumerate() {
-        let text = std::fs::read_to_string(file).with_context(|| format!("reading {}", file.display()))?;
-        let backup = dir.join(format!("{n}-{}", file.file_name().and_then(|f| f.to_str()).unwrap_or("config")));
-        std::fs::write(&backup, &text).with_context(|| format!("writing {}", backup.display()))?;
-        manifest.push_str(&format!("{}\t{}\n", backup.file_name().unwrap_or_default().to_string_lossy(), file.display()));
-        let retire_lines: BTreeSet<usize> = conflicts.iter().filter(|c| &c.file == *file).flat_map(|c| c.lines.iter().copied()).collect();
-        let prefix = comment_prefix(target, file);
-        let script = is_script(file);
-        let mut out: Vec<String> = Vec::new();
-        // Umbriel autostarts are entries of one array: only the entry goes.
-        let umbriel_programs: Vec<(usize, &str)> = if target == Target::Umbriel {
-            conflicts
-                .iter()
-                .filter(|c| &c.file == *file)
-                .filter_map(|c| match &c.kind {
-                    Kind::Autostart { program, .. } => Some(c.lines.iter().map(move |l| (*l, program.as_str()))),
-                    _ => None,
-                })
-                .flatten()
-                .collect()
-        } else {
-            Vec::new()
-        };
-        for (i, line) in text.lines().enumerate() {
-            let programs: Vec<&str> = umbriel_programs.iter().filter(|(l, _)| *l == i).map(|(_, p)| *p).collect();
-            if !programs.is_empty() && !script {
-                out.push(programs.iter().fold(line.to_string(), |l, p| umbriel_retire_autostart(&l, p)));
-            } else if retire_lines.contains(&i) {
-                let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
-                if script {
-                    out.push(format!("{indent}{SCRIPT_RETIRED} {}", line.trim_start()));
-                } else {
-                    out.push(format!("{indent}{prefix} mandara-retired: {}", line.trim_start()));
-                }
-            } else {
-                out.push(line.to_string());
-            }
-        }
-        let mut new = out.join("\n");
-        if text.ends_with('\n') {
-            new.push('\n');
-        }
-        crate::store::write_atomic(file, new.as_bytes())?;
-        // A login script must still parse; otherwise put it back untouched.
-        if script && !std::process::Command::new("sh").arg("-n").arg(file).status().is_ok_and(|s| s.success()) {
-            crate::store::write_atomic(file, text.as_bytes())?;
-            anyhow::bail!("retiring lines in {} would break the script; it was left unchanged", file.display());
-        }
+    for (n, (file, text, _)) in staged.iter().enumerate() {
+        let name = format!("{n}-{}", file.file_name().and_then(|f| f.to_str()).unwrap_or("config"));
+        let backup = dir.join(&name);
+        std::fs::write(&backup, text).with_context(|| format!("writing {}", backup.display()))?;
+        manifest.push_str(&format!("{name}\t{}\n", file.display()));
     }
     std::fs::write(dir.join("manifest.txt"), manifest)?;
+    for (done, (file, _, new)) in staged.iter().enumerate() {
+        if let Err(error) = crate::store::write_atomic(file, new.as_bytes()) {
+            let failed_to_restore: Vec<String> = staged[..done].iter().filter_map(|(earlier, text, _)| crate::store::write_atomic(earlier, text.as_bytes()).err().map(|e| format!("{}: {e:#}", earlier.display()))).collect();
+            let kept = if failed_to_restore.is_empty() { "nothing was changed".to_string() } else { format!("could not put back {}; restore {} to undo", failed_to_restore.join("; "), dir.display()) };
+            return Err(error.context(format!("writing {} ({kept})", file.display())));
+        }
+    }
     Ok(dir)
+}
+
+/// `text` of `file` with the lines of `conflicts` retired (each conflict's
+/// line first checked against what the scan saw), line endings kept as they
+/// were. A login script that would no longer parse is an error.
+fn retired_text(target: Target, file: &Path, text: &str, conflicts: &[&Conflict]) -> Result<String> {
+    let segments: Vec<&str> = text.split_inclusive('\n').collect();
+    let body = |segment: &str| segment.trim_end_matches(['\r', '\n']).len();
+    for c in conflicts {
+        let seen = c.lines.first().and_then(|i| segments.get(*i)).map(|segment| segment[..body(segment)].trim());
+        if seen != Some(c.text.as_str()) {
+            anyhow::bail!("{}:{} changed since the scan; scan again", file.display(), c.lines.first().map_or(0, |l| l + 1));
+        }
+    }
+    let retire_lines: BTreeSet<usize> = conflicts.iter().flat_map(|c| c.lines.iter().copied()).collect();
+    let prefix = comment_prefix(target, file);
+    let script = is_script(file);
+    // Umbriel autostarts are entries of one array: only the entry goes.
+    let umbriel_programs: Vec<(usize, &str)> = if target == Target::Umbriel {
+        conflicts
+            .iter()
+            .filter_map(|c| match &c.kind {
+                Kind::Autostart { program, .. } => Some(c.lines.iter().map(move |l| (*l, program.as_str()))),
+                _ => None,
+            })
+            .flatten()
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let mut new = String::with_capacity(text.len() + 32 * retire_lines.len());
+    for (i, segment) in segments.iter().enumerate() {
+        let (line, ending) = segment.split_at(body(segment));
+        let programs: Vec<&str> = umbriel_programs.iter().filter(|(l, _)| *l == i).map(|(_, p)| *p).collect();
+        if !programs.is_empty() && !script {
+            new.push_str(&programs.iter().fold(line.to_string(), |l, p| umbriel_retire_autostart(&l, p)));
+        } else if retire_lines.contains(&i) {
+            let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
+            if script {
+                new.push_str(&format!("{indent}{SCRIPT_RETIRED} {}", line.trim_start()));
+            } else {
+                new.push_str(&format!("{indent}{prefix} mandara-retired: {}", line.trim_start()));
+            }
+        } else {
+            new.push_str(line);
+        }
+        new.push_str(ending);
+    }
+    // A login script must still parse.
+    if script {
+        let mut copy = tempfile::NamedTempFile::new().context("creating a copy of the script to check")?;
+        std::io::Write::write_all(&mut copy, new.as_bytes())?;
+        if !std::process::Command::new("sh").arg("-n").arg(copy.path()).status().is_ok_and(|s| s.success()) {
+            anyhow::bail!("retiring lines in {} would break the script; nothing was changed", file.display());
+        }
+    }
+    Ok(new)
 }
 
 /// Puts every file of a retire backup back where it was.
@@ -853,20 +886,15 @@ pub fn validate_file(target: Target, config: &Path) -> Validation {
         // River has no config checker (its config is a program).
         Target::River | Target::KWin | Target::Aqueous | Target::Labwc | Target::Cosmic => return Validation::Unchecked,
     };
-    let (success, report) = if target == Target::Sway {
-        // Sway builds its (headless, software) backend before it reads the
-        // config, even to validate: through the doctor's runner (its own
-        // private runtime dir, no display, a time limit). If that can't be
-        // set up, the config is left unchecked rather than checked against
-        // the running session.
-        let argv: Vec<std::ffi::OsString> = std::iter::once(tool.into()).chain(args.iter().map(Into::into)).collect();
-        match crate::doctor::run_isolated(&argv, crate::doctor::SWAY_CHECK_ENV) {
-            Some(out) => (out.success, format!("{}{}", out.stdout, out.stderr)),
-            None => return Validation::Unchecked,
-        }
-    } else {
-        let Ok(out) = std::process::Command::new(tool).args(&args).stdin(std::process::Stdio::null()).output() else { return Validation::Unchecked };
-        (out.status.success(), format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr)))
+    // Every checker through the doctor's runner: its own private runtime dir,
+    // no display, a time limit. A checker that can't be started or doesn't
+    // finish in time leaves the config unchecked rather than hanging the
+    // caller (Sway also builds a headless backend before it reads the config,
+    // and must not be checked against the running session).
+    let argv: Vec<std::ffi::OsString> = std::iter::once(tool.into()).chain(args.iter().map(Into::into)).collect();
+    let (success, report) = match crate::doctor::run_isolated(&argv, if target == Target::Sway { crate::doctor::SWAY_CHECK_ENV } else { &[] }) {
+        Some(out) => (out.success, format!("{}{}", out.stdout, out.stderr)),
+        None => return Validation::Unchecked,
     };
     let failed = match target {
         // mango -p prints problems; it exits 0 either way.

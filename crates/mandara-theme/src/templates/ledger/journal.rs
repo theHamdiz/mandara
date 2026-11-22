@@ -232,10 +232,23 @@ impl Ledger {
                 let entry = match moved {
                     Some(backup) if exists(backup) => Some(next.clone()),
                     Some(_) if untouched => previous.clone(),
-                    Some(_) => {
-                        return Err(io::Error::other(
-                            "an interrupted theme write is missing its original backup",
-                        ));
+                    Some(backup) => {
+                        // Deliberately fail closed: the destination changed and
+                        // the user's original is gone, so any guess could
+                        // overwrite their data. Name everything needed to
+                        // resolve it by hand; the record stays pending.
+                        let record = self.record.as_deref().map_or_else(String::new, |record| {
+                            format!(
+                                "; once it is resolved, delete {} to let theme syncing continue (Mandara then forgets which files it manages)",
+                                record.display()
+                            )
+                        });
+                        return Err(io::Error::other(format!(
+                            "an interrupted theme write is missing its original backup {}, and {} has changed since; check that {} still holds your own settings{record}",
+                            backup.display(),
+                            path.display(),
+                            path.display(),
+                        )));
                     }
                     None if untouched && original.is_some() => previous.clone(),
                     None if previous

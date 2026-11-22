@@ -20,6 +20,8 @@
 //! The parsers are tested against output captured from a real (headless)
 //! sway 1.12 in `tests/fixtures/sway/`.
 
+mod watch;
+
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
@@ -78,6 +80,14 @@ pub fn encode(kind: u32, payload: &[u8]) -> Vec<u8> {
 pub fn read_message(r: &mut impl Read) -> Result<(u32, Vec<u8>)> {
     let mut header = [0u8; HEADER_LEN];
     r.read_exact(&mut header)?;
+    let (len, kind) = parse_header(&header)?;
+    let mut payload = vec![0u8; len];
+    r.read_exact(&mut payload)?;
+    Ok((kind, payload))
+}
+
+/// A message header's payload length and type.
+fn parse_header(header: &[u8; HEADER_LEN]) -> Result<(usize, u32)> {
     if &header[..MAGIC.len()] != MAGIC {
         bail!("sway: not an i3-ipc message");
     }
@@ -86,9 +96,7 @@ pub fn read_message(r: &mut impl Read) -> Result<(u32, Vec<u8>)> {
     if len > MAX_PAYLOAD {
         bail!("sway: a {len}-byte message is too large");
     }
-    let mut payload = vec![0u8; len];
-    r.read_exact(&mut payload)?;
-    Ok((kind, payload))
+    Ok((len, kind))
 }
 
 /// A rectangle in layout (logical) coordinates.
@@ -476,39 +484,18 @@ impl SwayDriver {
     }
 
     /// The state the bar needs on (re)subscribing.
-    fn snapshot(&self, state: &mut SwayState) -> Vec<CompositorEvent> {
+    fn snapshot(&self, state: &mut SwayState, workspaces: &mut Vec<SwayWorkspace>) -> Vec<CompositorEvent> {
         let mut out = match (self.workspaces(), self.tree()) {
-            (Ok(ws), Ok(tree)) => state.update(&ws, &tree),
+            (Ok(ws), Ok(tree)) => {
+                *workspaces = ws;
+                state.update(workspaces, &tree)
+            }
             _ => Vec::new(),
         };
         out.extend(self.get_monitors().ok().map(CompositorEvent::Monitors));
         out.extend(self.keymode().ok().map(CompositorEvent::Keymode));
         out.extend(self.keyboard_layout().map(CompositorEvent::KeyboardLayout));
         out
-    }
-
-    /// Events for one message of the subscription; `Ok(None)` when sway is
-    /// shutting down.
-    fn on_event(&self, kind: u32, payload: &[u8], state: &mut SwayState) -> Result<Option<Vec<CompositorEvent>>> {
-        Ok(Some(match kind {
-            event::WORKSPACE | event::WINDOW => state.update(&self.workspaces()?, &self.tree()?),
-            event::OUTPUT => {
-                let mut out = vec![CompositorEvent::Monitors(self.get_monitors()?)];
-                out.extend(state.update(&self.workspaces()?, &self.tree()?));
-                out
-            }
-            event::MODE => {
-                let body: Value = serde_json::from_slice(payload)?;
-                vec![CompositorEvent::Keymode(body.get("change").and_then(Value::as_str).unwrap_or_default().to_string())]
-            }
-            event::INPUT => {
-                let body: Value = serde_json::from_slice(payload)?;
-                let layout_change = matches!(body.get("change").and_then(Value::as_str), Some("xkb_layout" | "xkb_keymap"));
-                body.get("input").filter(|_| layout_change).and_then(keyboard_layout_name).map(CompositorEvent::KeyboardLayout).into_iter().collect()
-            }
-            event::SHUTDOWN => return Ok(None),
-            _ => Vec::new(),
-        }))
     }
 }
 
@@ -525,39 +512,7 @@ impl CompositorBackend for SwayDriver {
     fn subscribe_events(&self) -> async_channel::Receiver<CompositorEvent> {
         let (tx, rx) = async_channel::bounded(crate::EVENT_QUEUE);
         let socket = self.socket.clone();
-        let _ = std::thread::Builder::new().name("sway-events".into()).spawn(move || {
-            let driver = SwayDriver { socket };
-            loop {
-                let result = (|| -> Result<bool> {
-                    let mut stream = UnixStream::connect(&driver.socket)?;
-                    stream.write_all(&encode(msg::SUBSCRIBE, serde_json::to_string(&EVENTS)?.as_bytes()))?;
-                    let (kind, body) = read_message(&mut stream)?;
-                    let reply: Value = serde_json::from_slice(&body)?;
-                    if kind != msg::SUBSCRIBE || reply.get("success").and_then(Value::as_bool) != Some(true) {
-                        bail!("sway: subscription refused: {reply}");
-                    }
-                    let mut state = SwayState::default();
-                    for e in driver.snapshot(&mut state) {
-                        if tx.send_blocking(e).is_err() {
-                            return Ok(true);
-                        }
-                    }
-                    loop {
-                        let (kind, payload) = read_message(&mut stream)?;
-                        let Some(events) = driver.on_event(kind, &payload, &mut state)? else { bail!("sway is shutting down") };
-                        for e in events {
-                            if tx.send_blocking(e).is_err() {
-                                return Ok(true);
-                            }
-                        }
-                    }
-                })();
-                if matches!(result, Ok(true)) || tx.is_closed() {
-                    return;
-                }
-                std::thread::sleep(crate::RECONNECT_DELAY);
-            }
-        });
+        let _ = std::thread::Builder::new().name("sway-events".into()).spawn(move || watch::watch(&SwayDriver { socket }, &tx));
         rx
     }
 

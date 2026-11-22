@@ -466,6 +466,8 @@ pub fn init(cx: &mut App) {
         move |cfg: &ShellConfig| {
             lock_sleep.store(cfg.idle.lock_before_sleep && cfg.general.lock_screen, Ordering::Relaxed);
             lock_lid.store(cfg.idle.lock_on_lid_close && cfg.general.lock_screen, Ordering::Relaxed);
+            // The sleep inhibitor follows `lock_sleep` (no polling).
+            mandara_services::sleep::recheck();
         }
     };
     let store = config(cx);

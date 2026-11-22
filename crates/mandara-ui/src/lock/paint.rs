@@ -197,21 +197,42 @@ pub struct Font<'a> {
     pub tracking: f32,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
-struct Key {
-    text: String,
-    family: String,
+/// Every font parameter that changes shaping (size and tracking quantized).
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct Style {
     size: u32,
     weight: u16,
     tabular: bool,
     tracking: i32,
 }
 
+impl Style {
+    fn of(font: &Font<'_>) -> Self {
+        Self { size: (font.size * 64.0) as u32, weight: font.weight, tabular: font.tabular, tracking: (font.tracking * 1000.0) as i32 }
+    }
+}
+
+/// Identifies a shaping in the cache: a hash of its inputs, so that looking
+/// one up allocates nothing (the text and family are borrowed).
+type ShapeId = u64;
+
+/// One cached shaping. The inputs are kept to tell a real hit from another
+/// text that happens to hash the same.
+struct Shaped {
+    text: String,
+    family: String,
+    style: Style,
+    buffer: Buffer,
+}
+
+/// Shaped texts kept before the cache starts over.
+const MAX_SHAPED: usize = 96;
+
 /// Shapes and rasterizes text; shaped buffers and glyph bitmaps are cached.
 pub struct TextPainter {
     fonts: FontSystem,
     glyphs: SwashCache,
-    shaped: HashMap<Key, Buffer>,
+    shaped: HashMap<ShapeId, Shaped>,
     /// Families for characters the requested family lacks (Arabic in Inter),
     /// best first; see [`crate::fonts::fallback_chain`].
     fallbacks: Vec<String>,
@@ -354,31 +375,30 @@ impl TextPainter {
         &mut self.fonts
     }
 
-    /// The shaped-text cache key: the text and every font parameter that
-    /// changes shaping (size and tracking quantized).
-    fn key(text: &str, font: &Font<'_>) -> Key {
-        Key {
-            text: text.to_string(),
-            family: font.family.to_string(),
-            size: (font.size * 64.0) as u32,
-            weight: font.weight,
-            tabular: font.tabular,
-            tracking: (font.tracking * 1000.0) as i32,
-        }
+    /// The cache id of `text` in `font`: its hash, computed without copying.
+    fn shape_id(text: &str, family: &str, style: Style) -> ShapeId {
+        use std::hash::{Hash as _, Hasher as _};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        text.hash(&mut hasher);
+        family.hash(&mut hasher);
+        style.hash(&mut hasher);
+        hasher.finish()
     }
 
-    /// Shapes `text` once; returns its cache key.
-    fn shape(&mut self, text: &str, font: &Font<'_>) -> Key {
-        let key = Self::key(text, font);
-        if self.shaped.len() > 96 && !self.shaped.contains_key(&key) {
+    /// Shapes `text` once; returns its cache id. A repeat of an earlier call
+    /// (every frame of a clock) allocates nothing.
+    fn shape(&mut self, text: &str, font: &Font<'_>) -> ShapeId {
+        let style = Style::of(font);
+        let id = Self::shape_id(text, font.family, style);
+        if self.shaped.get(&id).is_some_and(|s| s.style == style && s.family == font.family && s.text == text) {
+            return id;
+        }
+        if self.shaped.len() > MAX_SHAPED && !self.shaped.contains_key(&id) {
             self.shaped.clear();
         }
-        if self.shaped.contains_key(&key) {
-            return key;
-        }
         let buffer = self.shape_buffer(text, font, None, (font.size * 1.25).ceil(), None);
-        self.shaped.insert(key.clone(), buffer);
-        key
+        self.shaped.insert(id, Shaped { text: text.to_string(), family: font.family.to_string(), style, buffer });
+        id
     }
 
     /// Shapes `text` into a new buffer, wrapping to `width` when given, with
@@ -430,7 +450,7 @@ impl TextPainter {
     /// `(width, line height)` in physical pixels.
     pub fn measure(&mut self, text: &str, font: &Font<'_>) -> (f32, f32) {
         let key = self.shape(text, font);
-        let Some(buffer) = self.shaped.get(&key) else { return (0.0, font.size) };
+        let Some(Shaped { buffer, .. }) = self.shaped.get(&key) else { return (0.0, font.size) };
         let mut w: f32 = 0.0;
         let mut h: f32 = 0.0;
         for run in buffer.layout_runs() {
@@ -453,7 +473,7 @@ impl TextPainter {
         // Split borrows: the buffer lives in `shaped`; the font system and
         // glyph cache are separate fields.
         let Self { fonts, glyphs, shaped, .. } = self;
-        let Some(buffer) = shaped.get_mut(&key) else { return };
+        let Some(Shaped { buffer, .. }) = shaped.get_mut(&key) else { return };
         let data = pm.data_mut();
         buffer.draw(fonts, glyphs, base, |gx, gy, w, h, c| {
             composite_glyph(data, (pw, ph), (ox + gx, oy + gy, w, h), c, opacity);
@@ -546,6 +566,35 @@ mod tests {
     }
 
     #[test]
+    fn repeated_shaping_reuses_one_cache_entry() {
+        let mut painter = TextPainter::new();
+        let font = Font { family: "Inter", size: 16.0, weight: 400, tabular: true, tracking: 0.0 };
+        let id = painter.shape("12:00", &font);
+        assert_eq!(painter.shape("12:00", &font), id);
+        assert_eq!(painter.shaped.len(), 1);
+        // Another text, size or family is another entry.
+        assert_ne!(painter.shape("12:01", &font), id);
+        assert_ne!(painter.shape("12:00", &Font { size: 20.0, ..font.clone() }), id);
+        assert_ne!(painter.shape("12:00", &Font { family: "Noto Sans", ..font.clone() }), id);
+        assert_eq!(painter.shaped.len(), 4);
+        // An entry whose inputs differ (a hash collision) is no hit: it is
+        // shaped again for the text asked for.
+        painter.shaped.get_mut(&id).expect("entry").text = "impostor".into();
+        assert_eq!(painter.shape("12:00", &font), id);
+        assert_eq!(painter.shaped[&id].text, "12:00");
+    }
+
+    #[test]
+    fn the_shape_cache_starts_over_when_full() {
+        let mut painter = TextPainter::new();
+        let font = Font { family: "Inter", size: 12.0, weight: 400, tabular: false, tracking: 0.0 };
+        for n in 0..=MAX_SHAPED + 1 {
+            painter.shape(&n.to_string(), &font);
+        }
+        assert!(painter.shaped.len() <= MAX_SHAPED);
+    }
+
+    #[test]
     fn arabic_uses_the_fallback_chain_at_every_weight() {
         let mut painter = TextPainter::new();
         let Some(first) = painter.fallbacks.first().cloned() else { return };
@@ -553,7 +602,7 @@ mod tests {
         for weight in [300, 400, 500, 600, 700] {
             let font = Font { family: "Inter", size: 16.0, weight, tabular: false, tracking: 0.0 };
             let key = painter.shape(sample, &font);
-            let buffer = &painter.shaped[&key];
+            let buffer = &painter.shaped[&key].buffer;
             for run in buffer.layout_runs() {
                 for glyph in run.glyphs.iter().filter(|g| !sample[g.start..].starts_with(' ')) {
                     let face = painter.fonts.db().face(glyph.font_id).expect("face");
@@ -574,7 +623,7 @@ mod tests {
         let font = Font { family: "Inter", size: 16.0, weight: 600, tabular: false, tracking: 0.0 };
         let key = painter.shape(text, &font);
         let glyphs: Vec<(usize, f32)> =
-            painter.shaped[&key].layout_runs().flat_map(|run| run.glyphs.iter().map(|g| (g.start, g.x))).collect();
+            painter.shaped[&key].buffer.layout_runs().flat_map(|run| run.glyphs.iter().map(|g| (g.start, g.x))).collect();
         let x_of = |index: usize| glyphs.iter().find(|(start, _)| *start == index).map(|(_, x)| *x).expect("glyph");
         let colon = x_of(text.find(':').expect("colon"));
         let (first, last) = (x_of(0), x_of(text.char_indices().last().expect("char").0));
@@ -591,7 +640,7 @@ mod tests {
         {
             let key = painter.shape(text, &font);
             let glyphs: Vec<(usize, f32, cosmic_text::fontdb::ID, u16)> =
-                painter.shaped[&key].layout_runs().flat_map(|run| run.glyphs.iter().map(|g| (g.start, g.x, g.font_id, g.glyph_id))).collect();
+                painter.shaped[&key].buffer.layout_runs().flat_map(|run| run.glyphs.iter().map(|g| (g.start, g.x, g.font_id, g.glyph_id))).collect();
             let waw_at = text.find('و').expect("waw");
             let &(_, waw_x, waw_face, waw_glyph) = glyphs.iter().find(|g| g.0 == waw_at).expect("waw glyph");
             let face = painter.fonts.db().face(waw_face).expect("face").families[0].0.clone();

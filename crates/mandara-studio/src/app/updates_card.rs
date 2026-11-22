@@ -5,7 +5,7 @@
 
 use mandara_ui::bidi::Bidi as _;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use gpui::prelude::FluentBuilder as _;
 use gpui::{AnyElement, App, ClickEvent, Context, FontWeight, InteractiveElement, IntoElement, ParentElement, SharedString, StatefulInteractiveElement, Styled, div, px};
@@ -23,6 +23,10 @@ use crate::tokens::*;
 
 /// Repaint interval while an update runs.
 pub(super) const JOB_REPAINT: Duration = Duration::from_millis(150);
+/// Longest an update or plugin update is followed: past this its card stops
+/// waiting and reports a failure (a download plus the apply step, with room
+/// for a slow connection).
+const JOB_DEADLINE: Duration = Duration::from_secs(60 * 60);
 /// Background angle of the card's wash (matches the About hero).
 const WASH_ANGLE: f32 = 135.0;
 
@@ -131,12 +135,17 @@ pub(super) fn progress_bar(done: u64, total: u64, p: &MandaraPalette) -> AnyElem
         .into_any_element()
 }
 
-/// Polls `job` until it has a result, repainting, then hands it to `done`.
+/// Polls `job` until it has a result, repainting, then hands it to `done`;
+/// after [`JOB_DEADLINE`] it hands over a failure instead.
 pub(super) fn watch_job(job: JobHandle, cx: &mut Context<StudioView>, done: impl FnOnce(&mut StudioView, Result<ApplyReport, String>, &mut Context<StudioView>) + 'static) {
     cx.spawn(async move |this, cx| {
+        let started = Instant::now();
         loop {
             cx.background_executor().timer(JOB_REPAINT).await;
-            let result = lock(&job).result.take();
+            let mut result = lock(&job).result.take();
+            if result.is_none() && started.elapsed() >= JOB_DEADLINE {
+                result = Some(Err(t("This took too long, so Studio stopped waiting for it").to_string()));
+            }
             let alive = this.update(cx, |_, cx| cx.notify()).is_ok();
             if let Some(result) = result {
                 let _ = this.update(cx, |view, cx| {

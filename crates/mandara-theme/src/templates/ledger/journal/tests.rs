@@ -134,7 +134,12 @@ fn missing_backups_after_an_interrupted_write_fail_closed() {
         .unwrap();
     std::fs::write(&path, "newer personal edit").unwrap();
     drop(ledger);
-    assert!(Ledger::read(&record).is_err());
+    // Failing closed stays, but the message names what a person needs to
+    // resolve it: the lost backup, the changed file and the record to delete.
+    let message = Ledger::read(&record).unwrap_err().to_string();
+    assert!(message.contains(backup.to_str().unwrap()), "{message}");
+    assert!(message.contains(path.to_str().unwrap()), "{message}");
+    assert!(message.contains(record.to_str().unwrap()), "{message}");
     assert_eq!(
         std::fs::read_to_string(path).unwrap(),
         "newer personal edit"

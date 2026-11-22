@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 
 use gpui::{App, AppContext as _, Context, Entity, Global, Task};
 use mandara_config::{ConfigStore, ReloadOutcome, ShellConfig};
+use mandara_i18n::{t, tf};
 use mandara_theme::{ThemeEngine, ThemeSource};
 
 use crate::floating::dock::{Effect, PanelDock};
@@ -375,25 +376,92 @@ pub fn update_config(cx: &mut App, f: impl FnOnce(&mut ShellConfig)) {
     }
 }
 
+/// Pauses before each retry of a save that failed (a lock another process
+/// held, a file edited while the save ran, a full disk someone then cleared).
+/// Any newer edit schedules its own save and replaces the pending retries.
+const SAVE_RETRY_DELAYS: [Duration; 3] = [Duration::from_secs(2), Duration::from_secs(10), Duration::from_secs(60)];
+
+/// Set while saves keep failing, so the person hears about a streak once.
+static SAVE_FAILING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// How one try to save the pending edits ended.
+enum Saving {
+    /// Saved, or nothing was waiting to be saved.
+    Done,
+    /// A newer save replaced this one, and answers for the edits.
+    Superseded,
+    Failed(String),
+}
+
+async fn save_once(cx: &mut gpui::AsyncApp) -> Saving {
+    let Some(reply) = cx.update(queue_save) else { return Saving::Done };
+    match reply.recv().await {
+        Ok(Ok(saved)) => match cx.update(|cx| finish_save(saved, cx)) {
+            Ok(()) => Saving::Done,
+            Err(error) => Saving::Failed(error),
+        },
+        Ok(Err(error)) => Saving::Failed(error),
+        Err(_) => Saving::Superseded,
+    }
+}
+
 fn schedule_flush(cx: &mut App) {
     let shell = shell(cx);
     shell.update(cx, |state, cx| {
         state.flush_task = Some(cx.spawn(async move |_, cx| {
             cx.background_executor().timer(FLUSH_DEBOUNCE).await;
-            if let Some(reply) = cx.update(queue_save) {
-                match reply.recv().await {
-                    Ok(Ok(saved)) => {
-                if let Err(error) = cx.update(|cx| finish_save(saved, cx)) {
-                    tracing::error!("failed to persist config: {error}");
+            let mut last_error = String::new();
+            for delay in std::iter::once(Duration::ZERO).chain(SAVE_RETRY_DELAYS) {
+                if !delay.is_zero() {
+                    cx.background_executor().timer(delay).await;
+                }
+                match save_once(cx).await {
+                    Saving::Done => {
+                        SAVE_FAILING.store(false, std::sync::atomic::Ordering::Relaxed);
+                        return;
+                    }
+                    Saving::Superseded => return,
+                    Saving::Failed(error) => {
+                        tracing::error!("failed to persist config: {error}");
+                        last_error = error;
+                    }
                 }
             }
-                    Ok(Err(error)) => tracing::error!("failed to persist config: {error}"),
-                    // A newer pending save replaced this one.
-                    Err(_) => {}
-                }
+            if !SAVE_FAILING.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                cx.update(|cx| {
+                    notify_with_studio(
+                        t("Your settings couldn't be saved"),
+                        &tf("Your latest changes are not saved yet ({error}).", &[("error", &last_error)]),
+                        cx,
+                    );
+                });
             }
         }));
     });
+}
+
+/// Tells the person about a problem with their settings file in a
+/// notification; a click opens Studio's Maintenance page, where the config
+/// check and its repair are.
+fn notify_with_studio(summary: &str, body: &str, cx: &mut App) {
+    let clicked = mandara_services::desktop_notify::post_with_action(t("Mandara Shell"), "dialog-warning", summary, body, t("Open Studio"));
+    cx.spawn(async move |cx| {
+        if clicked.recv().await == Ok(true) {
+            cx.update(|cx| open_studio_at(Some("maintenance".into()), cx));
+        }
+    })
+    .detach();
+}
+
+/// Says that opening the config file reset some of its settings
+/// (`ConfigStore::repaired`), and where the original file is kept.
+pub fn announce_repaired_config(repaired: &mandara_config::Repaired, cx: &mut App) {
+    let file = repaired.backup.display().to_string();
+    notify_with_studio(
+        t("Some of your settings were reset"),
+        &tf("{settings} fell back to their defaults. Your original file is kept as {file}.", &[("settings", &repaired.dropped.join(", ")), ("file", &file)]),
+        cx,
+    );
 }
 
 /// Re-reads the config file after an external edit and applies it.

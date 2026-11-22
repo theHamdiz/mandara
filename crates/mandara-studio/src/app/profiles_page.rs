@@ -429,31 +429,64 @@ impl StudioView {
                 return cx.notify();
             }
             let path = mandara_config::paths::expand_tilde(&raw);
-            let result = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display())).and_then(|text| profiles::import_text(&text).map_err(|e| format!("{e:#}"))).and_then(|next| {
-                let backup = crate::maintenance::backup_now("before-import")?;
-                Ok((next, backup))
-            });
-            match result {
-                Ok((next, backup)) => {
-                    update_config(cx, move |c| *c = next);
-                    form::clear("import-path", cx);
-                    st(cx).note = Some((tf("Imported — the previous settings are in {folder}", &[("folder", &backup.display())]), false));
-                }
-                Err(e) => st(cx).note = Some((e, true)),
-            }
-            cx.notify();
+            // Reading the file and copying the config folder are disk work:
+            // off the UI thread, which only applies the result.
+            let current = config(cx).read(cx).snapshot();
+            cx.spawn(async move |this, cx| {
+                let result = cx
+                    .background_executor()
+                    .spawn(async move {
+                        let text = mandara_config::store::read_to_string_capped(&path, profiles::IMPORT_MAX_BYTES).map_err(|e| format!("{}: {e}", path.display()))?;
+                        let next = profiles::import_text(&text, &current).map_err(|e| format!("{e:#}"))?;
+                        let backup = crate::maintenance::backup_now("before-import")?;
+                        Ok::<_, String>((next, backup))
+                    })
+                    .await;
+                this.update(cx, |_, cx| {
+                    match result {
+                        Ok((next, backup)) => {
+                            // Permissions can have changed while this ran: keep the live ones.
+                            update_config(cx, move |c| {
+                                let mut next = next;
+                                profiles::keep_plugin_authority(&mut next, c);
+                                *c = next;
+                            });
+                            form::clear("import-path", cx);
+                            st(cx).note = Some((tf("Imported — the previous settings are in {folder}", &[("folder", &backup.display())]), false));
+                        }
+                        Err(e) => st(cx).note = Some((e, true)),
+                    }
+                    cx.notify();
+                })
+                .ok();
+            })
+            .detach();
         }));
         let version = mandara_core::build_info(cx).long.clone();
         let report = button("support-report", "note", t("Create support report"), false, p).on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
             let path = mandara_config::paths::expand_tilde(&format!("~/mandara-support-{}.txt", stamp()));
             let cfg = config(cx).read(cx).snapshot();
-            let text = support_report(&cfg, &version);
-            let r = mandara_config::write_atomic(&path, text.as_bytes());
-            st(cx).note = Some(match r {
-                Ok(()) => (tf("Report written to {file} (personal values redacted) — attach it to your bug report", &[("file", &path.display())]), false),
-                Err(e) => (format!("{e:#}"), true),
-            });
-            cx.notify();
+            let version = version.clone();
+            // Reads /etc/os-release and writes the file: off the UI thread.
+            cx.spawn(async move |this, cx| {
+                let (path, result) = cx
+                    .background_executor()
+                    .spawn(async move {
+                        let text = support_report(&cfg, &version);
+                        let result = mandara_config::write_atomic(&path, text.as_bytes());
+                        (path, result)
+                    })
+                    .await;
+                this.update(cx, |_, cx| {
+                    st(cx).note = Some(match result {
+                        Ok(()) => (tf("Report written to {file} (personal values redacted) — attach it to your bug report", &[("file", &path.display())]), false),
+                        Err(e) => (format!("{e:#}"), true),
+                    });
+                    cx.notify();
+                })
+                .ok();
+            })
+            .detach();
         }));
         let warning = (!sensitive.is_empty() && !redact).then(|| {
             div()

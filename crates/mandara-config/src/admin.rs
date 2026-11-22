@@ -4,7 +4,9 @@
 //! would get root the next time an administrator approves a prompt. Only a
 //! copy that root owns and nobody else can change runs as root: a package's
 //! `mandara`, the admin helper (`mandara install` puts it in place, or
-//! Studio once, with your approval), or the login screen's own copy.
+//! Studio once, with your approval: root then copies the very process you
+//! are running, by its `/proc` handle, not a path), or the login screen's
+//! own copy.
 
 use std::ffi::OsString;
 use std::os::unix::fs::MetadataExt as _;
@@ -101,12 +103,34 @@ macro_rules! install_script {
 /// the helper, then becomes it.
 const SETUP_AND_RUN_SCRIPT: &str = concat!(install_script!(), " && shift && exec \"$0\" \"$@\"");
 
-/// One approval that puts `from` (the running binary) in place as the
-/// admin helper and runs `args` with it: `pkexec /bin/sh -c <script>
-/// ADMIN_EXE <from> <args…>`. Used when no helper exists yet or the one
-/// there is an older version, so refreshing it never costs a second
-/// password prompt.
-pub fn setup_and_run(from: &Path, args: impl IntoIterator<Item = OsString>) -> (OsString, Vec<OsString>) {
+/// How root names the binary that is running: its own inode, through
+/// `/proc`. A path such as `~/.local/bin/mandara` can be replaced between
+/// the moment you approve and the moment root copies it, but a running
+/// executable's inode cannot be written to or swapped, so root installs
+/// exactly the code you were running when you clicked.
+#[cfg(target_os = "linux")]
+fn running_binary() -> std::io::Result<PathBuf> {
+    Ok(PathBuf::from(format!("/proc/{}/exe", std::process::id())))
+}
+
+/// Other systems have no stable handle (FreeBSD's procfs is optional): the
+/// path of the running binary.
+#[cfg(not(target_os = "linux"))]
+fn running_binary() -> std::io::Result<PathBuf> {
+    std::env::current_exe()
+}
+
+/// One approval that puts the running binary in place as the admin helper
+/// and runs `args` with it: `pkexec /bin/sh -c <script> ADMIN_EXE <binary>
+/// <args…>`. Used when no helper exists yet or the one there is an older
+/// version, so refreshing it never costs a second password prompt. Root
+/// copies the running process's own inode (`running_binary`), never a path
+/// that could be swapped after the prompt.
+pub fn setup_and_run(args: impl IntoIterator<Item = OsString>) -> std::io::Result<(OsString, Vec<OsString>)> {
+    Ok(setup_and_run_from(&running_binary()?, args))
+}
+
+fn setup_and_run_from(from: &Path, args: impl IntoIterator<Item = OsString>) -> (OsString, Vec<OsString>) {
     let argv = ["/bin/sh", "-c", SETUP_AND_RUN_SCRIPT, ADMIN_EXE].into_iter().map(OsString::from).chain([from.as_os_str().to_owned()]).chain(args).collect();
     ("pkexec".into(), argv)
 }
@@ -210,7 +234,7 @@ mod tests {
     #[test]
     fn setup_and_run_is_one_fixed_script() {
         let from = Path::new("/home/u/my $(evil)/mandara");
-        let (prog, args) = setup_and_run(from, ["greeter".into(), "apply-config".into(), "--from".into(), "/home/u/a b.toml".into()]);
+        let (prog, args) = setup_and_run_from(from, ["greeter".into(), "apply-config".into(), "--from".into(), "/home/u/a b.toml".into()]);
         assert_eq!(prog, "pkexec");
         assert_eq!(args[..3], ["/bin/sh", "-c", SETUP_AND_RUN_SCRIPT].map(OsString::from));
         assert_eq!(args[3], ADMIN_EXE, "$0: where the helper goes");
@@ -222,6 +246,17 @@ mod tests {
         if let Ok(o) = std::process::Command::new("/bin/sh").args(["-c", "printf %s \"${0%/*}\"", ADMIN_EXE]).output() {
             assert_eq!(String::from_utf8_lossy(&o.stdout), "/usr/local/lib/mandara");
         }
+    }
+
+    /// Root installs the running process's own inode (`/proc/<pid>/exe`),
+    /// which no one can swap after the prompt, not the path in `~/.local`.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn root_installs_the_running_inode_not_a_path() {
+        let (_, args) = setup_and_run(["greeter".into()]).unwrap();
+        assert_eq!(args[3], ADMIN_EXE);
+        assert_eq!(args[4], format!("/proc/{}/exe", std::process::id()).as_str());
+        assert!(same_contents(Path::new(&args[4]), &std::env::current_exe().unwrap()));
     }
 
     /// The script, run unprivileged with `install` swapped for a stub:

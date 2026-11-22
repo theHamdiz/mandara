@@ -146,51 +146,98 @@ pub fn snapshot_paths(cfg: &ShellConfig, name: &str, description: &str, paths: &
     })
 }
 
-/// `cfg` with `profile` applied.
-pub fn apply(cfg: &ShellConfig, profile: &Profile) -> Result<ShellConfig> {
-    if profile.paths.is_empty() {
-        return Value::Table(profile.config.clone()).try_into().context("the profile is not a valid config");
-    }
-    let mut table = to_table(cfg)?;
-    for p in &profile.paths {
-        set_path(&mut table, p, get_path(&profile.config, p).cloned());
-    }
-    Value::Table(table).try_into().context("the profile doesn't fit this version's config")
+/// What a plugin may do is decided by the person at the grant prompt, never
+/// by a file: `next` takes `current`'s grants and its enabled / disabled
+/// lists, whatever a profile or an imported settings file said about them.
+/// (`ConfigStore::update` accepts any grant of a plugin that had none.)
+pub fn keep_plugin_authority(next: &mut ShellConfig, current: &ShellConfig) {
+    next.plugins.grants = current.plugins.grants.clone();
+    next.plugins.enabled = current.plugins.enabled.clone();
+    next.plugins.disabled = current.plugins.disabled.clone();
 }
 
+/// `cfg` with `profile` applied. Plugin permissions and which plugins are
+/// switched on stay as they are in `cfg`.
+pub fn apply(cfg: &ShellConfig, profile: &Profile) -> Result<ShellConfig> {
+    let mut next: ShellConfig = if profile.paths.is_empty() {
+        Value::Table(profile.config.clone()).try_into().context("the profile is not a valid config")?
+    } else {
+        let mut table = to_table(cfg)?;
+        for p in &profile.paths {
+            set_path(&mut table, p, get_path(&profile.config, p).cloned());
+        }
+        Value::Table(table).try_into().context("the profile doesn't fit this version's config")?
+    };
+    keep_plugin_authority(&mut next, cfg);
+    Ok(next)
+}
+
+/// Largest profile file read (1 MiB; a full config is a few tens of KiB).
+const PROFILE_MAX_BYTES: u64 = 1 << 20;
+
+fn read_profile(path: &Path) -> Option<Profile> {
+    toml::from_str::<Profile>(&crate::store::read_to_string_capped(path, PROFILE_MAX_BYTES).ok()?).ok()
+}
+
+/// Saves `profile` as `<slug>.toml`. A profile of the same name is replaced
+/// in the file it came from; a different profile whose name happens to share
+/// the slug (`Night mode` / `night-mode`) is never overwritten.
 pub fn save_in(dir: &Path, profile: &Profile) -> Result<PathBuf> {
-    if profile.name.trim().is_empty() {
+    let name = profile.name.trim();
+    if name.is_empty() {
         bail!("a profile needs a name");
     }
     std::fs::create_dir_all(dir)?;
-    let path = dir.join(format!("{}.toml", slug(&profile.name)));
+    let path = match entries_in(dir).into_iter().find(|(_, p)| p.name.trim().eq_ignore_ascii_case(name)) {
+        Some((path, _)) => path,
+        None => {
+            let path = dir.join(format!("{}.toml", slug(name)));
+            if let Some(other) = read_profile(&path) {
+                bail!("{path:?} already holds the profile {:?}; pick another name", other.name);
+            }
+            path
+        }
+    };
     let text = toml::to_string_pretty(profile).context("serializing the profile")?;
     crate::store::write_atomic(&path, text.as_bytes())?;
     Ok(path)
 }
 
-pub fn list_in(dir: &Path) -> Vec<Profile> {
-    let mut out: Vec<Profile> = std::fs::read_dir(dir)
+/// Every readable profile with the file it was loaded from, by name.
+fn entries_in(dir: &Path) -> Vec<(PathBuf, Profile)> {
+    let mut out: Vec<(PathBuf, Profile)> = std::fs::read_dir(dir)
         .into_iter()
         .flatten()
         .flatten()
-        .filter(|e| e.path().extension().is_some_and(|x| x == "toml"))
-        .filter_map(|e| toml::from_str::<Profile>(&std::fs::read_to_string(e.path()).ok()?).ok())
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "toml"))
+        .filter_map(|p| read_profile(&p).map(|profile| (p, profile)))
         .collect();
-    out.sort_by_key(|p| p.name.to_lowercase());
+    out.sort_by_key(|(path, p)| (p.name.to_lowercase(), path.clone()));
     out
+}
+
+fn find_entry(dir: &Path, name: &str) -> Option<(PathBuf, Profile)> {
+    let want = slug(name);
+    let mut entries = entries_in(dir);
+    // The exact name wins over a profile that merely shares its slug.
+    let at = entries.iter().position(|(_, p)| p.name.trim().eq_ignore_ascii_case(name.trim())).or_else(|| entries.iter().position(|(_, p)| slug(&p.name) == want))?;
+    Some(entries.swap_remove(at))
+}
+
+pub fn list_in(dir: &Path) -> Vec<Profile> {
+    entries_in(dir).into_iter().map(|(_, p)| p).collect()
 }
 
 /// The profile named `name` (case-insensitive, or its slug).
 pub fn find_in(dir: &Path, name: &str) -> Option<Profile> {
-    let want = slug(name);
-    list_in(dir).into_iter().find(|p| p.name.eq_ignore_ascii_case(name.trim()) || slug(&p.name) == want)
+    find_entry(dir, name).map(|(_, p)| p)
 }
 
+/// Deletes the file the profile was loaded from, whatever it is called.
 pub fn delete_in(dir: &Path, name: &str) -> Result<()> {
-    let p = find_in(dir, name).with_context(|| format!("no profile named {name:?}"))?;
-    std::fs::remove_file(dir.join(format!("{}.toml", slug(&p.name))))?;
-    Ok(())
+    let (path, _) = find_entry(dir, name).with_context(|| format!("no profile named {name:?}"))?;
+    std::fs::remove_file(&path).with_context(|| format!("deleting {}", path.display()))
 }
 
 pub fn save(profile: &Profile) -> Result<PathBuf> {
@@ -214,30 +261,93 @@ pub fn backups_dir() -> PathBuf {
     crate::paths::data_dir().join("backups")
 }
 
-fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
+/// How many backup folders are kept; older ones are deleted when a new
+/// backup is made.
+pub const MAX_BACKUPS: usize = 20;
+
+/// Copies a config folder into a backup. Symlinks (a dotfiles repo linking
+/// whole folders or files) are followed so the backup holds their contents; a
+/// link that leads nowhere is recreated as a link. `generated/` (rebuilt by
+/// the shell on the next sync), `*.tmp` leftovers of interrupted atomic
+/// writes, sockets and pipes are not copied.
+pub fn copy_config_tree(from: &Path, to: &Path) -> std::io::Result<()> {
+    let mut ancestors = vec![from.canonicalize()?];
+    copy_tree(from, to, &mut ancestors, true)
+}
+
+fn copy_tree(from: &Path, to: &Path, ancestors: &mut Vec<PathBuf>, top: bool) -> std::io::Result<()> {
     std::fs::create_dir_all(to)?;
     for entry in std::fs::read_dir(from)? {
         let entry = entry?;
-        let dest = to.join(entry.file_name());
-        if entry.file_type()?.is_dir() {
-            copy_dir(&entry.path(), &dest)?;
-        } else {
-            std::fs::copy(entry.path(), dest)?;
+        let name = entry.file_name();
+        let name_text = name.to_string_lossy();
+        if (top && name_text == "generated") || name_text.ends_with(".tmp") {
+            continue;
+        }
+        let (path, dest) = (entry.path(), to.join(&name));
+        let kind = entry.file_type()?;
+        // `metadata` follows links; an error is a link to nothing.
+        let resolved = if kind.is_symlink() { std::fs::metadata(&path) } else { entry.metadata() };
+        match resolved {
+            Ok(meta) if meta.is_dir() => {
+                let real = path.canonicalize()?;
+                // A link back to a folder being copied would never end.
+                if ancestors.contains(&real) {
+                    continue;
+                }
+                ancestors.push(real);
+                let copied = copy_tree(&path, &dest, ancestors, false);
+                ancestors.pop();
+                copied?;
+            }
+            Ok(meta) if meta.is_file() => {
+                std::fs::copy(&path, &dest)?;
+            }
+            Ok(_) => {}
+            Err(_) if kind.is_symlink() => std::os::unix::fs::symlink(std::fs::read_link(&path)?, &dest)?,
+            Err(error) => return Err(error),
         }
     }
     Ok(())
 }
 
+/// Deletes all but the newest `keep` backup folders in `dir`. Only folders
+/// named like Mandara's own (`YYYYMMDD-HHMMSS-<reason>`) are ever removed.
+pub fn prune_backups(dir: &Path, keep: usize) {
+    let is_backup = |name: &str| {
+        let b = name.as_bytes();
+        b.len() > 16 && b[..8].iter().all(u8::is_ascii_digit) && b[8] == b'-' && b[9..15].iter().all(u8::is_ascii_digit) && b[15] == b'-'
+    };
+    let mut found: Vec<PathBuf> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()) && is_backup(&e.file_name().to_string_lossy()))
+        .map(|e| e.path())
+        .collect();
+    // Stamps sort chronologically.
+    found.sort();
+    let excess = found.len().saturating_sub(keep);
+    for old in &found[..excess] {
+        if let Err(error) = std::fs::remove_dir_all(old) {
+            tracing::warn!("removing old backup {}: {error}", old.display());
+        }
+    }
+}
+
 /// Copies `~/.config/mandara` to `<backups>/<stamp>-<reason>` (the layout
-/// Studio → Maintenance lists and restores).
+/// Studio → Maintenance lists and restores), then drops the oldest backups
+/// beyond [`MAX_BACKUPS`].
 pub fn backup_config_dir(stamp: &str, reason: &str) -> Result<PathBuf> {
-    let dest = backups_dir().join(format!("{stamp}-{reason}"));
+    let root = backups_dir();
+    let dest = root.join(format!("{stamp}-{reason}"));
     let src = crate::paths::config_dir();
     if src.exists() {
-        copy_dir(&src, &dest).with_context(|| format!("backing up to {}", dest.display()))?;
+        copy_config_tree(&src, &dest).with_context(|| format!("backing up to {}", dest.display()))?;
     } else {
         std::fs::create_dir_all(&dest)?;
     }
+    prune_backups(&root, MAX_BACKUPS);
     Ok(dest)
 }
 
@@ -370,15 +480,26 @@ const VERSIONED: &[(&str, &str)] = &[("plugins", "defaults_version"), ("integrat
 /// Parses an exported (or hand-written) config. Missing values take their
 /// defaults, so a changes-only export imports as "defaults + changes"; an
 /// export from an older version is upgraded like a config file.
-pub fn import_text(text: &str) -> Result<ShellConfig> {
+///
+/// The result is the config to switch to from `current`. Plugin permissions
+/// (`plugins.grants`) and which plugins are enabled or disabled are never
+/// taken from the file: a shared export must not hand a plugin capabilities
+/// the person didn't approve. They stay as in `current`; permissions are
+/// given in Studio → Plugins as usual.
+pub fn import_text(text: &str, current: &ShellConfig) -> Result<ShellConfig> {
     let table: Table = toml::from_str(text).context("not a TOML file")?;
     if contains_redacted(&table) {
         bail!("this export was redacted (personal values replaced); import an unredacted export instead");
     }
     let mut cfg: ShellConfig = Value::Table(table).try_into().context("the file is not a Mandara config")?;
     crate::upgrade::upgrade(&mut cfg);
+    keep_plugin_authority(&mut cfg, current);
     Ok(cfg)
 }
+
+/// Largest settings file [`import_text`] callers read (a full export is a few
+/// tens of KiB).
+pub const IMPORT_MAX_BYTES: u64 = 4 << 20;
 
 /// Parses a damaged `config.toml`, keeping every value that still fits:
 /// whole sections first, then a broken section key by key. Returns the
@@ -389,14 +510,15 @@ pub fn salvage(text: &str) -> (ShellConfig, Vec<String>) {
         return (cfg, Vec::new());
     }
     let Ok(found) = toml::from_str::<Table>(text) else { return (ShellConfig::default(), vec![String::from("<file>")]) };
-    let fits = |t: &Table| Value::Table(t.clone()).try_into::<ShellConfig>().is_ok();
-    let mut out = to_table(&ShellConfig::default()).unwrap_or_default();
+    // Every section has its own defaults, so a trial holds just the section
+    // under test: deserializing it costs that section, not the whole config.
+    let fits = |section: &str, value: &Value| Value::Table(Table::from_iter([(section.to_string(), value.clone())])).try_into::<ShellConfig>().is_ok();
+    let defaults = to_table(&ShellConfig::default()).unwrap_or_default();
+    let mut out = defaults.clone();
     let mut dropped = Vec::new();
     for (section, value) in found {
-        let mut trial = out.clone();
-        trial.insert(section.clone(), value.clone());
-        if fits(&trial) {
-            out = trial;
+        if fits(&section, &value) {
+            out.insert(section, value);
             continue;
         }
         // Keep the section's good keys on top of its defaults.
@@ -404,21 +526,20 @@ pub fn salvage(text: &str) -> (ShellConfig, Vec<String>) {
             dropped.push(section);
             continue;
         };
+        let mut kept = match defaults.get(&section) {
+            Some(Value::Table(base)) => base.clone(),
+            _ => Table::new(),
+        };
         for (key, v) in keys {
-            let mut trial = out.clone();
-            let entry = trial.entry(section.clone()).or_insert_with(|| Value::Table(Table::new()));
-            match entry.as_table_mut() {
-                Some(t) => {
-                    t.insert(key.clone(), v);
-                }
-                None => *entry = Value::Table(Table::from_iter([(key.clone(), v)])),
-            }
-            if fits(&trial) {
-                out = trial;
+            let mut trial = kept.clone();
+            trial.insert(key.clone(), v);
+            if fits(&section, &Value::Table(trial.clone())) {
+                kept = trial;
             } else {
                 dropped.push(format!("{section}.{key}"));
             }
         }
+        out.insert(section, Value::Table(kept));
     }
     let cfg = Value::Table(out).try_into().unwrap_or_default();
     (cfg, dropped)
@@ -500,9 +621,102 @@ mod tests {
         let (text, sensitive) = export_text(&tweaked(), ExportOptions { changes_only: true, redact: false }).unwrap();
         assert!(text.contains("height = 28.0") && !text.contains("[launcher]"), "{text}");
         assert_eq!(sensitive, vec!["plugins.settings.prayer-times.latitude"]);
-        assert_eq!(import_text(&text).unwrap(), tweaked());
+        let current = ShellConfig::default();
+        assert_eq!(import_text(&text, &current).unwrap(), tweaked());
         let (full, _) = export_text(&tweaked(), ExportOptions::default()).unwrap();
-        assert_eq!(import_text(&full).unwrap(), tweaked());
+        assert_eq!(import_text(&full, &current).unwrap(), tweaked());
+    }
+
+    /// A shared settings file must not grant plugin permissions or switch
+    /// plugins on: only the person's own grants and choices survive.
+    #[test]
+    fn imports_and_full_profiles_never_bring_plugin_permissions() {
+        let mut shared = tweaked();
+        shared.plugins.set_granted("evil", "wallpaper.live", true);
+        shared.plugins.enabled.push("evil".into());
+        shared.plugins.disabled.push("weather".into());
+        let (text, _) = export_text(&shared, ExportOptions { changes_only: false, redact: false }).unwrap();
+        assert!(text.contains("evil"), "fixture must carry the grant");
+
+        let mut mine = ShellConfig::default();
+        mine.plugins.set_granted("moon-phase", "media.read", true);
+        mine.plugins.disabled.push("clock".into());
+        let imported = import_text(&text, &mine).unwrap();
+        assert_eq!(imported.plugins.grants, mine.plugins.grants);
+        assert_eq!((&imported.plugins.enabled, &imported.plugins.disabled), (&mine.plugins.enabled, &mine.plugins.disabled));
+        assert_eq!(imported.bar.height, 28.0, "everything else is imported");
+
+        let full = snapshot(&shared, "Shared", "", ProfileScope::Full, "").unwrap();
+        let applied = apply(&mine, &full).unwrap();
+        assert_eq!(applied.plugins.grants, mine.plugins.grants);
+        assert_eq!(applied.plugins.enabled, mine.plugins.enabled);
+        assert_eq!(applied.bar.height, 28.0);
+
+        // A hand-made profile that lists the grants as one of its paths gets nowhere either.
+        let mut sneaky = snapshot_paths(&shared, "Sneaky", "", &["plugins.grants", "plugins.enabled", "bar"], "").unwrap();
+        sneaky.scope = ProfileScope::Look;
+        let applied = apply(&mine, &sneaky).unwrap();
+        assert_eq!(applied.plugins.grants, mine.plugins.grants);
+        assert!(applied.plugins.enabled.is_empty());
+        assert_eq!(applied.bar.height, 28.0);
+    }
+
+    #[test]
+    fn profiles_that_share_a_slug_never_overwrite_or_delete_each_other() {
+        let dir = tempfile::tempdir().unwrap();
+        let first = snapshot(&tweaked(), "Night mode", "", ProfileScope::Look, "").unwrap();
+        save_in(dir.path(), &first).unwrap();
+        let clash = snapshot(&ShellConfig::default(), "night-mode", "", ProfileScope::Look, "").unwrap();
+        assert!(save_in(dir.path(), &clash).is_err(), "same file name, different profile");
+        assert_eq!(find_in(dir.path(), "Night mode").unwrap(), first);
+        // Saving the same profile again replaces it, whatever the case.
+        let again = snapshot(&tweaked(), "NIGHT MODE", "again", ProfileScope::Look, "").unwrap();
+        save_in(dir.path(), &again).unwrap();
+        assert_eq!(list_in(dir.path()), vec![again]);
+
+        // A hand-made file whose name differs from its file name.
+        let other = snapshot(&ShellConfig::default(), "c", "", ProfileScope::Look, "").unwrap();
+        std::fs::write(dir.path().join("b.toml"), toml::to_string_pretty(&other).unwrap()).unwrap();
+        let moved = snapshot(&ShellConfig::default(), "b", "", ProfileScope::Look, "").unwrap();
+        std::fs::write(dir.path().join("a.toml"), toml::to_string_pretty(&moved).unwrap()).unwrap();
+        delete_in(dir.path(), "b").unwrap();
+        assert!(!dir.path().join("a.toml").exists(), "the file the profile came from goes");
+        assert_eq!(find_in(dir.path(), "c").unwrap(), other, "b.toml (profile c) stays");
+        // Saving "b" now would collide with b.toml, which holds "c".
+        assert!(save_in(dir.path(), &moved).is_err());
+    }
+
+    #[test]
+    fn backups_follow_symlinks_skip_generated_and_prune() {
+        use std::os::unix::fs::symlink;
+        let root = tempfile::tempdir().unwrap();
+        let (config, dotfiles) = (root.path().join("config"), root.path().join("dotfiles"));
+        std::fs::create_dir_all(config.join("generated")).unwrap();
+        std::fs::create_dir_all(dotfiles.join("looks")).unwrap();
+        std::fs::write(config.join("config.toml"), "a").unwrap();
+        std::fs::write(config.join("generated/niri.kdl"), "x").unwrap();
+        std::fs::write(config.join(".config.toml.1.2.3.tmp"), "half").unwrap();
+        std::fs::write(dotfiles.join("looks/mine.toml"), "look").unwrap();
+        symlink(dotfiles.join("looks"), config.join("looks")).unwrap();
+        symlink(&config, dotfiles.join("looks/loop")).unwrap();
+        symlink("/nonexistent/target", config.join("dangling")).unwrap();
+        let backup = root.path().join("backups/20260101-000000-test");
+        copy_config_tree(&config, &backup).unwrap();
+        assert_eq!(std::fs::read_to_string(backup.join("config.toml")).unwrap(), "a");
+        assert_eq!(std::fs::read_to_string(backup.join("looks/mine.toml")).unwrap(), "look", "a linked folder is copied");
+        assert!(!backup.join("looks/loop/config.toml").exists(), "a link back into the tree is not followed");
+        assert!(!backup.join("generated").exists() && !backup.join(".config.toml.1.2.3.tmp").exists());
+        assert!(std::fs::symlink_metadata(backup.join("dangling")).unwrap().file_type().is_symlink());
+
+        let dir = root.path().join("backups");
+        for n in 1..=5 {
+            std::fs::create_dir_all(dir.join(format!("2026010{n}-000000-x"))).unwrap();
+        }
+        std::fs::create_dir_all(dir.join("mine")).unwrap();
+        prune_backups(&dir, 3);
+        let mut left: Vec<String> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+        left.sort();
+        assert_eq!(left, ["20260103-000000-x", "20260104-000000-x", "20260105-000000-x", "mine"], "oldest go, other folders stay");
     }
 
     #[test]
@@ -510,8 +724,8 @@ mod tests {
         let (text, sensitive) = export_text(&tweaked(), ExportOptions { changes_only: true, redact: true }).unwrap();
         assert!(sensitive.is_empty());
         assert!(text.contains("latitude = \"<redacted>\"") && !text.contains("31.2"));
-        assert!(import_text(&text).is_err());
-        assert!(import_text("not = [toml").is_err());
+        assert!(import_text(&text, &ShellConfig::default()).is_err());
+        assert!(import_text("not = [toml", &ShellConfig::default()).is_err());
     }
 
     #[test]

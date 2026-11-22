@@ -46,9 +46,10 @@ Where they live, first match wins:
 `~/.local/share/mandara/locales/<version>/` (downloads and
 `mandara install`), `share/mandara/locales/<version>/` next to the binary
 (an unpacked tarball), then `/usr/local/share` and `/usr/share`
-(packages, and the copy Mandara Login uses). Packs are memory-mapped and
-read in place: switching to a language takes well under a millisecond and
-costs no extra memory for its strings. The format is described in
+(packages, and the copy Mandara Login uses). Packs are read into memory once and
+looked up in place (a file replaced or truncated later cannot fault the
+shell): switching to a language takes well under a millisecond and costs a
+few hundred KB for its strings. The format is described in
 [releasing.md](releasing.md#language-packs).
 
 ## Right to left

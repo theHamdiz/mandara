@@ -113,6 +113,72 @@ pub async fn next_wake<C, S: futures::Stream + Unpin>(signals: &mut S, commands:
     }
 }
 
+/// How long [`send_event`] waits for a full event queue to drain.
+const EVENT_SEND_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Queues an event for the UI without silently losing it: a full queue is
+/// waited on for a few seconds, then the loss is logged. A closed queue
+/// (the UI side is gone) is not an error. Returns whether the UI got it.
+pub async fn send_event<T>(tx: &async_channel::Sender<T>, event: T, what: &str) -> bool {
+    match tx.try_send(event) {
+        Ok(()) => true,
+        Err(async_channel::TrySendError::Closed(_)) => false,
+        Err(async_channel::TrySendError::Full(event)) => match crate::runtime::timeout(EVENT_SEND_TIMEOUT, tx.send(event)).await {
+            Some(sent) => sent.is_ok(),
+            None => {
+                tracing::warn!("{what}: the UI did not take the event in time; dropped");
+                false
+            }
+        },
+    }
+}
+
+/// Whether the caller of a D-Bus method is `service`'s current owner, or
+/// root. For agent interfaces the system bus policy already limits who can
+/// call them; this keeps another local process from driving the prompts.
+pub async fn caller_is(conn: &Connection, header: &zbus::message::Header<'_>, service: &str) -> bool {
+    let Some(sender) = header.sender() else { return false };
+    let Ok(dbus) = zbus::fdo::DBusProxy::new(conn).await else { return false };
+    if let Ok(name) = zbus::names::BusName::try_from(service)
+        && dbus.get_name_owner(name).await.is_ok_and(|owner| owner.as_str() == sender.as_str())
+    {
+        return true;
+    }
+    dbus.get_connection_unix_user(zbus::names::BusName::from(sender.clone())).await.is_ok_and(|uid| uid == 0)
+}
+
+/// Follows `name` on the bus: `true` each time it gains an owner, `false`
+/// when it loses it. For services that must re-register after the daemon
+/// they talk to restarts.
+pub async fn owner_changes(conn: &Connection, name: &'static str) -> zbus::Result<std::pin::Pin<Box<dyn futures::Stream<Item = bool> + Send>>> {
+    use futures::StreamExt as _;
+    let dbus = zbus::fdo::DBusProxy::new(conn).await?;
+    let stream = dbus.receive_name_owner_changed_with_args(&[(0, name)]).await?;
+    Ok(stream.filter_map(|signal| async move { signal.args().ok().map(|a| a.new_owner().is_some()) }).boxed())
+}
+
+/// Waits until `owners` reports the name gained an owner, or `retry` passes.
+/// `false` when the stream ended (no more changes will come).
+pub async fn wait_for_owner<S: futures::Stream<Item = bool> + Unpin>(owners: &mut S, retry: Option<Duration>) -> bool {
+    use futures::{FutureExt as _, StreamExt as _};
+    let appeared = async {
+        loop {
+            match owners.next().await {
+                Some(true) => return true,
+                Some(false) => {}
+                None => return false,
+            }
+        }
+    };
+    match retry {
+        Some(retry) => futures::select! {
+            seen = appeared.fuse() => seen,
+            _ = futures::FutureExt::fuse(async_io::Timer::after(retry)) => true,
+        },
+        None => appeared.await,
+    }
+}
+
 /// Waits for the next command or a timeout, whichever comes first.
 pub async fn next_command<C>(commands: &async_channel::Receiver<Envelope<C>>, timeout: Duration) -> Option<Option<Envelope<C>>> {
     use futures::FutureExt as _;
@@ -128,6 +194,15 @@ pub async fn next_command<C>(commands: &async_channel::Receiver<Envelope<C>>, ti
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn send_event_reports_whether_the_ui_got_it() {
+        let (tx, rx) = async_channel::bounded(1);
+        assert!(crate::runtime::block_on(send_event(&tx, 1, "test")));
+        assert_eq!(rx.try_recv(), Ok(1));
+        rx.close();
+        assert!(!crate::runtime::block_on(send_event(&tx, 2, "test")), "a closed queue delivers nothing");
+    }
 
     #[test]
     fn nonblocking_send_reports_full_and_closed_queues_without_losing_the_command() {

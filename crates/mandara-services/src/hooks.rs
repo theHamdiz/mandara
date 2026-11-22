@@ -182,6 +182,9 @@ pub fn configure(config: &HooksConfig, skills: &[Skill]) {
             *reg = Some(Registry { config: config.clone(), skills: skills.to_vec(), history: VecDeque::new() })
         }
     }
+    drop(reg);
+    // A `before_sleep` rule appearing or going decides whether sleep is held.
+    crate::sleep::recheck();
 }
 
 /// The most recent runs, newest first.

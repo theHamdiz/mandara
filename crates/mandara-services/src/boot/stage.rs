@@ -116,12 +116,64 @@ pub fn check(kind: Kind, dir: &Path, name: &str, include: Option<&str>) -> Resul
     }
 }
 
+/// Moves finished folders (and files) into the stage together, each
+/// replacing an older staging at its `dest`. Older versions are parked in
+/// `aside` first and put back if anything fails, so the stage never holds
+/// a mix of new and old, or loses what was staged before.
+fn replace_all(items: &[(&Path, &Path)], aside: &Path) -> Result<(), String> {
+    let mut parked: Vec<(&Path, PathBuf)> = Vec::new();
+    let mut placed: Vec<&Path> = Vec::new();
+    let result = place_all(items, aside, &mut parked, &mut placed);
+    if result.is_err() {
+        for dest in placed.iter().rev() {
+            let _ = if dest.is_dir() { std::fs::remove_dir_all(dest) } else { std::fs::remove_file(dest) };
+        }
+        let mut restore_err: Option<String> = None;
+        for (dest, old) in parked.iter().rev() {
+            if let Err(e) = std::fs::rename(old, dest) {
+                // Keep the parked theme outside `aside` (often under Scratch)
+                // so Drop cannot delete the only remaining previous stage.
+                let keep = aside.with_extension(format!("recover-{}", old.file_name().and_then(|n| n.to_str()).unwrap_or("stage")));
+                let kept = std::fs::rename(old, &keep).is_ok();
+                restore_err = Some(if kept {
+                    format!("{}: could not restore previous stage ({e}); kept at {}", dest.display(), keep.display())
+                } else {
+                    format!("{}: could not restore previous stage from {}: {e}", dest.display(), old.display())
+                });
+                break;
+            }
+        }
+        if let Some(e) = restore_err {
+            return Err(e);
+        }
+    }
+    result
+}
+
+fn place_all<'a>(items: &[(&'a Path, &Path)], aside: &Path, parked: &mut Vec<(&'a Path, PathBuf)>, placed: &mut Vec<&'a Path>) -> Result<(), String> {
+    let io = |path: &Path, e: std::io::Error| format!("{}: {e}", path.display());
+    std::fs::create_dir_all(aside).map_err(|e| io(aside, e))?;
+    for (n, (dest, _)) in items.iter().enumerate() {
+        if std::fs::symlink_metadata(dest).is_ok() {
+            let old = aside.join(n.to_string());
+            std::fs::rename(dest, &old).map_err(|e| io(dest, e))?;
+            parked.push((dest, old));
+        }
+    }
+    for (dest, built) in items {
+        if let Some(dir) = dest.parent() {
+            std::fs::create_dir_all(dir).map_err(|e| io(dir, e))?;
+        }
+        std::fs::rename(built, dest).map_err(|e| io(dest, e))?;
+        placed.push(dest);
+    }
+    Ok(())
+}
+
 /// Moves a finished folder into the stage, replacing an older staging.
 fn commit(env: &Env, kind: Kind, name: &str, built: &Path) -> Result<PathBuf, String> {
     let dest = env.stage(kind).join(name);
-    std::fs::create_dir_all(env.stage(kind)).map_err(|e| e.to_string())?;
-    let _ = std::fs::remove_dir_all(&dest);
-    std::fs::rename(built, &dest).map_err(|e| format!("{}: {e}", dest.display()))?;
+    replace_all(&[(&dest, built)], &built.with_extension("previous"))?;
     Ok(dest)
 }
 
@@ -256,10 +308,13 @@ pub fn import(source: &str, env: &Env, confirmed_unverified: bool, cancel: &Atom
 const UNPINNED_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 /// How long an unpinned download's body may stall.
 const UNPINNED_BODY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(180);
+/// How long the whole unpinned download may take, however steadily it
+/// trickles: [`MAX_DOWNLOAD`] in 15 minutes is about 70 KiB/s.
+const UNPINNED_TOTAL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15 * 60);
 
 fn download_unpinned(url: &str, to: &Path, cancel: &AtomicBool) -> Result<(), String> {
     use std::io::{Read as _, Write as _};
-    let agent: ureq::Agent = ureq::Agent::config_builder().timeout_connect(Some(UNPINNED_CONNECT_TIMEOUT)).timeout_recv_body(Some(UNPINNED_BODY_TIMEOUT)).https_only(true).build().into();
+    let agent: ureq::Agent = ureq::Agent::config_builder().timeout_connect(Some(UNPINNED_CONNECT_TIMEOUT)).timeout_recv_body(Some(UNPINNED_BODY_TIMEOUT)).timeout_global(Some(UNPINNED_TOTAL_TIMEOUT)).https_only(true).build().into();
     let mut response = agent.get(url).header("User-Agent", concat!("mandara-shell/", env!("CARGO_PKG_VERSION"))).call().map_err(|e| tf("Download failed: {error}", &[("error", &e)]))?;
     let mut reader = response.body_mut().with_config().limit(MAX_DOWNLOAD + 1).reader();
     let mut out = std::fs::File::create(to).map_err(|e| e.to_string())?;
@@ -322,13 +377,11 @@ pub fn from_image(path: &Path, opts: &Options, screen: (u32, u32), menu: (u32, u
     let wall = scratch.0.join("wallpaper.png");
     let wall_opts = Options { position: image::Position::Lower, scale: opts.scale.min(LIMINE_LOGO_SCALE), ..opts.clone() };
     image::write_wallpaper(&wall, &src, &wall_opts, menu)?;
-    let splash = commit(env, Kind::Plymouth, super::SPLASH_NAME, &splash_dir)?;
-    let grub = commit(env, Kind::Grub, super::GRUB_IMAGE_NAME, &grub_dir)?;
+    // The three belong together: all replace what was staged, or none does.
+    let splash = env.stage(Kind::Plymouth).join(super::SPLASH_NAME);
+    let grub = env.stage(Kind::Grub).join(super::GRUB_IMAGE_NAME);
     let wallpaper = env.wallpaper();
-    if let Some(d) = wallpaper.parent() {
-        std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
-    }
-    std::fs::rename(&wall, &wallpaper).map_err(|e| e.to_string())?;
+    replace_all(&[(&splash, &splash_dir), (&grub, &grub_dir), (&wallpaper, &wall)], &scratch.0.join("previous"))?;
     Ok(FromImage { splash: Staged { name: super::SPLASH_NAME.into(), dir: splash, include: None }, grub: Staged { name: super::GRUB_IMAGE_NAME.into(), dir: grub, include: None }, wallpaper })
 }
 
@@ -349,7 +402,7 @@ pub fn run_admin(args: &[&str]) -> Result<helper::Outcome, String> {
     let args: Vec<OsString> = std::iter::once(OsString::from("boot-admin")).chain(args.iter().map(OsString::from)).collect();
     let (prog, argv) = match admin::current_admin_exe() {
         Some(exe) => admin::pkexec(&exe, args),
-        None => admin::setup_and_run(&std::env::current_exe().map_err(|e| e.to_string())?, args),
+        None => admin::setup_and_run(args).map_err(|e| e.to_string())?,
     };
     let out = std::process::Command::new(&prog).args(&argv).stdin(std::process::Stdio::null()).output().map_err(|e| format!("{}: {e}", prog.to_string_lossy()))?;
     let stdout = String::from_utf8_lossy(&out.stdout);

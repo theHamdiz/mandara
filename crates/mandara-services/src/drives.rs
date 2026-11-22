@@ -796,7 +796,7 @@ impl Actor<'_> {
                 if path.is_empty() {
                     return Err(tf("{device} is not mounted", &[("device", &v.device)]));
                 }
-                crate::session::open_uri(&file_uri(&path))?;
+                crate::session::open_uri_async(&file_uri(&path)).await?;
                 Ok(tf("Opened {path}", &[("path", &path)]))
             }
         }

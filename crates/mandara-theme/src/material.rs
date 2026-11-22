@@ -223,8 +223,19 @@ pub fn open_shared(path: &Path) -> image::ImageResult<Arc<image::DynamicImage>> 
     }
     map.insert(key.clone(), Shared::Decoding);
     drop(map);
-    let result = open_image(path).map(Arc::new);
+    // A decoder panic must not leave `Decoding` behind: every later caller
+    // for this picture would wait on it forever.
+    let decoded = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| open_image(path).map(Arc::new)));
     let mut map = lock.lock().unwrap_or_else(|e| e.into_inner());
+    let result = match decoded {
+        Ok(result) => result,
+        Err(panic) => {
+            map.remove(&key);
+            drop(map);
+            ready.notify_all();
+            std::panic::resume_unwind(panic);
+        }
+    };
     map.retain(|_, slot| !matches!(slot, Shared::Ready(weak) if weak.strong_count() == 0));
     match &result {
         Ok(image) => {

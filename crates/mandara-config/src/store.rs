@@ -43,6 +43,20 @@ pub struct ConfigStore {
     disk_hash: Option<u64>,
     /// Defaults loaded after a parse error must never replace the user's file.
     load_error: Option<String>,
+    /// What [`ConfigStore::open`] had to drop to make a damaged file usable.
+    repaired: Option<Repaired>,
+}
+
+/// A config file with values this version can't read (a bad edit, or a
+/// setting from a newer version after a downgrade) that [`ConfigStore::open`]
+/// loaded anyway: the readable values are kept, the others are at their
+/// defaults, and the file as it was is kept beside the config.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Repaired {
+    /// Dotted paths of the values that fell back to their defaults.
+    pub dropped: Vec<String>,
+    /// The untouched copy of the damaged file.
+    pub backup: PathBuf,
 }
 
 /// A shared snapshot for a serialized background save.
@@ -111,28 +125,45 @@ impl ConfigStore {
         Self::open(crate::paths::config_file())
     }
 
-    /// Opens a config file, writing defaults if it does not exist yet. A file
-    /// that fails to parse is reported and the defaults are used in memory
-    /// (saving stays disabled until a valid file is reloaded).
+    /// Opens a config file, writing defaults if it does not exist yet.
+    ///
+    /// A file with some values this version can't read (a typo, a setting
+    /// from a newer version) is loaded value by value: what parses is kept,
+    /// the rest takes its defaults, and the original is copied aside before
+    /// anything is saved over it ([`ConfigStore::repaired`] says what
+    /// happened). A file that isn't TOML at all can't be salvaged: the
+    /// defaults are used in memory and saving stays disabled until a valid
+    /// file is reloaded.
     pub fn open(path: impl Into<PathBuf>) -> Result<Self> {
         let path = path.into();
         let current = Arc::new(ShellConfig::default());
         let mut store = Self {
             path,
             saved: current.clone(),
-            current, dirty: false, disk_hash: None, load_error: None };
-        if store.path.exists() {
-            let bytes = fs::read(&store.path).with_context(|| format!("reading {}", store.path.display()))?;
+            current, dirty: false, disk_hash: None, load_error: None, repaired: None };
+        // No `exists()` first: one read tells a missing file from a failing one.
+        let bytes = match fs::read(&store.path) {
+            Ok(bytes) => Some(bytes),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => return Err(error).with_context(|| format!("reading {}", store.path.display())),
+        };
+        if let Some(bytes) = bytes {
             store.disk_hash = Some(hash_bytes(&bytes));
             match parse(&bytes) {
                 Ok(cfg) => {
                     store.current = Arc::new(cfg);
                     store.saved = store.current.clone();
                 }
-                Err(err) => {
-                    store.load_error = Some(format!("{err:#}"));
-                    tracing::error!("{}: {err:#}; using defaults in memory without saving", store.path.display());
-                }
+                Err(err) => match store.salvage(&bytes) {
+                    Some(repaired) => {
+                        tracing::warn!("{}: {err:#}; kept what parses, reset {} to defaults (original in {})", store.path.display(), repaired.dropped.join(", "), repaired.backup.display());
+                        store.repaired = Some(repaired);
+                    }
+                    None => {
+                        store.load_error = Some(format!("{err:#}"));
+                        tracing::error!("{}: {err:#}; using defaults in memory without saving", store.path.display());
+                    }
+                },
             }
         } else {
             let mut fresh = ShellConfig::default();
@@ -142,6 +173,55 @@ impl ConfigStore {
             store.flush()?;
         }
         Ok(store)
+    }
+
+    /// Loads a file that doesn't parse as a whole, value by value (see
+    /// [`ConfigStore::open`]). `None` when nothing can be salvaged or the
+    /// original can't be copied aside first.
+    fn salvage(&mut self, bytes: &[u8]) -> Option<Repaired> {
+        let (mut cfg, dropped) = crate::profiles::salvage(std::str::from_utf8(bytes).ok()?);
+        // Nothing dropped: the file failed on something `salvage` doesn't
+        // check. Not TOML at all: nothing to keep.
+        if dropped.is_empty() || dropped.iter().any(|path| path == "<file>") {
+            return None;
+        }
+        cfg.migrate_legacy();
+        crate::desktop_widgets::migrate(&mut cfg);
+        crate::upgrade::upgrade(&mut cfg);
+        cfg.integrations.app_themes.validate().ok()?;
+        let backup = match self.keep_damaged_copy(bytes) {
+            Ok(backup) => backup,
+            Err(error) => {
+                tracing::error!("keeping a copy of {}: {error:#}", self.path.display());
+                return None;
+            }
+        };
+        self.current = Arc::new(cfg);
+        self.saved = self.current.clone();
+        Some(Repaired { dropped, backup })
+    }
+
+    /// Copies a damaged file next to the config (`config.toml.invalid-<hash>`,
+    /// private like the config; one copy per distinct content).
+    fn keep_damaged_copy(&self, bytes: &[u8]) -> Result<PathBuf> {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        let name = self.path.file_name().and_then(|n| n.to_str()).unwrap_or("config.toml");
+        let copy = self.path.with_file_name(format!("{name}.invalid-{:016x}", hash_bytes(bytes)));
+        match fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&copy) {
+            Ok(mut file) => {
+                file.write_all(bytes)?;
+                file.sync_all()?;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(error).with_context(|| format!("creating {}", copy.display())),
+        }
+        Ok(copy)
+    }
+
+    /// What loading dropped from a damaged file, when it had to
+    /// (the shell tells the person; see [`Repaired`]).
+    pub fn repaired(&self) -> Option<&Repaired> {
+        self.repaired.as_ref()
     }
 
     pub fn path(&self) -> &Path {
@@ -175,15 +255,13 @@ impl ConfigStore {
         if self.disk_hash != loaded.base_hash && self.disk_hash != loaded.store.disk_hash {
             return Ok(ReloadOutcome::Unchanged);
         }
-        let mut merged = crate::patch::ConfigPatch::between(&loaded.queued, &self.current)?
-            .apply(&loaded.store.current)?;
-        crate::plugin_grants::reconcile(&self.current.plugins, &mut merged.plugins);
-        let changed = merged != *self.current;
+        let merged = self.merge_local_edits(&loaded.queued, &loaded.store.current)?;
+        let changed = merged != self.current;
         self.saved = loaded.store.saved;
-        self.current = if merged == *self.saved {
+        self.current = if *merged == *self.saved {
             self.saved.clone()
         } else {
-            Arc::new(merged)
+            merged
         };
         self.disk_hash = loaded.store.disk_hash;
         self.load_error = loaded.store.load_error;
@@ -211,19 +289,34 @@ impl ConfigStore {
         if self.disk_hash != saved.base_hash && self.disk_hash != saved.store.disk_hash {
             return Ok(false);
         }
-        let pending = crate::patch::ConfigPatch::between(&saved.queued, &self.current)?;
-        let mut merged = pending.apply(&saved.store.current)?;
-        crate::plugin_grants::reconcile(&self.current.plugins, &mut merged.plugins);
-        let changed = merged != *self.current;
+        let merged = self.merge_local_edits(&saved.queued, &saved.store.current)?;
+        let changed = merged != self.current;
         self.saved = saved.store.current;
-        self.current = if merged == *self.saved {
+        self.current = if *merged == *self.saved {
             self.saved.clone()
         } else {
-            Arc::new(merged)
+            merged
         };
         self.dirty = self.current != self.saved;
         self.disk_hash = saved.store.disk_hash;
         Ok(changed)
+    }
+
+    /// `disk` (what a background read or save ended with) plus the edits made
+    /// since `queued` was handed to it. With no edits in between (the common
+    /// case: a save finishing after the sliders stopped) there is nothing to
+    /// replay, so the two whole-config JSON conversions of a patch, which run
+    /// on the UI thread, are skipped.
+    fn merge_local_edits(&self, queued: &Arc<ShellConfig>, disk: &Arc<ShellConfig>) -> Result<Arc<ShellConfig>> {
+        let mut merged = if Arc::ptr_eq(queued, &self.current) {
+            disk.clone()
+        } else {
+            Arc::new(crate::patch::ConfigPatch::between(queued, &self.current)?.apply(disk)?)
+        };
+        if crate::plugin_grants::changed(&self.current.plugins, &merged.plugins) {
+            crate::plugin_grants::reconcile(&self.current.plugins, &mut Arc::make_mut(&mut merged).plugins);
+        }
+        Ok(merged)
     }
 
     /// Mutates the in-memory config. Returns `true` if anything changed.
@@ -271,24 +364,21 @@ impl ConfigStore {
             fs::create_dir_all(parent)?;
         }
         let directory = mandara_theme::templates::WriteLock::new(&target)?;
-        let lock = fs::OpenOptions::new()
-            .create(true)
-            .truncate(false)
-            .read(true)
-            .write(true)
-            .open(target.with_extension("toml.lock"))?;
-        lock.lock().context("locking configuration")?;
         let before = mandara_theme::templates::FileStamp::at(directory.target())?;
         // Another process may have saved since the watcher's last event.
         // Merge before writing so Studio cannot undo a shell-side change.
-        if target.exists() {
-            let bytes = fs::read(&target).with_context(||format!("reading {}",target.display()))?;
-            self.reload_bytes(&bytes, |_| publication::confirm(&directory, &bytes, &mut sync_directory))?;
+        let on_disk = match fs::read(&target) {
+            Ok(bytes) => Some(bytes),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => return Err(error).with_context(|| format!("reading {}", target.display())),
+        };
+        if let Some(bytes) = &on_disk {
+            self.reload_bytes(bytes, |_| publication::confirm(&directory, bytes, &mut sync_directory))?;
         }
         if !self.dirty {
             return Ok(());
         }
-        let body = toml::to_string_pretty(&*self.current).context("serializing config")?;
+        let body = self.serialize(on_disk.as_deref())?;
         let contents = format!("{HEADER}{body}");
         before_publish()?;
         write_atomic_checked_using(&directory, before, contents.as_bytes(), sync_directory)?;
@@ -296,6 +386,19 @@ impl ConfigStore {
         self.saved = self.current.clone();
         self.dirty = false;
         Ok(())
+    }
+
+    /// The config as TOML. Settings the file on disk has that this version
+    /// doesn't know (written by a newer one before a downgrade) are carried
+    /// over instead of being dropped by the save.
+    fn serialize(&self, on_disk: Option<&[u8]>) -> Result<String> {
+        let unknown = on_disk.and_then(|bytes| std::str::from_utf8(bytes).ok()).and_then(unknown_settings);
+        let Some(unknown) = unknown else {
+            return toml::to_string_pretty(&*self.current).context("serializing config");
+        };
+        let mut table = crate::profiles::to_table(&self.current)?;
+        merge_unknown(&mut table, unknown);
+        toml::to_string_pretty(&table).context("serializing config")
     }
 
     /// Re-reads the file. Our own writes (same hash) are reported as
@@ -351,6 +454,77 @@ impl ConfigStore {
     }
 }
 
+/// Reads config TOML exactly as [`ConfigStore`] does when it opens a file
+/// (migrations, upgrades and the app-theme checks included): what a check of
+/// a config file must use, or it can call OK a file the store refuses.
+pub fn parse_text(text: &str) -> Result<ShellConfig> {
+    parse(text.as_bytes())
+}
+
+/// Replaces the config file at `path` with `config` as a whole (factory
+/// reset, restoring a backup, repair) even when what is there can't be
+/// loaded. The new text is read back through [`parse_text`] first, then
+/// written under the same directory lock and stale-write check as a save,
+/// so it can't interleave with one.
+pub fn replace_file(path: &Path, config: &ShellConfig) -> Result<()> {
+    let contents = format!("{HEADER}{}", toml::to_string_pretty(config).context("serializing config")?);
+    parse_text(&contents).context("the new config would not load")?;
+    let target = symlink_target(path);
+    let target = target.canonicalize().unwrap_or(target);
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
+    }
+    let lock = mandara_theme::templates::WriteLock::new(&target)?;
+    let before = mandara_theme::templates::FileStamp::at(lock.target())?;
+    write_atomic_checked(&lock, before, contents.as_bytes())?;
+    Ok(())
+}
+
+/// The values in `text` that no [`ShellConfig`] field holds: what is in the
+/// file but not in the file read into a config and written back. Empty
+/// arrays and tables don't count (the schema leaves its own empty ones out).
+fn unknown_settings(text: &str) -> Option<toml::Table> {
+    use toml::Value;
+    fn collect(file: &toml::Table, known: &toml::Table, out: &mut toml::Table) {
+        for (key, value) in file {
+            match (known.get(key), value) {
+                (Some(Value::Table(known)), Value::Table(file)) => {
+                    let mut inner = toml::Table::new();
+                    collect(file, known, &mut inner);
+                    if !inner.is_empty() {
+                        out.insert(key.clone(), Value::Table(inner));
+                    }
+                }
+                (Some(_), _) => {}
+                (None, Value::Array(items)) if items.is_empty() => {}
+                (None, Value::Table(table)) if table.is_empty() => {}
+                (None, value) => {
+                    out.insert(key.clone(), value.clone());
+                }
+            }
+        }
+    }
+    let file: toml::Table = toml::from_str(text).ok()?;
+    let known = crate::profiles::to_table(&toml::from_str::<ShellConfig>(text).ok()?).ok()?;
+    let mut out = toml::Table::new();
+    collect(&file, &known, &mut out);
+    (!out.is_empty()).then_some(out)
+}
+
+/// Adds `unknown` to `table` where `table` has no value of its own.
+fn merge_unknown(table: &mut toml::Table, unknown: toml::Table) {
+    use toml::Value;
+    for (key, value) in unknown {
+        match (table.get_mut(&key), value) {
+            (Some(Value::Table(table)), Value::Table(unknown)) => merge_unknown(table, unknown),
+            (Some(_), _) => {}
+            (None, value) => {
+                table.insert(key, value);
+            }
+        }
+    }
+}
+
 fn parse(bytes: &[u8]) -> Result<ShellConfig> {
     let text = std::str::from_utf8(bytes).context("config is not valid UTF-8")?;
     let mut cfg: ShellConfig = toml::from_str(text).context("parsing config TOML")?;
@@ -359,6 +533,20 @@ fn parse(bytes: &[u8]) -> Result<ShellConfig> {
     crate::upgrade::upgrade(&mut cfg);
     cfg.integrations.app_themes.validate()?;
     Ok(cfg)
+}
+
+/// Reads a UTF-8 text file of at most `limit` bytes. Anything larger is an
+/// error rather than an allocation: user-writable folders (profiles, looks,
+/// imports) may hold files of any size.
+pub fn read_to_string_capped(path: &Path, limit: u64) -> std::io::Result<String> {
+    use std::io::Read as _;
+    let mut text = String::new();
+    // One byte past the limit tells "exactly the limit" from "too large".
+    fs::File::open(path)?.take(limit.saturating_add(1)).read_to_string(&mut text)?;
+    if text.len() as u64 > limit {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("{} is larger than {limit} bytes", path.display())));
+    }
+    Ok(text)
 }
 
 /// Writes `contents` to `path` atomically, creating parent directories.
@@ -408,8 +596,40 @@ fn write_atomic_checked_using(lock: &mandara_theme::templates::WriteLock, before
         sync_directory(dir).map_err(|error| PublishedWriteError::new(path, written, error)).with_context(|| format!("syncing {}", dir.display()))?;
         Ok(written)
     })();
-    if result.is_err() && temporary_created { fs::remove_file(&tmp).with_context(|| format!("removing incomplete write {}", tmp.display()))?; }
+    if result.is_err() && temporary_created
+        && let Err(error) = fs::remove_file(&tmp)
+    {
+        // The write's own error is the one to report.
+        tracing::warn!("removing incomplete write {}: {error}", tmp.display());
+    }
+    if result.is_ok() {
+        remove_stale_temporaries(dir, file_name, &tmp);
+    }
     result
+}
+
+/// How old a temporary must be before it counts as left by a crash.
+const STALE_TEMPORARY: Duration = Duration::from_secs(10 * 60);
+
+/// Deletes `.{file_name}.*.tmp` files of earlier writes that never finished
+/// (a crash between creating the temporary and renaming it). Writers hold
+/// the directory lock from creating a temporary to renaming it, so an old
+/// one is nobody's.
+fn remove_stale_temporaries(dir: &Path, file_name: &str, current: &Path) {
+    let prefix = format!(".{file_name}.");
+    let Ok(entries) = fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if path == current || !name.starts_with(&prefix) || !name.ends_with(".tmp") {
+            continue;
+        }
+        let stale = entry.metadata().and_then(|m| m.modified()).ok().and_then(|at| at.elapsed().ok()).is_some_and(|age| age >= STALE_TEMPORARY);
+        if stale && let Err(error) = fs::remove_file(&path) {
+            tracing::debug!("removing stale temporary {}: {error}", path.display());
+        }
+    }
 }
 
 /// Unpublished config bytes stay private before final permissions are restored.
@@ -579,6 +799,90 @@ mod tests {
         let temporary = super::private_temporary(&path).unwrap();
         assert_eq!(temporary.metadata().unwrap().permissions().mode() & 0o077, 0);
         assert!(super::private_temporary(&path).is_err(), "an existing temporary is never followed or truncated");
+    }
+
+    #[test]
+    fn a_file_with_unreadable_values_is_loaded_value_by_value_and_saved_with_a_copy() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("config.toml");
+        // A bad enum value, as after a downgrade, next to settings that still fit.
+        let damaged = "[bar]\nheight = 31.0\nlayout = \"from-the-future\"\n[general]\nclock_24h = false\n";
+        fs::write(&path, damaged).unwrap();
+        let mut store = ConfigStore::open(&path).unwrap();
+        let repaired = store.repaired().expect("the store says it repaired the file").clone();
+        assert_eq!(repaired.dropped, ["bar.layout"]);
+        assert_eq!(fs::read_to_string(&repaired.backup).unwrap(), damaged, "the original is kept as it was");
+        assert_eq!(store.get().bar.height, 31.0);
+        assert!(!store.get().general.clock_24h);
+        // Saving is not disabled any more.
+        store.update(|c| c.bar.height = 33.0);
+        store.flush().unwrap();
+        let saved = ConfigStore::open(&path).unwrap();
+        assert!(saved.repaired().is_none());
+        assert_eq!(saved.get().bar.height, 33.0);
+        assert_eq!(fs::read_to_string(&repaired.backup).unwrap(), damaged);
+        // Text that isn't TOML still can't be loaded: defaults, never saved over the file.
+        fs::write(&path, "not = [toml").unwrap();
+        let mut broken = ConfigStore::open(&path).unwrap();
+        assert!(broken.repaired().is_none());
+        broken.update(|c| c.bar.height = 40.0);
+        assert!(broken.flush().is_err());
+        assert_eq!(fs::read_to_string(&path).unwrap(), "not = [toml");
+    }
+
+    #[test]
+    fn saving_keeps_settings_this_version_does_not_know() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("config.toml");
+        let mut store = ConfigStore::open(&path).unwrap();
+        store.update(|c| c.bar.height = 30.0);
+        store.flush().unwrap();
+        // A newer version added a section, and a key inside a known one.
+        let text = fs::read_to_string(&path).unwrap();
+        let text = text.replacen("[bar]\n", "[bar]\nfuture_option = \"kept\"\n", 1) + "\n[holograms]\nbrightness = 7\n[holograms.deep]\nflag = true\n";
+        fs::write(&path, text).unwrap();
+        store.reload_from_disk().unwrap();
+        store.update(|c| c.bar.height = 32.0);
+        store.flush().unwrap();
+        let after: toml::Table = toml::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(after["bar"]["height"].as_float(), Some(32.0));
+        assert_eq!(after["bar"]["future_option"].as_str(), Some("kept"));
+        assert_eq!(after["holograms"]["brightness"].as_integer(), Some(7));
+        assert_eq!(after["holograms"]["deep"]["flag"].as_bool(), Some(true));
+        assert_eq!(ConfigStore::open(&path).unwrap().get().bar.height, 32.0);
+    }
+
+    #[test]
+    fn saving_needs_no_second_lock_file_and_clears_old_temporaries() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("config.toml");
+        let mut store = ConfigStore::open(&path).unwrap();
+        let stale = root.path().join(".config.toml.1.2.3.tmp");
+        let fresh = root.path().join(".config.toml.4.5.6.tmp");
+        let unrelated = root.path().join(".other.toml.1.2.3.tmp");
+        for file in [&stale, &fresh, &unrelated] {
+            fs::write(file, "half").unwrap();
+        }
+        let old = std::time::SystemTime::now() - STALE_TEMPORARY - Duration::from_secs(60);
+        for file in [&stale, &unrelated] {
+            fs::File::options().write(true).open(file).unwrap().set_modified(old).unwrap();
+        }
+        // A real change: setting the default value again would leave the store clean and skip the write.
+        store.update(|c| c.bar.height = 34.0);
+        store.flush().unwrap();
+        assert!(!root.path().join("config.toml.lock").exists());
+        assert!(!stale.exists(), "a temporary left by a crash goes");
+        assert!(fresh.exists(), "a recent one may belong to a writer in flight");
+        assert!(unrelated.exists(), "other files' temporaries are not ours");
+    }
+
+    #[test]
+    fn capped_reads_refuse_large_files() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("big.toml");
+        fs::write(&path, "x".repeat(100)).unwrap();
+        assert_eq!(read_to_string_capped(&path, 100).unwrap().len(), 100);
+        assert_eq!(read_to_string_capped(&path, 99).unwrap_err().kind(), std::io::ErrorKind::InvalidData);
     }
 
     #[test]

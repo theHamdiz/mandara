@@ -4168,6 +4168,7 @@ dependencies = [
  "anyhow",
  "async-channel",
  "clap",
+ "futures",
  "gpui",
  "gpui_platform",
  "libc",
@@ -4315,7 +4316,6 @@ name = "mandara-i18n"
 version = "0.36.0"
 dependencies = [
  "mandara-version",
- "memmap2",
  "tempfile",
  "toml 1.2.0+spec-1.1.0",
 ]
@@ -4492,11 +4492,13 @@ dependencies = [
  "rustix",
  "serde",
  "serde_json",
+ "sha2",
  "smallvec",
  "tempfile",
  "toml 1.2.0+spec-1.1.0",
  "tracing",
  "ureq",
+ "zeroize",
 ]
 
 [[package]]

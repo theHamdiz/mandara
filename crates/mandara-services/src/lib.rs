@@ -43,6 +43,7 @@ pub mod desktop_notify;
 pub mod drives;
 pub mod editor;
 pub mod feeds;
+pub mod font_sync;
 pub mod file_chooser;
 #[cfg(any(test, target_os = "freebsd"))]
 pub mod freebsd;
@@ -71,6 +72,7 @@ pub mod network;
 pub mod night_light;
 pub mod nm_admin;
 pub mod notifications;
+mod private_fs;
 pub mod notify_policy;
 pub mod ocr;
 pub mod offline;

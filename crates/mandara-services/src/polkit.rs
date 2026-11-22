@@ -40,8 +40,10 @@ use futures::FutureExt as _;
 use mandara_i18n::t;
 use parking_lot::Mutex;
 use serde::Serialize;
+use crate::actor::send_event;
 use zbus::interface;
 use zbus::zvariant::{OwnedValue, Value};
+use zeroize::Zeroizing;
 
 /// Events (prompts, results) buffered for the UI and replies buffered for
 /// a session; a dialog exchanges a handful of each.
@@ -49,6 +51,11 @@ const EVENT_QUEUE: usize = 64;
 const REPLY_QUEUE: usize = 16;
 /// Helper output lines buffered before the reader thread waits.
 const HELPER_LINE_QUEUE: usize = 32;
+
+/// polkitd's bus name.
+const POLKITD: &str = "org.freedesktop.PolicyKit1";
+/// How long to wait before registering again after a failed attempt.
+const REREGISTER_AFTER: std::time::Duration = std::time::Duration::from_secs(30);
 
 pub const AGENT_PATH: &str = "/org/mandara/PolicyKit1/AuthenticationAgent";
 pub const HELPER_SOCKET: &str = "/run/polkit/agent-helper.socket";
@@ -114,7 +121,8 @@ pub enum PolkitEvent {
 #[derive(Clone, Debug, PartialEq)]
 pub enum PolkitReply {
     SelectUser { cookie: String, user: String },
-    Answer { cookie: String, text: String },
+    /// The typed answer; wiped (spare capacity included) when dropped.
+    Answer { cookie: String, text: Zeroizing<String> },
     Cancel { cookie: String },
 }
 
@@ -280,12 +288,17 @@ impl HelperSpawner for SystemHelper {
         let stdout = child.stdout.take().ok_or_else(|| std::io::Error::other("helper stdout"))?;
         writeln!(stdin, "{cookie}")?;
         stdin.flush()?;
+        let mut child = Some(child);
         Ok(HelperConn {
             reader: Box::new(BufReader::new(stdout)),
             writer: Box::new(stdin),
             kill: Box::new(move || {
+                let Some(mut child) = child.take() else { return };
                 let _ = child.kill();
-                let _ = child.wait();
+                // Reap off the caller's thread (an executor thread).
+                let _ = std::thread::Builder::new().name("mandara-polkit-reap".into()).spawn(move || {
+                    let _ = child.wait();
+                });
             }),
         })
     }
@@ -313,12 +326,6 @@ fn read_lines(mut reader: Box<dyn BufRead + Send>) -> async_channel::Receiver<Op
     rx
 }
 
-fn wipe(s: &mut String) {
-    // SAFETY: zero bytes are valid UTF-8.
-    unsafe { s.as_bytes_mut().fill(0) };
-    s.clear();
-}
-
 /// Drives one request to its end: runs the helper for the chosen user,
 /// relays prompts and answers, retries after a wrong password, follows user
 /// switches, and stops on cancel.
@@ -329,8 +336,8 @@ pub async fn run_session(
     cookie: &str,
     mut user: String,
 ) -> Outcome {
-    let close = |outcome| {
-        let _ = events.try_send(PolkitEvent::Close { cookie: cookie.to_string(), outcome });
+    let close = async |outcome| {
+        send_event(events, PolkitEvent::Close { cookie: cookie.to_string(), outcome }, "polkit").await;
         outcome
     };
     loop {
@@ -338,8 +345,8 @@ pub async fn run_session(
             Ok(conn) => conn,
             Err(err) => {
                 tracing::error!("polkit: cannot start the authentication helper: {err}");
-                let _ = events.try_send(PolkitEvent::Message { cookie: cookie.into(), text: t("The authentication helper is not available").into(), error: true });
-                return close(Outcome::Failed);
+                send_event(events, PolkitEvent::Message { cookie: cookie.into(), text: t("The authentication helper is not available").into(), error: true }, "polkit").await;
+                return close(Outcome::Failed).await;
             }
         };
         let lines = read_lines(reader);
@@ -348,17 +355,21 @@ pub async fn run_session(
             futures::select! {
                 line = lines.recv().fuse() => match line.ok().flatten() {
                     Some(HelperLine::Prompt { text, echo }) => {
-                        let _ = events.try_send(PolkitEvent::Prompt { cookie: cookie.into(), user: user.clone(), text, echo });
+                        // PAM waits for an answer nobody could give: end the session.
+                        if !send_event(events, PolkitEvent::Prompt { cookie: cookie.into(), user: user.clone(), text, echo }, "polkit").await {
+                            kill();
+                            return close(Outcome::Failed).await;
+                        }
                     }
                     Some(HelperLine::Error(text)) => {
-                        let _ = events.try_send(PolkitEvent::Message { cookie: cookie.into(), text, error: true });
+                        send_event(events, PolkitEvent::Message { cookie: cookie.into(), text, error: true }, "polkit").await;
                     }
                     Some(HelperLine::Info(text)) => {
-                        let _ = events.try_send(PolkitEvent::Message { cookie: cookie.into(), text, error: false });
+                        send_event(events, PolkitEvent::Message { cookie: cookie.into(), text, error: false }, "polkit").await;
                     }
                     Some(HelperLine::Success) => {
                         kill();
-                        return close(Outcome::Authorized);
+                        return close(Outcome::Authorized).await;
                     }
                     Some(HelperLine::Unknown(l)) => tracing::debug!("polkit: unexpected helper line {l:?}"),
                     Some(HelperLine::Failure) | None => {
@@ -367,16 +378,16 @@ pub async fn run_session(
                             // It failed before asking anything: nothing a
                             // retry could fix (broken PAM, bad cookie).
                             tracing::warn!("polkit: the helper failed before prompting");
-                            return close(Outcome::Failed);
+                            return close(Outcome::Failed).await;
                         }
-                        let _ = events.try_send(PolkitEvent::Retry { cookie: cookie.into(), message: t("That didn't work — try again").into() });
+                        send_event(events, PolkitEvent::Retry { cookie: cookie.into(), message: t("That didn't work — try again").into() }, "polkit").await;
                         break true;
                     }
                 },
                 reply = replies.recv().fuse() => match reply {
-                    Ok(PolkitReply::Answer { mut text, .. }) => {
-                        let ok = writeln!(writer, "{text}").and_then(|_| writer.flush()).is_ok();
-                        wipe(&mut text);
+                    Ok(PolkitReply::Answer { text, .. }) => {
+                        let ok = writeln!(writer, "{}", text.as_str()).and_then(|_| writer.flush()).is_ok();
+                        drop(text);
                         answered |= ok;
                     }
                     Ok(PolkitReply::SelectUser { user: next, .. }) => {
@@ -386,13 +397,13 @@ pub async fn run_session(
                     }
                     Ok(PolkitReply::Cancel { .. }) | Err(_) => {
                         kill();
-                        return close(Outcome::Cancelled);
+                        return close(Outcome::Cancelled).await;
                     }
                 },
             }
         };
         if !restart {
-            return close(Outcome::Failed);
+            return close(Outcome::Failed).await;
         }
     }
 }
@@ -468,6 +479,116 @@ pub fn expand_identities(identities: &[Identity], passwd: &str, group: &str, me:
     out
 }
 
+/// Users and group members that `/etc/passwd` and `/etc/group` lack but NSS
+/// resolves (sssd, LDAP, systemd-homed): identities with no match in `found`.
+fn nss_users(identities: &[Identity], found: &[AdminUser]) -> Vec<AdminUser> {
+    let mut out: Vec<AdminUser> = Vec::new();
+    let mut add = |user: Option<AdminUser>| {
+        if let Some(u) = user
+            && !found.iter().chain(out.iter()).any(|f| f.uid == u.uid)
+        {
+            out.push(u);
+        }
+    };
+    for identity in identities {
+        match *identity {
+            Identity::User(uid) => add(nss_user_by_uid(uid)),
+            Identity::Group(gid) => {
+                for member in nss_group_members(gid) {
+                    add(nss_user_by_name(&member));
+                }
+            }
+        }
+    }
+    out
+}
+
+fn passwd_entry(pw: &libc::passwd) -> AdminUser {
+    // SAFETY: getpw*_r filled `pw` with NUL-terminated strings in its buffer.
+    let (name, gecos) = unsafe { (std::ffi::CStr::from_ptr(pw.pw_name).to_string_lossy().into_owned(), if pw.pw_gecos.is_null() { String::new() } else { std::ffi::CStr::from_ptr(pw.pw_gecos).to_string_lossy().into_owned() }) };
+    let full = gecos.split(',').next().unwrap_or("").trim().to_string();
+    AdminUser { uid: pw.pw_uid, display: if full.is_empty() { name.clone() } else { full }, name }
+}
+
+/// First buffer for a `getpw*_r` lookup (glibc's usual `_SC_GETPW_R_SIZE_MAX`).
+const NSS_PASSWD_BUF: usize = 4096;
+/// First buffer for `getgrgid_r`: large groups list many members.
+const NSS_GROUP_BUF: usize = 16384;
+/// Largest buffer an NSS lookup grows to on `ERANGE` before giving up.
+const NSS_BUF_MAX: usize = 1 << 20;
+
+/// Runs a reentrant NSS lookup, doubling its buffer while it reports
+/// `ERANGE` (up to [`NSS_BUF_MAX`]). `lookup` returns the call's error code
+/// or the record (`None` when there is none).
+fn nss_lookup<T>(start: usize, what: &str, mut lookup: impl FnMut(&mut [libc::c_char]) -> Result<Option<T>, libc::c_int>) -> Option<T> {
+    let mut buf = vec![0 as libc::c_char; start];
+    loop {
+        match lookup(&mut buf) {
+            Ok(found) => return found,
+            Err(libc::ERANGE) if buf.len() < NSS_BUF_MAX => buf.resize(buf.len() * 2, 0),
+            Err(rc) => {
+                tracing::debug!("polkit: NSS lookup of {what} failed: {}", std::io::Error::from_raw_os_error(rc));
+                return None;
+            }
+        }
+    }
+}
+
+fn nss_user_by_uid(uid: u32) -> Option<AdminUser> {
+    nss_lookup(NSS_PASSWD_BUF, "a user", |buf| {
+        let mut pw = std::mem::MaybeUninit::<libc::passwd>::uninit();
+        let mut result: *mut libc::passwd = std::ptr::null_mut();
+        // SAFETY: the buffers outlive the call; `result` is checked before use.
+        let rc = unsafe { libc::getpwuid_r(uid, pw.as_mut_ptr(), buf.as_mut_ptr(), buf.len(), &mut result) };
+        if rc != 0 {
+            return Err(rc);
+        }
+        // SAFETY: on success `pw` is initialised and points into `buf`.
+        Ok((!result.is_null()).then(|| passwd_entry(unsafe { &*result })))
+    })
+}
+
+fn nss_user_by_name(name: &str) -> Option<AdminUser> {
+    let name = std::ffi::CString::new(name).ok()?;
+    nss_lookup(NSS_PASSWD_BUF, "a user", |buf| {
+        let mut pw = std::mem::MaybeUninit::<libc::passwd>::uninit();
+        let mut result: *mut libc::passwd = std::ptr::null_mut();
+        // SAFETY: as in `nss_user_by_uid`.
+        let rc = unsafe { libc::getpwnam_r(name.as_ptr(), pw.as_mut_ptr(), buf.as_mut_ptr(), buf.len(), &mut result) };
+        if rc != 0 {
+            return Err(rc);
+        }
+        // SAFETY: as in `nss_user_by_uid`.
+        Ok((!result.is_null()).then(|| passwd_entry(unsafe { &*result })))
+    })
+}
+
+fn nss_group_members(gid: u32) -> Vec<String> {
+    nss_lookup(NSS_GROUP_BUF, "a group", |buf| {
+        let mut gr = std::mem::MaybeUninit::<libc::group>::uninit();
+        let mut result: *mut libc::group = std::ptr::null_mut();
+        // SAFETY: the buffers outlive the call; `result` is checked before use.
+        let rc = unsafe { libc::getgrgid_r(gid, gr.as_mut_ptr(), buf.as_mut_ptr(), buf.len(), &mut result) };
+        if rc != 0 {
+            return Err(rc);
+        }
+        if result.is_null() {
+            return Ok(None);
+        }
+        let mut members = Vec::new();
+        // SAFETY: `gr_mem` is a NULL-terminated array of C strings inside `buf`.
+        unsafe {
+            let mut p = (*result).gr_mem;
+            while !p.is_null() && !(*p).is_null() {
+                members.push(std::ffi::CStr::from_ptr(*p).to_string_lossy().into_owned());
+                p = p.add(1);
+            }
+        }
+        Ok(Some(members))
+    })
+    .unwrap_or_default()
+}
+
 // ─────────────────────────────── D-Bus side ───────────────────────────────
 
 struct Shared {
@@ -493,6 +614,8 @@ enum PolkitError {
 impl Agent {
     async fn begin_authentication(
         &self,
+        #[zbus(connection)] conn: &zbus::Connection,
+        #[zbus(header)] header: zbus::message::Header<'_>,
         action_id: String,
         message: String,
         icon_name: String,
@@ -500,18 +623,43 @@ impl Agent {
         cookie: String,
         identities: Vec<(String, HashMap<String, OwnedValue>)>,
     ) -> Result<(), PolkitError> {
+        if !crate::actor::caller_is(conn, &header, POLKITD).await {
+            return Err(PolkitError::Failed("only polkitd may start an authentication".into()));
+        }
         let parsed: Vec<Identity> = identities.iter().filter_map(|(k, d)| parse_identity(k, d)).collect();
-        let (passwd, group) = crate::runtime::unblock(|| (std::fs::read_to_string("/etc/passwd").unwrap_or_default(), std::fs::read_to_string("/etc/group").unwrap_or_default())).await;
-        let users = expand_identities(&parsed, &passwd, &group, rustix::process::getuid().as_raw());
+        let me = rustix::process::getuid().as_raw();
+        let users = crate::runtime::unblock(move || {
+            let passwd = std::fs::read_to_string("/etc/passwd").unwrap_or_default();
+            let group = std::fs::read_to_string("/etc/group").unwrap_or_default();
+            let mut users = expand_identities(&parsed, &passwd, &group, me);
+            // Users only NSS knows (sssd, LDAP, systemd-homed).
+            for extra in nss_users(&parsed, &users) {
+                users.push(extra);
+            }
+            if let Some(i) = users.iter().position(|u| u.uid == me) {
+                let mine = users.remove(i);
+                users.insert(0, mine);
+            }
+            users
+        })
+        .await;
         let Some(first) = users.first().map(|u| u.name.clone()) else {
             return Err(PolkitError::Failed("no user can authenticate this request".into()));
         };
         tracing::info!("polkit: authentication requested for {action_id} ({} candidate user(s))", users.len());
         let (tx, rx) = async_channel::bounded(REPLY_QUEUE);
-        self.shared.sessions.lock().insert(cookie.clone(), tx);
+        {
+            // A cookie names one request: a duplicate must not replace the
+            // first session's channel (nor have its end remove it).
+            let mut sessions = self.shared.sessions.lock();
+            if sessions.contains_key(&cookie) {
+                return Err(PolkitError::Failed("an authentication with this cookie is already running".into()));
+            }
+            sessions.insert(cookie.clone(), tx);
+        }
         let mut details: Vec<(String, String)> = details.into_iter().collect();
         details.sort();
-        let _ = self.shared.events.try_send(PolkitEvent::Begin(AuthRequest { cookie: cookie.clone(), action_id, message, icon_name, details, users }));
+        send_event(&self.shared.events, PolkitEvent::Begin(AuthRequest { cookie: cookie.clone(), action_id, message, icon_name, details, users }), "polkit").await;
         let spawner = self.shared.spawner.clone();
         let events = self.shared.events.clone();
         let outcome = run_session(spawner.as_ref(), &events, &rx, &cookie, first).await;
@@ -523,7 +671,10 @@ impl Agent {
         }
     }
 
-    async fn cancel_authentication(&self, cookie: String) -> Result<(), PolkitError> {
+    async fn cancel_authentication(&self, #[zbus(connection)] conn: &zbus::Connection, #[zbus(header)] header: zbus::message::Header<'_>, cookie: String) -> Result<(), PolkitError> {
+        if !crate::actor::caller_is(conn, &header, POLKITD).await {
+            return Err(PolkitError::Failed("only polkitd may cancel an authentication".into()));
+        }
         if let Some(tx) = self.shared.sessions.lock().get(&cookie) {
             let _ = tx.try_send(PolkitReply::Cancel { cookie: cookie.clone() });
         }
@@ -555,45 +706,108 @@ pub fn spawn_polkit_agent(enabled: bool) -> PolkitAgent {
         });
     }
     crate::runtime::spawn("polkit", async move {
-        {
-            let status = match register(shared).await {
-                Ok((conn, session)) => {
+        let conn = match serve(shared).await {
+            Ok(conn) => conn,
+            Err(status) => {
+                tracing::warn!("polkit: authentication agent unavailable: {status:?}");
+                send_event(&events_tx, PolkitEvent::Status(status), "polkit").await;
+                return;
+            }
+        };
+        let mut owners = crate::actor::owner_changes(&conn, POLKITD).await.ok();
+        let mut last: Option<AgentStatus> = None;
+        loop {
+            // A stalled registration must not outlive a stop.
+            let registered = {
+                let mut registering = std::pin::pin!(register(&conn).fuse());
+                futures::select! {
+                    r = registering => Some(r),
+                    _ = stop_rx.recv().fuse() => None,
+                }
+            };
+            let Some(registered) = registered else {
+                // Dropping the connection also undoes a registration polkitd
+                // already accepted.
+                drop(conn);
+                tracing::info!("polkit: authentication agent stopped");
+                send_event(&events_tx, PolkitEvent::Status(AgentStatus::Disabled), "polkit").await;
+                return;
+            };
+            let (status, retry) = match registered {
+                Ok(session) => {
                     tracing::info!("polkit: authentication agent registered for session {session}");
-                    let _ = events_tx.try_send(PolkitEvent::Status(AgentStatus::Registered { session }));
-                    // Serve until stopped: dropping the connection makes
-                    // polkit forget the agent (its bus name is gone).
-                    let _ = stop_rx.recv().await;
+                    (AgentStatus::Registered { session }, None)
+                }
+                Err(status) => {
+                    match &status {
+                        AgentStatus::AnotherAgent(msg) => tracing::info!("polkit: not registering — another authentication agent is running ({msg})"),
+                        AgentStatus::Unavailable(msg) => tracing::warn!("polkit: authentication agent unavailable: {msg}"),
+                        _ => {}
+                    }
+                    // Another agent holds the session until polkitd restarts;
+                    // anything else may be transient.
+                    let retry = matches!(status, AgentStatus::Unavailable(_)).then_some(REREGISTER_AFTER);
+                    (status, retry)
+                }
+            };
+            if last.as_ref() != Some(&status) {
+                last = Some(status.clone());
+                send_event(&events_tx, PolkitEvent::Status(status), "polkit").await;
+            }
+            // Serve until stopped; re-register when polkitd comes back (it
+            // forgets agents when it restarts).
+            let again = async {
+                match owners.as_mut() {
+                    Some(owners) => crate::actor::wait_for_owner(owners, retry).await,
+                    None => match retry {
+                        Some(retry) => {
+                            crate::runtime::sleep(retry).await;
+                            true
+                        }
+                        None => false,
+                    },
+                }
+            };
+            futures::select! {
+                _ = stop_rx.recv().fuse() => {
+                    // Dropping the connection makes polkit forget the agent
+                    // (its bus name is gone).
                     drop(conn);
                     tracing::info!("polkit: authentication agent stopped");
-                    let _ = events_tx.try_send(PolkitEvent::Status(AgentStatus::Disabled));
+                    send_event(&events_tx, PolkitEvent::Status(AgentStatus::Disabled), "polkit").await;
                     return;
                 }
-                Err(status) => status,
-            };
-            match &status {
-                AgentStatus::AnotherAgent(msg) => tracing::info!("polkit: not registering — another authentication agent is running ({msg})"),
-                AgentStatus::Unavailable(msg) => tracing::warn!("polkit: authentication agent unavailable: {msg}"),
-                _ => {}
+                keep_going = again.fuse() => {
+                    if !keep_going {
+                        // Nothing will change: serve until stopped.
+                        let _ = stop_rx.recv().await;
+                        drop(conn);
+                        send_event(&events_tx, PolkitEvent::Status(AgentStatus::Disabled), "polkit").await;
+                        return;
+                    }
+                }
             }
-            let _ = events_tx.try_send(PolkitEvent::Status(status));
         }
     });
     agent
 }
 
-async fn register(shared: Arc<Shared>) -> Result<(zbus::Connection, String), AgentStatus> {
+/// The bus connection that serves the agent object.
+async fn serve(shared: Arc<Shared>) -> Result<zbus::Connection, AgentStatus> {
     let unavailable = |e: zbus::Error| AgentStatus::Unavailable(e.to_string());
     let builder = zbus::connection::Builder::system().and_then(|b| b.serve_at(AGENT_PATH, Agent { shared })).map_err(unavailable)?;
-    let conn = crate::runtime::connect(builder).await.map_err(unavailable)?;
-    let (kind, subject, session) = agent_subject(&conn).await.map_err(unavailable)?;
-    let authority =
-        crate::actor::proxy(&conn, "org.freedesktop.PolicyKit1", "/org/freedesktop/PolicyKit1/Authority", "org.freedesktop.PolicyKit1.Authority")
-            .await
-            .map_err(unavailable)?;
+    crate::runtime::connect(builder).await.map_err(unavailable)
+}
+
+/// Registers the served agent with polkitd for this session.
+async fn register(conn: &zbus::Connection) -> Result<String, AgentStatus> {
+    let unavailable = |e: zbus::Error| AgentStatus::Unavailable(e.to_string());
+    let (kind, subject, session) = agent_subject(conn).await.map_err(unavailable)?;
+    let authority = crate::actor::proxy(conn, POLKITD, "/org/freedesktop/PolicyKit1/Authority", "org.freedesktop.PolicyKit1.Authority").await.map_err(unavailable)?;
     let locale = std::env::var("LC_ALL").or_else(|_| std::env::var("LANG")).unwrap_or_else(|_| "en_US.UTF-8".into());
     // polkit declares the object path as a string (`s`), not `o`.
     match authority.call::<_, _, ()>("RegisterAuthenticationAgent", &((kind, subject), locale.as_str(), AGENT_PATH)).await {
-        Ok(()) => Ok((conn, session)),
+        Ok(()) => Ok(session),
         Err(zbus::Error::MethodError(name, msg, _)) if msg.as_deref().is_some_and(|m| m.contains("already exists")) => {
             Err(AgentStatus::AnotherAgent(msg.unwrap_or_else(|| name.to_string())))
         }
@@ -652,6 +866,25 @@ async fn agent_subject(conn: &zbus::Connection) -> zbus::Result<(&'static str, H
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn nss_lookups_grow_their_buffer_on_erange_up_to_a_cap() {
+        let mut sizes = Vec::new();
+        let found = nss_lookup(NSS_PASSWD_BUF, "test", |buf| {
+            sizes.push(buf.len());
+            if buf.len() < 4 * NSS_PASSWD_BUF { Err(libc::ERANGE) } else { Ok(Some(buf.len())) }
+        });
+        assert_eq!(found, Some(4 * NSS_PASSWD_BUF));
+        assert_eq!(sizes, [NSS_PASSWD_BUF, 2 * NSS_PASSWD_BUF, 4 * NSS_PASSWD_BUF]);
+        let mut largest = 0;
+        let never = nss_lookup::<()>(NSS_GROUP_BUF, "test", |buf| {
+            largest = buf.len();
+            Err(libc::ERANGE)
+        });
+        assert_eq!((never, largest), (None, NSS_BUF_MAX), "growth stops at the cap");
+        assert_eq!(nss_lookup::<()>(NSS_PASSWD_BUF, "test", |_| Err(libc::EIO)), None);
+        assert_eq!(nss_lookup::<u8>(NSS_PASSWD_BUF, "test", |_| Ok(None)), None);
+    }
     use std::os::unix::net::UnixStream;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -796,7 +1029,7 @@ mod tests {
     }
 
     fn answer(text: &str) -> PolkitReply {
-        PolkitReply::Answer { cookie: "cookie-1".into(), text: text.into() }
+        PolkitReply::Answer { cookie: "cookie-1".into(), text: Zeroizing::new(text.into()) }
     }
 
     #[test]

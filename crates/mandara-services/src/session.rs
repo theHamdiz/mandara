@@ -88,6 +88,9 @@ impl SessionAction {
     /// asks the running compositor to quit first (MangoWM, Niri, Hyprland,
     /// Sway); only when that socket is missing does it fall back to logind
     /// `Session.Terminate`.
+    ///
+    /// Blocks the calling thread (D-Bus round trips, compositor sockets):
+    /// call it from a worker thread, never from the UI or a service task.
     pub fn run(self) -> Result<(), String> {
         crate::runtime::block_on(self.call())
     }
@@ -118,6 +121,12 @@ impl SessionAction {
         use crate::logind::bus::{DEST, MANAGER, MANAGER_PATH, SESSION};
         match self {
             SessionAction::Lock | SessionAction::Logout => {
+                // logind's Lock is only a signal: with nobody subscribed it
+                // would "succeed" and lock nothing.
+                #[cfg(not(target_os = "freebsd"))]
+                if self == SessionAction::Lock && !crate::logind::lock_requests_handled() {
+                    return Err(t("The lock screen did not confirm that the session is locked").into());
+                }
                 let conn = crate::runtime::system().await.map_err(err)?;
                 // This shell's own session (the one the lock screen answers
                 // for), not logind's "auto" guess.
@@ -404,28 +413,30 @@ pub fn preferred_argv(uri: &str, browser: Option<&str>, file_manager: Option<&st
 
 /// Opens a URL with the user's default handler through the desktop portal
 /// (`org.freedesktop.portal.OpenURI`) — pure D-Bus, no `xdg-open` — or with
-/// the browser / file manager picked in Studio → Applications.
+/// the browser / file manager picked in Studio → Applications. Blocks the
+/// calling thread: service tasks must use [`open_uri_async`].
 pub fn open_uri(uri: &str) -> Result<(), String> {
+    crate::runtime::block_on(open_uri_async(uri))
+}
+
+/// [`open_uri`] for service tasks: awaits the portal instead of blocking an
+/// executor thread.
+pub async fn open_uri_async(uri: &str) -> Result<(), String> {
     let preferred = PREFERRED.read().ok().and_then(|p| preferred_argv(uri, p.0.as_deref(), p.1.as_deref()));
     if let Some(argv) = preferred {
         use std::os::unix::process::CommandExt as _;
         return crate::reaper::spawn(std::process::Command::new(&argv[0]).args(&argv[1..]).process_group(0)).map(|_| ()).map_err(|e| tf("Could not open {uri}: {error}", &[("uri", &uri), ("error", &e)]));
     }
-    let uri = uri.to_string();
-    crate::runtime::block_on(async move {
-        {
-            let conn = crate::runtime::session().await.map_err(|e| e.to_string())?;
-            let portal = crate::actor::proxy(&conn, "org.freedesktop.portal.Desktop", "/org/freedesktop/portal/desktop", "org.freedesktop.portal.OpenURI")
-                .await
-                .map_err(|e| e.to_string())?;
-            let options: std::collections::HashMap<&str, zbus::zvariant::Value> = std::collections::HashMap::new();
-            portal
-                .call::<_, _, zbus::zvariant::OwnedObjectPath>("OpenURI", &("", uri.as_str(), options))
-                .await
-                .map(|_| ())
-                .map_err(|e| tf("Could not open {uri}: {error}", &[("uri", &uri), ("error", &e)]))
-        }
-    })
+    let conn = crate::runtime::session().await.map_err(|e| e.to_string())?;
+    let portal = crate::actor::proxy(&conn, "org.freedesktop.portal.Desktop", "/org/freedesktop/portal/desktop", "org.freedesktop.portal.OpenURI")
+        .await
+        .map_err(|e| e.to_string())?;
+    let options: std::collections::HashMap<&str, zbus::zvariant::Value> = std::collections::HashMap::new();
+    portal
+        .call::<_, _, zbus::zvariant::OwnedObjectPath>("OpenURI", &("", uri, options))
+        .await
+        .map(|_| ())
+        .map_err(|e| tf("Could not open {uri}: {error}", &[("uri", &uri), ("error", &e)]))
 }
 
 #[cfg(test)]

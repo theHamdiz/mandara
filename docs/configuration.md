@@ -39,7 +39,20 @@ load (in memory; the next write saves it), never losing what it had on:
 `[plugins] enabled` lists opt-in plugins you switched on, `disabled` the
 ones you switched off; a plugin in neither follows its default. Exports
 (`config export --changes-only`) keep these version keys, and imports of
-older exports are upgraded the same way.
+older exports are upgraded the same way. An import (and applying a profile)
+never changes `[plugins]` `grants`, `enabled` or `disabled`: those stay as
+they are on this machine, and permissions are given in Studio → Plugins.
+
+**A file Mandara can only partly read.** When `config.toml` has a value this
+version can't read (a typo, or a setting from a newer version after a
+downgrade), Mandara keeps every other value, puts the unreadable ones back
+to their defaults and shows a notification naming them. Your original file
+is kept beside it as `config.toml.invalid-<hash>`; the repaired settings are
+written with the next change you make. A file that isn't TOML at all is not
+loaded: defaults run in memory and nothing is saved over the file until it
+is fixed (Studio → Maintenance → Config can rewrite it). Keys a newer
+version added that this one doesn't know are carried along when it saves.
+Comments in the file are not kept: Mandara rewrites it on every save.
 
 ### App theming (`[integrations]`)
 
@@ -159,7 +172,8 @@ An independent snapshot starts with the Mandara preset. `look` accepts
 Use the Studio picker or `studio look apply` to save its complete recipe.
 `theme` starts dark, with a coastal seed, `tonal-spot`, neutral adjustments
 and a 450 ms transition. `style` starts with Classic components;
-`typography` uses Inter, Alexandria, Cairo and JetBrains Mono at weight 400;
+`typography` uses Inter, Alexandria (including Arabic) and CaskaydiaCove Nerd
+Font Mono at weight 400; `typography.sync` (system font sync) is off by default;
 `motion` starts at stiffness 280, damping 24 and mass 1, with reduced motion
 off. These tables reuse the shell's named choices and control ranges.
 
@@ -198,7 +212,7 @@ Grouped by Studio page. Keys are config paths (`table.key`).
 | Themes | **looks** — six one-click looks and *Restore my look* (`looks.*`, see [Looks](#looks)); light / dark / automatic and its schedule (`theme.*`), palette tuning (`theme.adjustments`), theme crossfade (`theme.transition_ms`), icons (`appearance.*`), corner roundness, shadows, borders, backdrop dim; under **Components**, the **slider design** of the thick volume, brightness and mixer sliders (`style.slider_design` = `classic`, the default: the fill, a small gap, an upright handle, another gap and the rest of the track ending in a stop dot; `continuous`: one track with a short grip inside the fill's end; `pill`: a round knob on the fill's end that stretches into a pill while held; `wavy`: the classic layout with a gentle wave along the fill that flows only while you drag; `segmented`: ten rounded steps that fill in turn; thin sliders always keep the classic look); the other **component designs**, each `classic` by default: `style.button_design` (`classic`, `square`, `expressive`, `cut`, `elevated`), `style.toggle_design` (`classic`, `material`, `expressive`, `round`), `style.input_design` (`classic`, `filled`, `outlined`, `pill`), `style.chip_design` (`classic`, `material`, `connected`), `style.progress_design` (`classic`, `material`, `wavy`, `segmented`; bars, meters and progress rings, always at their classic size), `style.surface_corners` (`rounded`, `asymmetric`, `square`, `squircle`, `cut`; `style.radius_scale` still sets the size; squircle and cut cards clip their contents to the rounded rectangle inside their shape) and `style.card_style` (`tonal`, `raised` — no shadow while `style.shadows` is off —, `outlined`); the Components **presets** write these and `style.slider_design` together (`looks.keep_components`: picking a look keeps your designs instead of applying the look's); and the **slider handle** (`style.slider_handle` = `line`: the upright handle between a slider's fill and its track, with a small gap on each side and a stop dot at the track's end, or the grip of the continuous design; `none`: the fill's rounded end alone; the pill and segmented designs ignore it) (`style.*`); the theme; **other apps** — the app theming switches, all off by default (`integrations.*`, see [App theming](#app-theming-integrations)); **cursor** (the opt-in `cursors` plugin) — theme, size, hide while typing / when idle, Hyprland's software cursor and hide on touch (`compositor.input.cursor.theme`, `.size`, `.hide_when_typing`, `.hide_after_secs`, `.no_hardware_cursors`, `.hide_on_touch`; themes Mandara downloaded are listed in `~/.local/share/mandara/cursor-themes.json`) |
 | Wallpaper | folder, picker style / size / focus / names, fill and colour, transitions, random transition each change (`wallpaper.random_transition`), crossfade (`wallpaper.crossfade_ms`), light / dark and per-display variants, depth effect (`wallpaper.depth_effect`) and how its subject is found: `wallpaper.depth.mode` (`hand-tuned` or `model`), `auto_split`, `split` (0.05–0.95, model mode) (`wallpaper.*`); video wallpapers: pause behind windows / on battery, frame-rate limit, first frame only (`wallpaper.video.*`, see [Video wallpapers](#video-wallpapers)); the slideshow (`wallpaper.slideshow.*`, see [Wallpaper slideshow](#wallpaper-slideshow)) |
 | Desktop | clocks (24 faces, including depth, analog, word, split-flap, glass-tube and binary), system monitor, gauges, meters and thermals, weather, world clock, countdown, progress, to-do, sticky note, focus timer, quote, notebook tabs, calendars, sun / moon / globe, profile, shortcuts, toggles, sliders, palette, desk cat, bubbles, photo frame, sticker, six media layouts, machine card, screen time, prayer times, search, at a glance, GitHub, exchange rates, AI usage, games, decorations, plane visualizer, per-widget plate shape, outline, shadow, header, frame, rotation and mirror, alignment, font, numerals, calendar and language, show / hide them all (`desktop.widgets.*`, see [Desktop widgets](#desktop-widgets)); desktop cards and visualizers (`cards.*`, `visualizers.*`); the right-click menu: ring or list, items and their order, custom programs, size, labels, gesture, glass and animation (`desktop.menu.*`, see [Desktop menu](#desktop-menu)) |
-| Typography | interface / display / Arabic / monospace fonts, text scale, weight (`typography.*`) |
+| Typography | interface / display / Arabic / monospace fonts, text scale, weight (`typography.*`); opt-in **system font sync** (`typography.sync.enabled` plus `fontconfig` / `gtk` / `qt` / `kde` / `browsers`) pushes those families to the desktop and restores Mandara's writes when turned off |
 | Motion | stiffness, damping, mass, animation speed, reduce motion (`motion.*`) |
 
 ### Desktop
@@ -682,7 +696,7 @@ are clamped to their ranges.
 | `recipe` | *(empty)* | The current recipe as the engine's TOML table (`style`, hex `seed`, `palette = { named = "…" }` / `{ custom = [hex…] }` / `{ theme = […] }`, `[params]`); empty: a mesh gradient in Mandara Corniche |
 | `tone` | `theme` | `theme` (follow light / dark mode), `dark`, `light` |
 | `size` | `display` | `display` (the 4K class fitted to the primary display's shape), `1080p`, `1440p`, `4k`, `5k`, `8k`, `uw1440`, `portrait4k`, `custom` |
-| `custom_width`, `custom_height` | `3840`, `2160` | For `custom` (640–16384 px) |
+| `custom_width`, `custom_height` | `3840`, `2160` | For `custom` (640–16384 px per side, at most 7680 × 4320 = 33 177 600 px in total; a larger area is shortened) |
 | `format` | `webp` | `webp` (lossless), `png` (lossless), `jpeg` |
 | `jpeg_quality` | `92` | 60–100 |
 | `directory` | *(empty)* | Output folder (`~` allowed); empty: `Generated` inside the wallpaper folder, which the picker lists |

@@ -18,19 +18,50 @@ pub struct GlobalTheme {
 impl Global for GlobalTheme {}
 
 /// Creates the theme entity and installs it as a global.
+///
+/// A wallpaper source is decoded to find its colours, which takes long
+/// enough to hold up the first frame: it is resolved in the background and
+/// crossfaded in, with the default palette showing until then.
 pub fn init_theme(
     source: ThemeSource,
     dark: bool,
     adjustments: PaletteAdjustments,
     cx: &mut App,
 ) -> Entity<ThemeEngine> {
-    let entity = cx.new(|_| ThemeEngine::new(source, dark, adjustments));
+    let wallpaper = matches!(source, ThemeSource::Wallpaper { .. });
+    let entity = cx.new(|_| {
+        if wallpaper {
+            ThemeEngine::provisional(source.clone(), dark, adjustments)
+        } else {
+            ThemeEngine::new(source.clone(), dark, adjustments)
+        }
+    });
     cx.set_global(GlobalTheme {
         layers: ThemeLayers {
             shell: entity.clone(),
             presentation: None,
         },
     });
+    if wallpaper {
+        let job = cx.background_executor().spawn({
+            let source = source.clone();
+            async move { source.resolve(dark) }
+        });
+        let engine = entity.clone();
+        cx.spawn(async move |cx| match job.await {
+            Ok(resolved) => {
+                engine.update(cx, |engine, cx| {
+                    // A config change while this ran has its own resolve under way.
+                    if *engine.source() == source && engine.is_dark() == dark {
+                        engine.apply_resolved(source, dark, resolved, Instant::now());
+                        cx.notify();
+                    }
+                });
+            }
+            Err(err) => tracing::warn!("wallpaper theme failed ({err:#}); keeping Mandara Corniche"),
+        })
+        .detach();
+    }
     entity
 }
 

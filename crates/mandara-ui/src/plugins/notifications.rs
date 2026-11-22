@@ -232,6 +232,12 @@ fn resolve_icon(spec: &str, app: &str) -> Option<Arc<Path>> {
     } else {
         crate::icon_theme::resolve(spec, None, false).or_else(|| crate::apps::icon_for_app_id(app, false)).map(|r| Arc::from(r.path.as_path()))
     };
+    // A file that is not there yet (a screenshot tool posts `image-path`
+    // before writing it) is looked up again next time: a stat is cheap, and
+    // a cached miss would hide the icon until the cache wraps.
+    if found.is_none() && spec.starts_with('/') {
+        return None;
+    }
     ICONS.with(|c| {
         let mut c = c.borrow_mut();
         if c.len() >= ICON_CACHE_CAP {

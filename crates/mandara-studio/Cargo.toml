@@ -28,6 +28,7 @@ mandara-services.workspace = true
 mandara-version.workspace = true
 toml = { workspace = true, features = ["display"] }
 ureq.workspace = true
+sha2.workspace = true
 chrono.workspace = true
 chrono-tz = "0.10"
 dirs.workspace = true
@@ -37,6 +38,8 @@ qrcodegen.workspace = true
 anyhow.workspace = true
 # The layout designer's plugin search (fuzzy, like the launcher).
 nucleo-matcher.workspace = true
+# Wipes typed passwords from memory once they are used.
+zeroize = "1"
 
 [dev-dependencies]
 tempfile.workspace = true

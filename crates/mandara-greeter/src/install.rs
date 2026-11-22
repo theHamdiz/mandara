@@ -10,6 +10,8 @@
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
+use crate::manager::{BACKUP_DIR, BACKUP_DIR_MODE, Runner, SysRoot, SystemRunner, owned_by_us, plain_unit_stem, undo_command, write_atomic};
+
 #[cfg(not(target_os = "freebsd"))]
 pub const GREETD_CONFIG: &str = "/etc/greetd/config.toml";
 /// FreeBSD: greetd reads `/usr/local/etc/greetd/config.toml` first (its
@@ -22,6 +24,15 @@ const FRESH_VT: i64 = if cfg!(target_os = "freebsd") { 8 } else { 1 };
 pub const BACKUP_SUFFIX: &str = "mandara-backup";
 pub const INSTALLED_EXE: &str = "/usr/local/lib/mandara/mandara-greeter";
 pub const STATE_DIR: &str = "/var/lib/mandara-greeter";
+/// Name of the file recording the display manager `greeter install`
+/// replaced. It lives in [`BACKUP_DIR`] (only root writes there): the state
+/// folder belongs to the greeter user, who parses untrusted avatars and
+/// media, and `uninstall --apply` turns this name into a root `systemctl`
+/// argument.
+pub const PREVIOUS_DM_FILE: &str = "previous-dm";
+/// Longest `previous-dm` file read: a unit name is short, and the legacy
+/// copy sits in a folder an unprivileged user once owned.
+const PREVIOUS_DM_MAX_BYTES: u64 = 256;
 pub const MARKER: &str = "# Managed by `mandara greeter install`";
 /// Permissions of the installed greeter binary.
 const EXE_MODE: u32 = 0o755;
@@ -186,6 +197,8 @@ pub struct InstallPlan {
     pub new_config: String,
     pub current_dm: Option<String>,
     pub commands: Vec<Vec<String>>,
+    /// `undo[i]` reverses `commands[i]` (worked out before they run).
+    pub undo: Vec<Vec<String>>,
     pub warnings: Vec<String>,
 }
 
@@ -198,11 +211,16 @@ impl InstallPlan {
         let root = crate::manager::SysRoot::system();
         let current_dm = if root.freebsd() { crate::manager::display_manager(&root) } else { current_display_manager(Path::new("/etc/systemd/system/display-manager.service")) };
         let mut commands = Vec::new();
+        let mut undo = Vec::new();
+        let mut service = |verb: &str, unit: &str| {
+            commands.push(crate::manager::service_command(&root, verb, unit));
+            undo.push(undo_command(&root, verb, unit));
+        };
         if let Some(dm) = current_dm.as_deref().filter(|d| *d != "greetd") {
-            commands.push(crate::manager::service_command(&root, "disable", &format!("{dm}.service")));
+            service("disable", &format!("{dm}.service"));
         }
         if current_dm.as_deref() != Some("greetd") {
-            commands.push(crate::manager::service_command(&root, "enable", "greetd.service"));
+            service("enable", "greetd.service");
         }
         let mut warnings = Vec::new();
         if !crate::sessions::program_exists("greetd") && !Path::new("/usr/bin/greetd").exists() {
@@ -219,7 +237,7 @@ impl InstallPlan {
         {
             warnings.push(format!("display-manager.service points to `{dm}`, which isn't a display manager this installer knows; check before applying."));
         }
-        InstallPlan { kiosk, exe, greeter_user: user, existing, new_config, current_dm, commands, warnings }
+        InstallPlan { kiosk, exe, greeter_user: user, existing, new_config, current_dm, commands, undo, warnings }
     }
 
     pub fn describe(&self) -> String {
@@ -275,35 +293,69 @@ impl InstallPlan {
         if !is_root() {
             return Err("not running as root: re-run with sudo to install (nothing was changed)".into());
         }
-        for line in install_runtime(Path::new("/"), &self.exe, &self.greeter_user)? {
+        self.perform(Path::new("/"), apply, &mut SystemRunner)
+    }
+
+    /// [`Self::execute`] without the root check, on `root` (tests use
+    /// fixture trees). A failing step puts back every file it wrote and
+    /// undoes the service commands that already ran, so a failed switch
+    /// never leaves the old display manager disabled and greetd not enabled.
+    pub(crate) fn perform(&self, root: &Path, apply: bool, runner: &mut dyn Runner) -> Result<(), String> {
+        for line in install_runtime(root, &self.exe, &self.greeter_user)? {
             println!("✓ {line}");
         }
         if let Some(dm) = self.current_dm.as_deref().filter(|d| *d != "greetd") {
-            let _ = std::fs::write(Path::new(STATE_DIR).join("previous-dm"), format!("{dm}\n"));
+            record_previous_dm(root, dm)?;
         }
-        let err = |what: &str, e: std::io::Error| format!("{what}: {e}");
+        // Files written so far, newest last, and how many service commands ran.
+        let mut written = Vec::new();
+        let mut done = 0;
+        let result = self.switch(root, apply, runner, &mut written, &mut done);
+        let Err(e) = result else { return Ok(()) };
+        let mut notes = Vec::new();
+        for undo in self.undo[..done].iter().rev() {
+            if let Err(err) = runner.run(undo) {
+                notes.push(err);
+            }
+        }
+        for step in written.into_iter().rev() {
+            if let Err(err) = step.undo() {
+                notes.push(err);
+            }
+        }
+        let tail = if notes.is_empty() { "everything was rolled back".to_string() } else { format!("rollback problems: {}", notes.join("; ")) };
+        Err(format!("{e}\n({tail})"))
+    }
+
+    /// The writes and service commands of [`Self::perform`], recording what
+    /// each one changed so a failure can undo it.
+    fn switch(&self, root: &Path, apply: bool, runner: &mut dyn Runner, written: &mut Vec<Written>, done: &mut usize) -> Result<(), String> {
         if let Some((path, text)) = self.kiosk.config_file() {
-            std::fs::write(path, text).map_err(|e| err(path, e))?;
+            write_tracked(&under(root, path), &text, written)?;
             println!("✓ wrote {path}");
         }
-        // 5. greetd config (backup first; an existing backup is kept).
-        let greetd_dir = Path::new(GREETD_CONFIG).parent().unwrap_or(Path::new("/"));
-        std::fs::create_dir_all(greetd_dir).map_err(|e| err(&greetd_dir.display().to_string(), e))?;
-        let backup = format!("{GREETD_CONFIG}.{BACKUP_SUFFIX}");
+        // greetd config (backup first; an existing backup is kept).
+        let config = under(root, GREETD_CONFIG);
+        let greetd_dir = config.parent().unwrap_or(root);
+        std::fs::create_dir_all(greetd_dir).map_err(|e| format!("{}: {e}", greetd_dir.display()))?;
+        let backup = under(root, &format!("{GREETD_CONFIG}.{BACKUP_SUFFIX}"));
         if let Some(existing) = &self.existing
             && !existing.starts_with(MARKER)
-            && !Path::new(&backup).exists()
+            && !backup.exists()
         {
-            std::fs::write(&backup, existing).map_err(|e| err("backing up greetd config", e))?;
-            println!("✓ backed up the previous greetd config to {backup}");
+            write_tracked(&backup, existing, written).map_err(|e| format!("backing up greetd config: {e}"))?;
+            println!("✓ backed up the previous greetd config to {GREETD_CONFIG}.{BACKUP_SUFFIX}");
         }
-        std::fs::write(GREETD_CONFIG, &self.new_config).map_err(|e| err(GREETD_CONFIG, e))?;
+        write_tracked(&config, &self.new_config, written)?;
         println!("✓ wrote {GREETD_CONFIG}");
-        // 6. Services.
+        // Services.
         if self.commands.is_empty() {
             println!("\ngreetd is already enabled; Mandara Login appears at the next greetd start (reboot).");
         } else if apply {
-            run_all(&self.commands)?;
+            for c in &self.commands {
+                runner.run(c)?;
+                *done += 1;
+            }
             println!("\nDone. Mandara Login takes over at the next boot. Your current session was not touched.");
         } else {
             println!("\nFiles are in place. To switch display managers at the next boot run:");
@@ -314,6 +366,90 @@ impl InstallPlan {
         }
         Ok(())
     }
+}
+
+/// A file [`InstallPlan::perform`] wrote, and how to put it back.
+enum Written {
+    /// The file existed with this text.
+    Replaced(PathBuf, String),
+    /// The file didn't exist.
+    Created(PathBuf),
+}
+
+impl Written {
+    fn undo(self) -> Result<(), String> {
+        match self {
+            Written::Replaced(path, text) => write_atomic(&path, &text),
+            Written::Created(path) => std::fs::remove_file(&path).map_err(|e| format!("{}: {e}", path.display())),
+        }
+    }
+}
+
+/// Writes `text` to `path` atomically and records what it replaced.
+fn write_tracked(path: &Path, text: &str, written: &mut Vec<Written>) -> Result<(), String> {
+    let previous = match std::fs::read_to_string(path) {
+        Ok(old) => Some(old),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(format!("{}: {e}", path.display())),
+    };
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+    }
+    write_atomic(path, text)?;
+    written.push(match previous {
+        Some(old) => Written::Replaced(path.to_path_buf(), old),
+        None => Written::Created(path.to_path_buf()),
+    });
+    Ok(())
+}
+
+/// Where `root`'s record of the display manager `greeter install` replaced
+/// lives: in the folder only root writes.
+fn previous_dm_path(root: &Path) -> PathBuf {
+    under(root, BACKUP_DIR).join(PREVIOUS_DM_FILE)
+}
+
+/// Records `dm` as the display manager to go back to on `uninstall`.
+fn record_previous_dm(root: &Path, dm: &str) -> Result<(), String> {
+    use std::os::unix::fs::DirBuilderExt as _;
+    let path = previous_dm_path(root);
+    let dir = path.parent().unwrap_or(root);
+    if let Some(parent) = dir.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+    }
+    match std::fs::DirBuilder::new().mode(BACKUP_DIR_MODE).create(dir) {
+        Err(e) if e.kind() != std::io::ErrorKind::AlreadyExists => return Err(format!("{}: {e}", dir.display())),
+        _ => {}
+    }
+    write_atomic(&path, &format!("{dm}\n"))
+}
+
+/// The display manager `greeter install` recorded, if the record can be
+/// trusted: a service name in systemd's alphabet (no path, no leading `-`)
+/// in a regular file that is not a link. A record in the greeter-owned
+/// state folder (where older installs put it) counts only while root owns
+/// it and nobody else may write it, since the greeter user could otherwise
+/// plant a name that `uninstall --apply` hands to `systemctl` as root.
+fn read_previous_dm(root: &Path) -> Option<String> {
+    let current = previous_dm_path(root);
+    let legacy = under(root, STATE_DIR).join(PREVIOUS_DM_FILE);
+    let text = read_small_file(&current).or_else(|| owned_by_us(&legacy).then(|| read_small_file(&legacy)).flatten())?;
+    let dm = text.trim();
+    plain_unit_stem(dm).then(|| dm.to_string())
+}
+
+/// `path`'s text, at most [`PREVIOUS_DM_MAX_BYTES`], refusing a symlink.
+fn read_small_file(path: &Path) -> Option<String> {
+    use std::io::Read as _;
+    use std::os::unix::fs::OpenOptionsExt as _;
+    let file = std::fs::OpenOptions::new().read(true).custom_flags(libc::O_NOFOLLOW).open(path).ok()?;
+    if !file.metadata().ok()?.is_file() {
+        return None;
+    }
+    let mut text = String::new();
+    // One byte more than allowed: a longer file is refused, not cut short.
+    file.take(PREVIOUS_DM_MAX_BYTES + 1).read_to_string(&mut text).ok()?;
+    (text.len() as u64 <= PREVIOUS_DM_MAX_BYTES).then_some(text)
 }
 
 /// Joins an absolute system path onto a filesystem root (`/` in real use,
@@ -468,12 +604,14 @@ fn home_of(uid: u32) -> Option<PathBuf> {
     }
 }
 
-fn run_all(commands: &[Vec<String>]) -> Result<(), String> {
-    for c in commands {
-        println!("$ {}", c.join(" "));
-        let status = std::process::Command::new(&c[0]).args(&c[1..]).status().map_err(|e| format!("{}: {e}", c[0]))?;
-        if !status.success() {
-            return Err(format!("`{}` failed ({status})", c.join(" ")));
+/// Runs `commands`; when one fails, runs the `undo` of those that already
+/// ran (newest first) so the system keeps the display manager it had.
+fn run_switch(commands: &[Vec<String>], undo: &[Vec<String>], runner: &mut dyn Runner) -> Result<(), String> {
+    for (done, c) in commands.iter().enumerate() {
+        if let Err(e) = runner.run(c) {
+            let notes: Vec<String> = undo[..done].iter().rev().filter_map(|u| runner.run(u).err()).collect();
+            let tail = if notes.is_empty() { "the services were put back as they were".to_string() } else { format!("rollback problems: {}", notes.join("; ")) };
+            return Err(format!("{e}\n({tail})"));
         }
     }
     Ok(())
@@ -484,6 +622,8 @@ pub struct UninstallPlan {
     pub ours: bool,
     pub previous_dm: Option<String>,
     pub commands: Vec<Vec<String>>,
+    /// `undo[i]` reverses `commands[i]`.
+    pub undo: Vec<Vec<String>>,
 }
 
 impl UninstallPlan {
@@ -491,14 +631,18 @@ impl UninstallPlan {
         let backup = PathBuf::from(format!("{GREETD_CONFIG}.{BACKUP_SUFFIX}"));
         let backup = backup.exists().then_some(backup);
         let ours = std::fs::read_to_string(GREETD_CONFIG).is_ok_and(|t| t.starts_with(MARKER));
-        let previous_dm = std::fs::read_to_string(Path::new(STATE_DIR).join("previous-dm")).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+        let previous_dm = read_previous_dm(Path::new("/"));
         let mut commands = Vec::new();
+        let mut undo = Vec::new();
         if let Some(dm) = &previous_dm {
-            let root = crate::manager::SysRoot::system();
-            commands.push(crate::manager::service_command(&root, "disable", "greetd.service"));
-            commands.push(crate::manager::service_command(&root, "enable", &format!("{dm}.service")));
+            let root = SysRoot::system();
+            let dm_unit = format!("{dm}.service");
+            for (verb, unit) in [("disable", "greetd.service"), ("enable", dm_unit.as_str())] {
+                commands.push(crate::manager::service_command(&root, verb, unit));
+                undo.push(undo_command(&root, verb, unit));
+            }
         }
-        UninstallPlan { backup, ours, previous_dm, commands }
+        UninstallPlan { backup, ours, previous_dm, commands, undo }
     }
 
     pub fn describe(&self) -> String {
@@ -551,7 +695,7 @@ impl UninstallPlan {
             println!("✓ removed {}", locales.display());
         }
         if apply && !self.commands.is_empty() {
-            run_all(&self.commands)?;
+            run_switch(&self.commands, &self.undo, &mut SystemRunner)?;
             println!("\nDone; {} returns at the next boot.", self.previous_dm.as_deref().unwrap_or("your display manager"));
         } else if !self.commands.is_empty() {
             println!("\nTo switch back at the next boot run:");
@@ -656,6 +800,120 @@ mod tests {
         std::fs::write(&file, Kiosk::Niri.config_file().unwrap().1).unwrap();
         let out = std::process::Command::new("niri").arg("validate").arg("-c").arg(&file).output().unwrap();
         assert!(out.status.success(), "{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    }
+
+    /// Records the commands it is asked to run and fails on the one named.
+    struct ScriptedRunner {
+        ran: Vec<String>,
+        fail_on: Option<&'static str>,
+    }
+
+    impl Runner for ScriptedRunner {
+        fn run(&mut self, argv: &[String]) -> Result<(), String> {
+            let line = argv.join(" ");
+            self.ran.push(line.clone());
+            if self.fail_on == Some(line.as_str()) { Err(format!("`{line}` failed")) } else { Ok(()) }
+        }
+    }
+
+    fn systemd_plan(root: &Path, existing: Option<&str>) -> InstallPlan {
+        let exe = root.join("mandara");
+        std::fs::write(&exe, "binary").unwrap();
+        let kiosk = Kiosk::Niri;
+        let user = greeter_user(existing);
+        let new_config = render_greetd_config(existing, &kiosk.command(), &user);
+        let cmd = |verb: &str, unit: &str| vec!["systemctl".to_string(), verb.to_string(), unit.to_string()];
+        InstallPlan {
+            kiosk,
+            exe,
+            greeter_user: user,
+            existing: existing.map(str::to_string),
+            new_config,
+            current_dm: Some("sddm".into()),
+            commands: vec![cmd("disable", "sddm.service"), cmd("enable", "greetd.service")],
+            undo: vec![cmd("enable", "sddm.service"), cmd("disable", "greetd.service")],
+            warnings: Vec::new(),
+        }
+    }
+
+    /// Enabling greetd fails after the old display manager was disabled:
+    /// the old one is enabled again and the files are put back, so the next
+    /// boot still has a login screen.
+    #[test]
+    fn a_failed_service_switch_rolls_back_services_and_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let original = "[default_session]\ncommand = \"agreety --cmd /bin/sh\"\nuser = \"greeter\"\n";
+        let config = under(root, GREETD_CONFIG);
+        std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+        std::fs::write(&config, original).unwrap();
+        let plan = systemd_plan(root, Some(original));
+        let mut runner = ScriptedRunner { ran: Vec::new(), fail_on: Some("systemctl enable greetd.service") };
+        let err = plan.perform(root, true, &mut runner).unwrap_err();
+        assert!(err.contains("`systemctl enable greetd.service` failed") && err.contains("everything was rolled back"), "{err}");
+        assert_eq!(runner.ran, ["systemctl disable sddm.service", "systemctl enable greetd.service", "systemctl enable sddm.service"], "only the command that succeeded is undone");
+        assert_eq!(std::fs::read_to_string(&config).unwrap(), original, "the greetd config is back");
+        assert!(!under(root, &format!("{GREETD_CONFIG}.{BACKUP_SUFFIX}")).exists(), "the backup this run made is gone");
+        assert!(!under(root, NIRI_GREETER_KDL).exists(), "the kiosk file this run made is gone");
+    }
+
+    #[test]
+    fn a_successful_switch_writes_the_files_and_records_the_old_manager() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let plan = systemd_plan(root, None);
+        let mut runner = ScriptedRunner { ran: Vec::new(), fail_on: None };
+        plan.perform(root, true, &mut runner).unwrap();
+        assert_eq!(runner.ran, ["systemctl disable sddm.service", "systemctl enable greetd.service"]);
+        assert_eq!(std::fs::read_to_string(under(root, GREETD_CONFIG)).unwrap(), plan.new_config);
+        assert!(under(root, NIRI_GREETER_KDL).is_file());
+        assert_eq!(read_previous_dm(root).as_deref(), Some("sddm"));
+        assert!(previous_dm_path(root).starts_with(under(root, BACKUP_DIR)), "recorded where only root writes");
+        assert!(!under(root, STATE_DIR).join(PREVIOUS_DM_FILE).exists(), "not in the greeter-owned folder");
+    }
+
+    #[test]
+    fn uninstall_rolls_back_when_the_old_manager_cannot_be_enabled() {
+        let commands = vec![vec!["systemctl".to_string(), "disable".into(), "greetd.service".into()], vec!["systemctl".to_string(), "enable".into(), "sddm.service".into()]];
+        let undo = vec![vec!["systemctl".to_string(), "enable".into(), "greetd.service".into()], vec!["systemctl".to_string(), "disable".into(), "sddm.service".into()]];
+        let mut runner = ScriptedRunner { ran: Vec::new(), fail_on: Some("systemctl enable sddm.service") };
+        let err = run_switch(&commands, &undo, &mut runner).unwrap_err();
+        assert!(err.contains("put back as they were"), "{err}");
+        assert_eq!(runner.ran, ["systemctl disable greetd.service", "systemctl enable sddm.service", "systemctl enable greetd.service"]);
+    }
+
+    /// `uninstall --apply` turns the recorded name into a root `systemctl`
+    /// argument: a path, an option, a link or an oversized file is ignored.
+    #[test]
+    fn previous_dm_record_is_validated() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        assert_eq!(read_previous_dm(root), None, "nothing recorded");
+        record_previous_dm(root, "sddm").unwrap();
+        assert_eq!(read_previous_dm(root).as_deref(), Some("sddm"));
+        let path = previous_dm_path(root);
+        for bad in ["/var/lib/mandara-greeter/evil", "../evil", "--root=/tmp/x", "-x", "a b", "sddm\nenable evil", ""] {
+            std::fs::write(&path, format!("{bad}\n")).unwrap();
+            assert_eq!(read_previous_dm(root), None, "{bad:?}");
+        }
+        std::fs::write(&path, format!("{}\n", "a".repeat(1000))).unwrap();
+        assert_eq!(read_previous_dm(root), None, "oversized");
+        // A link is never followed, even to a valid name.
+        let elsewhere = root.join("elsewhere");
+        std::fs::write(&elsewhere, "sddm\n").unwrap();
+        std::fs::remove_file(&path).unwrap();
+        std::os::unix::fs::symlink(&elsewhere, &path).unwrap();
+        assert_eq!(read_previous_dm(root), None, "symlink");
+        // Older installs kept it in the state folder: honoured only while
+        // root (here: the test's user) owns it and nobody else may write.
+        std::fs::remove_file(&path).unwrap();
+        let legacy = under(root, STATE_DIR).join(PREVIOUS_DM_FILE);
+        std::fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+        std::fs::write(&legacy, "gdm\n").unwrap();
+        std::fs::set_permissions(&legacy, std::os::unix::fs::PermissionsExt::from_mode(0o644)).unwrap();
+        assert_eq!(read_previous_dm(root).as_deref(), Some("gdm"));
+        std::fs::set_permissions(&legacy, std::os::unix::fs::PermissionsExt::from_mode(0o666)).unwrap();
+        assert_eq!(read_previous_dm(root), None, "writable by others");
     }
 
     #[test]

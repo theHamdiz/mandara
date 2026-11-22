@@ -27,6 +27,10 @@ pub const TOPIC: &str = "mandara-plugin";
 pub const ASSET_SUFFIX: &str = ".mandara.tar.gz";
 /// Largest archive accepted (and largest unpacked total).
 pub const MAX_BYTES: u64 = 64 << 20;
+/// Entries (files and folders) a plugin archive may hold: far more than a
+/// plugin has, small enough that a bomb of empty files can't fill the disk
+/// with inodes.
+const MAX_ENTRIES: usize = 10_000;
 /// Environment variable overriding the API base (no trailing slash needed).
 pub const API_ENV: &str = "MANDARA_MARKETPLACE_API";
 /// GitHub's REST API.
@@ -511,7 +515,8 @@ pub fn installed_all() -> std::collections::HashMap<String, (PathBuf, String)> {
 /// The installed copy of `full_name`, if any (matched by its `.source`).
 pub fn installed(full_name: &str) -> Option<(PathBuf, String)> {
     let entries = std::fs::read_dir(install_dir()).ok()?;
-    entries.flatten().map(|e| e.path()).find_map(|dir| {
+    // Dot-named folders are installs in progress or parked versions, not plugins.
+    entries.flatten().filter(|e| !e.file_name().to_string_lossy().starts_with('.')).map(|e| e.path()).find_map(|dir| {
         let src = std::fs::read_to_string(dir.join(".source")).ok()?;
         let mut lines = src.lines();
         (lines.next()? == full_name).then(|| (dir.clone(), lines.next().unwrap_or_default().to_string()))
@@ -534,7 +539,10 @@ pub(crate) fn unpack(bytes: &[u8], scratch: &Path) -> Result<(PathBuf, String), 
     std::fs::create_dir_all(scratch).map_err(|e| e.to_string())?;
     let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(bytes));
     let mut total = 0u64;
-    for entry in archive.entries().map_err(|e| e.to_string())? {
+    for (count, entry) in archive.entries().map_err(|e| e.to_string())?.enumerate() {
+        if count >= MAX_ENTRIES {
+            return Err(t("The plugin archive is too large").to_string());
+        }
         let mut entry = entry.map_err(|e| e.to_string())?;
         let kind = entry.header().entry_type();
         if !(kind.is_file() || kind.is_dir()) {
@@ -613,13 +621,26 @@ fn sum_for<'a>(sums: &'a str, file: &str) -> Option<&'a str> {
     })
 }
 
-/// Checks the archive against the release's `SHA256SUMS`, when it has one.
+/// Checks the archive against the release's `SHA256SUMS`. A release
+/// without one is allowed (publishing it is optional, see PLUGINS.md), and
+/// says so in the log; a list that doesn't name the archive is refused,
+/// since such a release's checksums vouch for something else.
 fn verify_archive(release: &Release, asset: &Asset, bytes: &[u8]) -> Result<(), InstallError> {
-    let Some(sums) = release.assets.iter().find(|a| a.name == SUMS_FILE) else { return Ok(()) };
+    let Some(sums) = release.assets.iter().find(|a| a.name == SUMS_FILE) else {
+        tracing::info!("{}: release {} has no {SUMS_FILE}; {} is installed unchecked", release.html_url, release.tag_name, asset.name);
+        return Ok(());
+    };
     let text = get(&sums.browser_download_url, MAX_JSON_BYTES).map_err(String::from)?;
-    let Some(want) = sum_for(&String::from_utf8_lossy(&text), &asset.name).map(str::to_string) else { return Ok(()) };
+    check_sums(&String::from_utf8_lossy(&text), &asset.name, bytes)
+}
+
+/// `bytes` (the asset `file`) against a `SHA256SUMS` listing.
+fn check_sums(sums: &str, file: &str, bytes: &[u8]) -> Result<(), InstallError> {
     let got = mandara_delta::sha256_hex(bytes);
-    if got.eq_ignore_ascii_case(&want) { Ok(()) } else { Err(InstallError::Failed(tf("{file} failed verification (sha256 {got})", &[("file", &asset.name), ("got", &got)]))) }
+    match sum_for(sums, file) {
+        Some(want) if got.eq_ignore_ascii_case(want) => Ok(()),
+        _ => Err(InstallError::Failed(tf("{file} failed verification (sha256 {got})", &[("file", &file), ("got", &got)]))),
+    }
 }
 
 /// A release's checksum list (`SHA256SUMS`).
@@ -692,19 +713,62 @@ pub fn install_with_policy(full_name: &str, vetting: &Vetting, progress: &dyn Fn
         return Err(e);
     }
     let dest = install_dir().join(&id);
-    if let Some((existing, _)) = installed(full_name)
-        && existing != dest {
-            let _ = std::fs::remove_dir_all(&existing);
+    // The folder an earlier version lives in, when the plugin's id changed
+    // between releases: it goes away once the new version is in place.
+    let renamed = installed(full_name).map(|(dir, _)| dir).filter(|dir| *dir != dest);
+    // Stage next to the destination (one filesystem, a unique name so two
+    // installs never share one), then swap: the old version is parked and
+    // put back if the new one can't be moved in, so a failure never
+    // leaves the plugin missing or half written.
+    let staging = staging_dir(&install_dir(), &id).map_err(|e| e.to_string())?;
+    std::fs::rename(&root, staging.path()).or_else(|_| copy_tree(&root, staging.path())).map_err(|e| e.to_string())?;
+    std::fs::write(staging.path().join(".source"), format!("{full_name}\n{}\n", release.tag_name)).map_err(|e| e.to_string())?;
+    let parked = staging_dir(&install_dir(), &id).map_err(|e| e.to_string())?;
+    if let Err(e) = swap_dir(staging.path(), &dest, parked.path()) {
+        // Restoration failed: persist the parked previous version so Drop
+        // cannot delete the only remaining copy.
+        if e.contains("kept at") {
+            let _ = parked.keep();
         }
-    let staging = install_dir().join(format!(".{id}.new"));
-    let _ = std::fs::remove_dir_all(&staging);
-    std::fs::create_dir_all(install_dir()).map_err(|e| e.to_string())?;
-    std::fs::rename(&root, &staging).or_else(|_| copy_tree(&root, &staging)).map_err(|e| e.to_string())?;
-    std::fs::write(staging.join(".source"), format!("{full_name}\n{}\n", release.tag_name)).map_err(|e| e.to_string())?;
-    let _ = std::fs::remove_dir_all(&dest);
-    std::fs::rename(&staging, &dest).map_err(|e| e.to_string())?;
+        return Err(e.into());
+    }
+    if let Some(old) = renamed {
+        let _ = std::fs::remove_dir_all(old);
+    }
     let _ = std::fs::remove_dir_all(&scratch);
     Ok((id, release.tag_name))
+}
+
+/// A fresh, uniquely named folder in `parent` for a plugin being installed.
+/// Dot-named, so it never reads as a plugin; removed when dropped.
+pub(crate) fn staging_dir(parent: &Path, id: &str) -> std::io::Result<tempfile::TempDir> {
+    std::fs::create_dir_all(parent)?;
+    tempfile::Builder::new().prefix(&format!(".{id}.new.")).tempdir_in(parent)
+}
+
+/// Moves `staged` to `dest`, parking what was there in `parked` (an empty
+/// folder on the same filesystem) and putting it back if the move fails.
+/// When restoration also fails, the error names `parked` so the caller can
+/// keep that directory instead of letting a `TempDir` delete it.
+fn swap_dir(staged: &Path, dest: &Path, parked: &Path) -> Result<(), String> {
+    let had_old = match std::fs::rename(dest, parked) {
+        Ok(()) => true,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+        Err(e) => return Err(format!("{}: {e}", dest.display())),
+    };
+    if let Err(e) = std::fs::rename(staged, dest) {
+        if had_old
+            && let Err(re) = std::fs::rename(parked, dest)
+        {
+            return Err(format!(
+                "{}: {e}; also could not restore the previous version ({re}); kept at {}",
+                dest.display(),
+                parked.display()
+            ));
+        }
+        return Err(format!("{}: {e}", dest.display()));
+    }
+    Ok(())
 }
 
 pub(crate) fn copy_tree(from: &Path, to: &Path) -> std::io::Result<()> {
@@ -743,6 +807,54 @@ mod tests {
         assert_eq!(sum_for(sums, "weather.mandara.tar.gz"), Some("0a1b"));
         assert_eq!(sum_for(sums, "other.tar.gz"), Some("ffee"));
         assert_eq!(sum_for(sums, "missing.tar.gz"), None);
+    }
+
+    /// A `SHA256SUMS` that doesn't name the archive vouches for nothing.
+    #[test]
+    fn checksums_must_name_the_archive_and_match() {
+        let bytes = b"plugin";
+        let good = mandara_delta::sha256_hex(bytes);
+        assert!(check_sums(&format!("{good}  p.mandara.tar.gz\n"), "p.mandara.tar.gz", bytes).is_ok());
+        assert!(check_sums(&format!("{good}  other.tar.gz\n"), "p.mandara.tar.gz", bytes).is_err(), "not listed");
+        assert!(check_sums("", "p.mandara.tar.gz", bytes).is_err(), "empty list");
+        assert!(check_sums(&format!("{}  p.mandara.tar.gz\n", "0".repeat(64)), "p.mandara.tar.gz", bytes).is_err(), "wrong sum");
+    }
+
+    /// An update swaps in whole, a failed swap leaves the old version where
+    /// it was, and a first install has nothing to park.
+    #[test]
+    fn swapping_keeps_the_old_version_on_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let (dest, parked) = (dir.path().join("moon"), dir.path().join("parked"));
+        let stage = |text: &str| {
+            let s = staging_dir(dir.path(), "moon").unwrap();
+            std::fs::write(s.path().join("plugin.toml"), text).unwrap();
+            s
+        };
+        std::fs::create_dir(&parked).unwrap();
+        let first = stage("v1");
+        swap_dir(first.path(), &dest, &parked).unwrap();
+        assert_eq!(std::fs::read_to_string(dest.join("plugin.toml")).unwrap(), "v1");
+        let second = stage("v2");
+        swap_dir(second.path(), &dest, &parked).unwrap();
+        assert_eq!(std::fs::read_to_string(dest.join("plugin.toml")).unwrap(), "v2");
+        assert_eq!(std::fs::read_to_string(parked.join("plugin.toml")).unwrap(), "v1", "the old one is parked");
+        std::fs::remove_dir_all(&parked).unwrap();
+        std::fs::create_dir(&parked).unwrap();
+        // The staged folder vanished: nothing moves in, the old one is back.
+        let missing = dir.path().join("missing");
+        assert!(swap_dir(&missing, &dest, &parked).is_err());
+        assert_eq!(std::fs::read_to_string(dest.join("plugin.toml")).unwrap(), "v2");
+        // Two stagings of one id never collide.
+        assert_ne!(stage("a").path(), stage("b").path());
+    }
+
+    #[test]
+    fn an_archive_with_too_many_entries_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let names: Vec<String> = (0..=MAX_ENTRIES).map(|i| format!("p/d{i}.txt")).collect();
+        let files: Vec<(&str, &[u8])> = names.iter().map(|n| (n.as_str(), &b""[..])).collect();
+        assert!(unpack(&archive(&files), &dir.path().join("x")).is_err());
     }
 
     fn archive(files: &[(&str, &[u8])]) -> Vec<u8> {
