@@ -120,8 +120,12 @@ pub struct Font {
 
 /// Largest font download accepted (Nerd Font CascadiaCode.tar.xz is ~3.5 MiB).
 const FONT_MAX_BYTES: u64 = 16 << 20;
+/// Unpacked CaskaydiaCove Mono faces from CascadiaCode.tar.xz (v3.5.1) total ~34 MiB.
+const NERD_EXTRACT_MAX_BYTES: u64 = 40 << 20;
 /// Whole-request timeout of a font download (archives need a little longer).
 const DOWNLOAD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+/// Installation marker face — written last so a partial unpack stays retriable.
+const CASKAYDIA_MARKER: &str = "CaskaydiaCoveNerdFontMono-Regular.ttf";
 /// Mono faces extracted from CascadiaCode.tar.xz (Nerd Fonts v3.5.1).
 const CASKAYDIA_MONO_MEMBERS: &[&str] = &[
     "CaskaydiaCoveNerdFontMono-Regular.ttf",
@@ -163,7 +167,8 @@ pub const FONTS: &[Font] = &[
         url: "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.5.1/CascadiaCode.tar.xz",
         size: 3_592_604,
         package: FontPackage::NerdTarXz,
-        aliases: &["CaskaydiaCove Nerd Font", "CaskaydiaCove NF", "CaskaydiaCove Nerd Font Propo"],
+        // Propo is proportional — not a mono substitute the shell accepts.
+        aliases: &["CaskaydiaCove Nerd Font", "CaskaydiaCove NF"],
     },
     Font {
         family: "Cairo",
@@ -215,9 +220,17 @@ pub fn fonts_dir() -> PathBuf {
     dirs::data_dir().unwrap_or_else(|| PathBuf::from("~/.local/share")).join("fonts").join("mandara")
 }
 
-fn font_present(font: &Font, installed: &[String]) -> bool {
+fn font_family_match(font: &Font, installed: &[String]) -> bool {
     let has = |name: &str| installed.iter().any(|n| n.eq_ignore_ascii_case(name));
-    has(font.family) || font.aliases.iter().copied().any(has) || fonts_dir().join(font.file).exists()
+    has(font.family) || font.aliases.iter().copied().any(has)
+}
+
+fn font_present_in(font: &Font, installed: &[String], dir: &Path) -> bool {
+    font_family_match(font, installed) || dir.join(font.file).exists()
+}
+
+fn font_present(font: &Font, installed: &[String]) -> bool {
+    font_present_in(font, installed, &fonts_dir())
 }
 
 /// Families not installed, given the system's font family names.
@@ -456,10 +469,13 @@ fn install_nerd_tar_xz(archive: &[u8], dir: &Path) -> Result<(), String> {
     let keep = |rel: &Path| {
         rel.file_name().and_then(|n| n.to_str()).is_some_and(|name| CASKAYDIA_MONO_MEMBERS.contains(&name))
     };
-    let opts = ExtractOptions { max_bytes: FONT_MAX_BYTES, max_entries: 64, keep: Some(&keep) };
+    let opts = ExtractOptions { max_bytes: NERD_EXTRACT_MAX_BYTES, max_entries: 64, keep: Some(&keep) };
     archive::extract_with(&archive_path, Format::TarXz, &unpack, &opts, &AtomicBool::new(false), &|_| {}).map_err(|e| tf("unpack failed: {error}", &[("error", &e)]))?;
+    let mut faces = walkdir_ttf(&unpack)?;
+    // Marker face last: a mid-write failure leaves the package retriable.
+    faces.sort_by_key(|p| p.file_name().and_then(|n| n.to_str()) == Some(CASKAYDIA_MARKER));
     let mut written = 0usize;
-    for entry in walkdir_ttf(&unpack)? {
+    for entry in faces {
         let name = entry.file_name().and_then(|n| n.to_str()).ok_or_else(|| t("font archive member has no name").to_string())?;
         let dest = dir.join(name);
         let bytes = std::fs::read(&entry).map_err(|e| format!("{}: {e}", entry.display()))?;
@@ -643,9 +659,13 @@ mod tests {
         let caskaydia = FONTS.iter().find(|f| f.family == "CaskaydiaCove Nerd Font Mono").expect("default mono is downloadable");
         assert!(matches!(caskaydia.package, FontPackage::NerdTarXz));
         assert!(caskaydia.url.contains("CascadiaCode.tar.xz"));
-        // An alias fontconfig often reports still counts as installed.
-        assert!(font_present(caskaydia, &["CaskaydiaCove Nerd Font".into()]));
-        assert!(!font_present(caskaydia, &["JetBrains Mono".into()]));
+        // Family / alias match must not touch the real fonts directory.
+        assert!(font_family_match(caskaydia, &["CaskaydiaCove Nerd Font".into()]));
+        assert!(!font_family_match(caskaydia, &["JetBrains Mono".into()]));
+        let empty = tempfile::tempdir().unwrap();
+        assert!(!font_present_in(caskaydia, &["JetBrains Mono".into()], empty.path()));
+        std::fs::write(empty.path().join(caskaydia.file), b"marker").unwrap();
+        assert!(font_present_in(caskaydia, &["JetBrains Mono".into()], empty.path()));
     }
 
     /// A sandbox: nothing here touches the user's own folders.

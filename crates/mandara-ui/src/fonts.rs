@@ -170,7 +170,6 @@ pub const MONO_FALLBACKS: &[&str] = &[
     "CaskaydiaCove NF",
     "JetBrainsMono Nerd Font Mono",
     "JetBrainsMono Nerd Font",
-    "JetBrainsMono Nerd Font Propo",
     "MesloLGS Nerd Font Mono",
     "MesloLGM Nerd Font Mono",
     "SauceCodePro Nerd Font Mono",

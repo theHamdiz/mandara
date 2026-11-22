@@ -492,16 +492,23 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         core,
-        CommandSpec::new("fonts sync", mandara_i18n::tk("Apply or restore Mandara's system font sync (typography.sync) now"), |_, cx| {
+        CommandSpec::new_output("fonts sync", mandara_i18n::tk("Apply or restore Mandara's system font sync (typography.sync) now"), |_, cx| {
             let cfg = config(cx).read(cx).get().clone();
-            let env = mandara_services::font_sync::ApplyEnv::current();
-            let report = mandara_services::font_sync::reconcile(&cfg, &env, &mandara_services::font_sync::FontGsettingsCommand)?;
-            Ok(json!({
-                "enabled": cfg.typography.sync.enabled,
-                "active": mandara_services::font_sync::active(&env),
-                "changed": report.changed,
-                "kept": report.kept,
-            }))
+            let (tx, rx) = async_channel::bounded(1);
+            let _ = std::thread::Builder::new().name("mandara-fonts-sync-cmd".into()).spawn(move || {
+                let env = mandara_services::font_sync::ApplyEnv::current();
+                let result = mandara_services::font_sync::reconcile(&cfg, &env, &mandara_services::font_sync::FontGsettingsCommand).map(|report| {
+                    json!({
+                        "enabled": cfg.typography.sync.enabled,
+                        "active": mandara_services::font_sync::active(&env),
+                        "changed": report.changed,
+                        "kept": report.kept,
+                    })
+                    .to_string()
+                });
+                let _ = tx.send_blocking(result);
+            });
+            Ok(mandara_plugins::Output::Pending(rx))
         })
         .example("fonts sync"),
     );

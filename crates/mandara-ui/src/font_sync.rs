@@ -3,6 +3,8 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 use std::time::Duration;
 
 use gpui::{App, Task};
@@ -12,6 +14,11 @@ use mandara_services::font_sync::{self, ApplyEnv, FontGsettingsCommand};
 /// Debounce while the user flips several toggles or picks fonts.
 const SETTLE_MS: u64 = 400;
 const SETTLE: Duration = Duration::from_millis(SETTLE_MS);
+
+/// Latest typography snapshot waiting for the single worker.
+static PENDING: Mutex<Option<mandara_config::ShellConfig>> = Mutex::new(None);
+/// True while the `mandara-font-sync` worker owns the loop.
+static WORKER: AtomicBool = AtomicBool::new(false);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Key {
@@ -27,12 +34,31 @@ impl Key {
     }
 }
 
-/// Applies or restores system fonts from the current config (worker thread).
+/// Applies or restores system fonts from the current config (single worker).
+///
+/// Concurrent calls only update the pending snapshot; an older in-flight
+/// reconcile cannot overwrite a newer disable / family change.
 pub fn reconcile_now(cfg: &mandara_config::ShellConfig) {
-    let cfg = cfg.clone();
-    let _ = std::thread::Builder::new().name("mandara-font-sync".into()).spawn(move || {
-        if let Err(err) = font_sync::reconcile(&cfg, &ApplyEnv::current(), &FontGsettingsCommand) {
-            tracing::warn!(error = %err, "system font sync");
+    if let Ok(mut slot) = PENDING.lock() {
+        *slot = Some(cfg.clone());
+    }
+    if WORKER.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let _ = std::thread::Builder::new().name("mandara-font-sync".into()).spawn(|| {
+        loop {
+            let next = PENDING.lock().ok().and_then(|mut slot| slot.take());
+            let Some(cfg) = next else {
+                WORKER.store(false, Ordering::SeqCst);
+                // A reconcile_now may have raced after we saw None.
+                if PENDING.lock().ok().is_some_and(|s| s.is_some()) && !WORKER.swap(true, Ordering::SeqCst) {
+                    continue;
+                }
+                break;
+            };
+            if let Err(err) = font_sync::reconcile(&cfg, &ApplyEnv::current(), &FontGsettingsCommand) {
+                tracing::warn!(error = %err, "system font sync");
+            }
         }
     });
 }

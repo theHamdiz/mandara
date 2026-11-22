@@ -219,6 +219,28 @@ fn ini_target(file: &str, key: &str) -> String {
     format!("{file}::{key}")
 }
 
+/// Persist ownership after each successful mutation so a later failure still
+/// leaves a restore record for what already landed.
+fn checkpoint(env: &ApplyEnv, record: &Record) -> Result<(), String> {
+    if record.before.is_empty() {
+        match std::fs::remove_file(&env.record) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e.to_string()),
+        }
+    } else {
+        save_record(env, record)
+    }
+}
+
+fn remove_file_ok(path: &Path) -> Result<(), String> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(format!("{}: {e}", path.display())),
+    }
+}
+
 fn apply_ini(env: &ApplyEnv, record: &mut Record, report: &mut Report, w: IniWrite) -> Result<(), String> {
     let path = env.config.join(w.file);
     let current = std::fs::read_to_string(&path).ok();
@@ -229,22 +251,31 @@ fn apply_ini(env: &ApplyEnv, record: &mut Record, report: &mut Report, w: IniWri
     let previous = ini_get(&text, w.section, w.key);
     let target = ini_target(w.file, w.key);
     remember(record, &target, w.group, previous.clone(), current.is_none());
+    // Own the key before mutating so a write error still restores correctly.
+    checkpoint(env, record)?;
     if previous.as_deref() != Some(w.value.as_str()) {
         write(&path, &ini_set(&text, w.section, w.key, Some(&w.value)))?;
         if !report.changed.iter().any(|c| c == w.file) {
             report.changed.push(w.file.into());
         }
+        checkpoint(env, record)?;
     }
     Ok(())
 }
 
-fn apply_gsettings(gs: &dyn FontGsettings, record: &mut Record, report: &mut Report, key: &str, value: &str) {
+fn apply_gsettings(env: &ApplyEnv, gs: &dyn FontGsettings, record: &mut Record, report: &mut Report, key: &str, value: &str) -> Result<(), String> {
     let target = format!("gsettings:{key}");
-    let Some(previous) = gs.get(key) else { return };
+    let Some(previous) = gs.get(key) else { return Ok(()) };
     remember(record, &target, "gtk", Some(previous.clone()), false);
-    if previous != value && gs.set(key, value) {
+    checkpoint(env, record)?;
+    if previous != value {
+        if !gs.set(key, value) {
+            return Err(format!("gsettings set {GSETTINGS_SCHEMA} {key} failed"));
+        }
         report.changed.push(target);
+        checkpoint(env, record)?;
     }
+    Ok(())
 }
 
 fn apply_fontconfig(env: &ApplyEnv, record: &mut Record, report: &mut Report, families: &Families) -> Result<(), String> {
@@ -252,9 +283,11 @@ fn apply_fontconfig(env: &ApplyEnv, record: &mut Record, report: &mut Report, fa
     let body = fontconfig_body(families);
     let current = std::fs::read_to_string(&path).ok();
     remember(record, FONTCONFIG_REL, "fontconfig", current.clone(), current.is_none());
+    checkpoint(env, record)?;
     if current.as_deref() != Some(body.as_str()) {
         write(&path, &body)?;
         report.changed.push(FONTCONFIG_REL.into());
+        checkpoint(env, record)?;
     }
     Ok(())
 }
@@ -266,6 +299,9 @@ pub fn apply(families: &Families, targets: Targets, env: &ApplyEnv, gsettings: &
     }
     let mut record = load(&env.record).unwrap_or_default();
     let mut report = Report::default();
+    // So a mid-apply restore knows which values Mandara meant to own.
+    record.families = Some(families.clone());
+    checkpoint(env, &record)?;
 
     // Drop writes for groups the user turned off.
     let keep = |g: &str| match g {
@@ -280,6 +316,7 @@ pub fn apply(families: &Families, targets: Targets, env: &ApplyEnv, gsettings: &
         let partial = restore_groups_inner(env, gsettings, &mut record, Some(&off))?;
         report.changed.extend(partial.changed);
         report.kept.extend(partial.kept);
+        checkpoint(env, &record)?;
     }
 
     if targets.wants_fontconfig() {
@@ -298,9 +335,9 @@ pub fn apply(families: &Families, targets: Targets, env: &ApplyEnv, gsettings: &
             &mut report,
             IniWrite { file: "gtk-4.0/settings.ini", section: "Settings", key: "gtk-font-name", group: "gtk", only_existing: false, value: families.gtk_ui() },
         )?;
-        apply_gsettings(gsettings, &mut record, &mut report, "font-name", &families.gtk_ui());
-        apply_gsettings(gsettings, &mut record, &mut report, "document-font-name", &families.gtk_document());
-        apply_gsettings(gsettings, &mut record, &mut report, "monospace-font-name", &families.gtk_mono());
+        apply_gsettings(env, gsettings, &mut record, &mut report, "font-name", &families.gtk_ui())?;
+        apply_gsettings(env, gsettings, &mut record, &mut report, "document-font-name", &families.gtk_document())?;
+        apply_gsettings(env, gsettings, &mut record, &mut report, "monospace-font-name", &families.gtk_mono())?;
     }
     if targets.qt {
         let general = families.qt_font(&families.ui);
@@ -327,12 +364,7 @@ pub fn apply(families: &Families, targets: Targets, env: &ApplyEnv, gsettings: &
         }
     }
 
-    record.families = Some(families.clone());
-    if record.before.is_empty() {
-        let _ = std::fs::remove_file(&env.record);
-    } else {
-        save_record(env, &record)?;
-    }
+    checkpoint(env, &record)?;
     Ok(report)
 }
 
@@ -341,108 +373,156 @@ pub fn restore(env: &ApplyEnv, gsettings: &dyn FontGsettings) -> Result<Report, 
     restore_groups(env, gsettings, None)
 }
 
+fn persist_record(env: &ApplyEnv, record: &Record) -> Result<(), String> {
+    if record.before.is_empty() {
+        remove_file_ok(&env.record)
+    } else {
+        save_record(env, record)
+    }
+}
+
 fn restore_groups(env: &ApplyEnv, gsettings: &dyn FontGsettings, only: Option<&[String]>) -> Result<Report, String> {
     let mut record = load(&env.record).unwrap_or_default();
     if record.before.is_empty() {
         let _ = std::fs::remove_file(&env.record);
         return Ok(Report::default());
     }
-    let report = restore_groups_inner(env, gsettings, &mut record, only)?;
-    if record.before.is_empty() {
-        if let Err(e) = std::fs::remove_file(&env.record)
-            && e.kind() != std::io::ErrorKind::NotFound
-        {
-            return Err(e.to_string());
+    match restore_groups_inner(env, gsettings, &mut record, only) {
+        Ok(report) => {
+            persist_record(env, &record)?;
+            Ok(report)
         }
-    } else {
-        save_record(env, &record)?;
+        Err(err) => {
+            // Keep remaining ownership so a retry can finish the restore.
+            let _ = persist_record(env, &record);
+            Err(err)
+        }
     }
-    Ok(report)
 }
 
 fn restore_groups_inner(env: &ApplyEnv, gsettings: &dyn FontGsettings, record: &mut Record, only: Option<&[String]>) -> Result<Report, String> {
     let mut report = Report::default();
     let applied = record.families.clone();
+    let mut pending = std::mem::take(&mut record.before);
     let mut keep = Vec::new();
-    for before in std::mem::take(&mut record.before) {
+    let idx = 0;
+    while idx < pending.len() {
+        let before = &pending[idx];
         if only.is_some_and(|groups| !groups.iter().any(|g| g == &before.group)) {
-            keep.push(before);
+            keep.push(pending.remove(idx));
             continue;
         }
         if before.target.starts_with("gsettings:") {
-            let key = before.target.trim_start_matches("gsettings:");
-            let Some(now) = gsettings.get(key) else {
+            let key = before.target.trim_start_matches("gsettings:").to_string();
+            let target = before.target.clone();
+            let previous = before.value.clone();
+            let Some(now) = gsettings.get(&key) else {
+                pending.remove(idx);
                 continue;
             };
-            let mandara = applied.as_ref().map(|f| match key {
+            let mandara = applied.as_ref().map(|f| match key.as_str() {
                 "font-name" => f.gtk_ui(),
                 "document-font-name" => f.gtk_document(),
                 "monospace-font-name" => f.gtk_mono(),
                 _ => String::new(),
             });
             if mandara.as_ref() == Some(&now) {
-                if let Some(old) = &before.value
-                    && gsettings.set(key, old)
-                {
-                    report.changed.push(before.target.clone());
+                match previous {
+                    Some(ref old) if gsettings.set(&key, old) => {
+                        report.changed.push(target);
+                        pending.remove(idx);
+                    }
+                    Some(_) => {
+                        keep.push(pending.remove(idx));
+                        keep.extend(pending.drain(idx..));
+                        record.before = keep;
+                        return Err(format!("gsettings set {GSETTINGS_SCHEMA} {key} failed during restore"));
+                    }
+                    None => {
+                        report.changed.push(target);
+                        pending.remove(idx);
+                    }
                 }
             } else {
-                report.kept.push(before.target.clone());
-                keep.push(before);
+                report.kept.push(target);
+                keep.push(pending.remove(idx));
             }
             continue;
         }
         if before.target == FONTCONFIG_REL {
             let path = env.config.join(FONTCONFIG_REL);
             let Ok(now) = std::fs::read_to_string(&path) else {
+                pending.remove(idx);
                 continue;
             };
             let ours = applied.as_ref().map(fontconfig_body);
             if ours.as_deref() != Some(now.as_str()) {
                 report.kept.push(before.target.clone());
-                keep.push(before);
+                keep.push(pending.remove(idx));
                 continue;
             }
-            if before.created {
-                let _ = std::fs::remove_file(&path);
-                if let Some(dir) = path.parent() {
-                    let _ = std::fs::remove_dir(dir);
+            let created = before.created;
+            let old = before.value.clone();
+            if let Err(err) = (|| -> Result<(), String> {
+                if created {
+                    remove_file_ok(&path)?;
+                    if let Some(dir) = path.parent() {
+                        let _ = std::fs::remove_dir(dir);
+                    }
+                } else if let Some(old) = &old {
+                    write(&path, old)?;
+                } else {
+                    remove_file_ok(&path)?;
                 }
-            } else if let Some(old) = &before.value {
-                write(&path, old)?;
-            } else {
-                let _ = std::fs::remove_file(&path);
+                Ok(())
+            })() {
+                keep.push(pending.remove(idx));
+                keep.extend(pending.drain(idx..));
+                record.before = keep;
+                return Err(err);
             }
             report.changed.push(before.target.clone());
+            pending.remove(idx);
             continue;
         }
         let Some((rel, section, key)) = ini_meta(&before.target) else {
-            keep.push(before);
+            keep.push(pending.remove(idx));
             continue;
         };
         let path = env.config.join(rel);
         let Ok(text) = std::fs::read_to_string(&path) else {
+            pending.remove(idx);
             continue;
         };
         let now = ini_get(&text, section, key);
         let expected = applied.as_ref().and_then(|f| expected_ini(rel, key, f));
         if now != expected {
             report.kept.push(before.target.clone());
-            keep.push(before);
+            keep.push(pending.remove(idx));
             continue;
         }
         let next = ini_set(&text, section, key, before.value.as_deref());
-        if before.created && only_headers(&next) {
-            std::fs::remove_file(&path).map_err(|e| e.to_string())?;
-            if let Some(dir) = path.parent().filter(|d| *d != env.config) {
-                let _ = std::fs::remove_dir(dir);
+        let created = before.created;
+        if let Err(err) = (|| -> Result<(), String> {
+            if created && only_headers(&next) {
+                remove_file_ok(&path)?;
+                if let Some(dir) = path.parent().filter(|d| *d != env.config) {
+                    let _ = std::fs::remove_dir(dir);
+                }
+            } else {
+                write(&path, &next)?;
             }
-        } else {
-            write(&path, &next)?;
+            Ok(())
+        })() {
+            keep.push(pending.remove(idx));
+            keep.extend(pending.drain(idx..));
+            record.before = keep;
+            return Err(err);
         }
         if !report.changed.iter().any(|c| c == rel) {
             report.changed.push(rel.into());
         }
+        pending.remove(idx);
     }
     record.before = keep;
     if record.before.is_empty() {
@@ -573,5 +653,48 @@ mod tests {
         apply(&families(), no_fc, &env, &gs).unwrap();
         assert!(!env.config.join(FONTCONFIG_REL).exists(), "fontconfig taken back");
         assert!(env.config.join("gtk-3.0/settings.ini").exists(), "gtk stays");
+    }
+
+    /// gsettings that refuse every set — used to prove ownership is retained.
+    struct FailSetGs(FakeGs);
+
+    impl FontGsettings for FailSetGs {
+        fn get(&self, key: &str) -> Option<String> {
+            self.0.get(key)
+        }
+        fn set(&self, _key: &str, _value: &str) -> bool {
+            false
+        }
+    }
+
+    #[test]
+    fn apply_checkpoints_before_later_target_fails() {
+        let root = tempfile::tempdir().unwrap();
+        let env = ApplyEnv::under(root.path());
+        let gs = FailSetGs(FakeGs::default());
+        gs.0.0.borrow_mut().insert("font-name".into(), "Old 10".into());
+        let targets = Targets { fontconfig: true, gtk: true, qt: false, kde: false, browsers: false };
+        assert!(apply(&families(), targets, &env, &gs).is_err());
+        assert!(env.config.join(FONTCONFIG_REL).exists(), "fontconfig already written");
+        assert!(active(&env), "ownership persisted for restore");
+        let record = load(&env.record).expect("record");
+        assert!(record.before.iter().any(|b| b.target == FONTCONFIG_REL));
+        assert!(record.before.iter().any(|b| b.target == "gsettings:font-name"));
+    }
+
+    #[test]
+    fn gsettings_restore_failure_keeps_ownership() {
+        let root = tempfile::tempdir().unwrap();
+        let env = ApplyEnv::under(root.path());
+        let gs = FakeGs::default();
+        gs.0.borrow_mut().insert("font-name".into(), "Old 10".into());
+        let targets = Targets { fontconfig: false, gtk: true, qt: false, kde: false, browsers: false };
+        apply(&families(), targets, &env, &gs).unwrap();
+        assert_eq!(gs.get("font-name").as_deref(), Some("Inter 11"));
+        let failing = FailSetGs(FakeGs(RefCell::new(gs.0.borrow().clone())));
+        assert!(restore(&env, &failing).is_err());
+        assert!(active(&env), "failed restore must keep the record");
+        let record = load(&env.record).expect("record");
+        assert!(record.before.iter().any(|b| b.target == "gsettings:font-name"));
     }
 }
