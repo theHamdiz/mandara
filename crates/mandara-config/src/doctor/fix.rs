@@ -134,7 +134,7 @@ pub fn apply_in(report: &Report, id: &str, fix: Fix, env: &CheckEnv, regenerate:
             }
             let backup = backup_files(target, std::slice::from_ref(&file), backups)?;
             crate::store::write_atomic(&file, new.as_bytes())?;
-            Ok(settle(report, id, fix, env, backup))
+            settle(report, id, fix, env, backup)
         }
         Fix::Regenerate => {
             if d.owner != Owner::Mandara {
@@ -153,7 +153,7 @@ pub fn apply_in(report: &Report, id: &str, fix: Fix, env: &CheckEnv, regenerate:
                 }
                 return Err(err.context("regenerating Mandara's drop-in"));
             }
-            let outcome = settle(report, id, fix, env, backup);
+            let outcome = settle(report, id, fix, env, backup)?;
             if outcome.rolled_back
                 && let Some((version, key)) = &learned
             {
@@ -165,15 +165,18 @@ pub fn apply_in(report: &Report, id: &str, fix: Fix, env: &CheckEnv, regenerate:
 }
 
 /// Re-checks after a change; restores `backup` when the result is worse.
-fn settle(before: &Report, id: &str, fix: Fix, env: &CheckEnv, backup: PathBuf) -> Outcome {
+/// A rollback that fails is an error that names the backup, never a
+/// reported `rolled_back`: the files are then still in their changed state.
+fn settle(before: &Report, id: &str, fix: Fix, env: &CheckEnv, backup: PathBuf) -> Result<Outcome> {
     let d = before.find(id).cloned();
     let mut after = check_with(before.target, &before.root, env);
     let worse = is_worse(before, &after);
-    if worse && restore(&backup).is_ok() {
+    if worse {
+        restore(&backup).with_context(|| format!("the change made the config worse and putting the old files back failed; they are in {}", backup.display()))?;
         after = check_with(before.target, &before.root, env);
     }
     let resolved = !worse && d.is_some_and(|d| !after.diagnostics.iter().any(|x| x.message == d.message && x.file == d.file && x.kind == d.kind));
-    Outcome { fix, backup: Some(backup), rolled_back: worse, resolved, after }
+    Ok(Outcome { fix, backup: Some(backup), rolled_back: worse, resolved, after })
 }
 
 pub use super::comparison::is_worse;
@@ -301,7 +304,25 @@ pub fn backup_files(target: Target, files: &[PathBuf], root: &Path) -> Result<Pa
         }
     }
     std::fs::write(dir.join("manifest.txt"), manifest)?;
+    prune_backups(root, MAX_BACKUPS);
     Ok(dir)
+}
+
+/// Backup folders kept; older ones are deleted when a new one is made.
+const MAX_BACKUPS: usize = 20;
+
+/// Deletes the oldest backups in `root` beyond `keep` (folders named by
+/// their timestamp, so name order is age order; only folders with a
+/// manifest are Mandara's).
+fn prune_backups(root: &Path, keep: usize) {
+    let mut found: Vec<PathBuf> = std::fs::read_dir(root).map(|d| d.flatten().map(|e| e.path()).filter(|p| p.join("manifest.txt").is_file()).collect()).unwrap_or_default();
+    found.sort();
+    let excess = found.len().saturating_sub(keep);
+    for old in &found[..excess] {
+        if let Err(error) = std::fs::remove_dir_all(old) {
+            tracing::warn!("removing old doctor backup {}: {error}", old.display());
+        }
+    }
 }
 
 /// Puts a backup back: every file as it was (a file that didn't exist is
@@ -368,7 +389,13 @@ pub fn guarded_write_in(before: &Report, env: &CheckEnv, write: &dyn Fn() -> Res
     }
     let target = before.target;
     let lock = mandara_theme::templates::WriteLock::new(generated)?;
-    let previous = std::fs::read(generated).ok();
+    // Only a missing drop-in has nothing to put back: a read that failed must
+    // not turn a rollback into deleting the file.
+    let previous = match std::fs::read(generated) {
+        Ok(bytes) => Some(bytes),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error).with_context(|| format!("reading {}", generated.display())),
+    };
     write()?;
     let mut written = mandara_theme::templates::FileStamp::at(lock.target())?;
     let mut after = check_with(target, &before.root, env);

@@ -7,6 +7,7 @@ use std::io::{self, Read as _};
 use std::os::unix::fs::MetadataExt as _;
 use std::path::{Path, PathBuf};
 use std::rc::{Rc, Weak};
+use std::time::{Duration, Instant};
 
 thread_local! {
     // Nested ownership journals can live beside the file being edited.
@@ -31,7 +32,7 @@ fn directory(path: &Path) -> io::Result<Rc<Directory>> {
         return Ok(existing);
     }
     let file = File::open(path)?;
-    file.lock()?;
+    lock_before_deadline(&file, path)?;
     let directory = Rc::new(Directory {
         path: path.into(),
         _file: file,
@@ -41,6 +42,30 @@ fn directory(path: &Path) -> io::Result<Rc<Directory>> {
             .insert(path.into(), Rc::downgrade(&directory));
     });
     Ok(directory)
+}
+
+/// How long a writer waits for another process to finish its own write. A
+/// holder normally keeps the lock for milliseconds; the longest is a
+/// compositor checker validating a config it just wrote.
+const LOCK_TIMEOUT: Duration = Duration::from_secs(30);
+/// How often a waiting writer tries the lock again.
+const LOCK_RETRY: Duration = Duration::from_millis(10);
+
+/// Takes the exclusive lock, giving up with `TimedOut` after
+/// [`LOCK_TIMEOUT`]: a blocking `lock()` would hang its thread (and a shell
+/// flushing at shutdown with it) for as long as a stuck process holds it.
+fn lock_before_deadline(file: &File, path: &Path) -> io::Result<()> {
+    let deadline = Instant::now() + LOCK_TIMEOUT;
+    loop {
+        match file.try_lock() {
+            Ok(()) => return Ok(()),
+            Err(fs::TryLockError::Error(error)) => return Err(error),
+            Err(fs::TryLockError::WouldBlock) if Instant::now() >= deadline => {
+                return Err(io::Error::new(io::ErrorKind::TimedOut, format!("another process is still writing in {}", path.display())));
+            }
+            Err(fs::TryLockError::WouldBlock) => std::thread::sleep(LOCK_RETRY),
+        }
+    }
 }
 
 /// An identity captured from the actual file descriptor, including its contents' revision.

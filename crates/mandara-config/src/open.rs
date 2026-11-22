@@ -329,14 +329,17 @@ pub fn handler_for_types(env: &OpenEnv, types: &[String]) -> Option<Handler> {
         }
     }
     let removed = |mime: &str, id: &str| lists.iter().any(|text| listed(text, "[Removed Associations]", mime).any(|r| r == id));
+    let declared: Vec<std::cell::OnceCell<Declared>> = env.app_dirs.iter().map(|_| std::cell::OnceCell::new()).collect();
     for mime in types {
         for text in &lists {
             if let Some(h) = listed(text, "[Added Associations]", mime).filter(|id| !removed(mime, id)).find_map(pick) {
                 return Some(h);
             }
         }
-        for dir in &env.app_dirs {
-            if let Some(h) = declared_in(dir, mime).into_iter().filter(|id| !removed(mime, id)).find_map(|id| pick(&id)) {
+        // Read once per lookup, not once per type: a folder without a
+        // `mimeinfo.cache` is a scan of every entry in it.
+        for (dir, index) in env.app_dirs.iter().zip(&declared) {
+            if let Some(h) = index.get_or_init(|| Declared::read(dir)).ids_for(mime).into_iter().filter(|id| !removed(mime, id)).find_map(|id| pick(&id)) {
                 return Some(h);
             }
         }
@@ -344,23 +347,43 @@ pub fn handler_for_types(env: &OpenEnv, types: &[String]) -> Option<Handler> {
     None
 }
 
-/// Desktop ids in `dir` that declare `mime`: from its `mimeinfo.cache`, or
-/// by reading its entries when it has none.
-fn declared_in(dir: &Path, mime: &str) -> Vec<String> {
-    if let Ok(cache) = std::fs::read_to_string(dir.join("mimeinfo.cache")) {
-        return listed(&cache, "[MIME Cache]", mime).map(String::from).collect();
+/// Largest desktop entry read when a folder has to be scanned.
+const DESKTOP_MAX_BYTES: u64 = 256 << 10;
+
+/// What one applications folder says its apps open.
+enum Declared {
+    /// Its `mimeinfo.cache`.
+    Cache(String),
+    /// No cache: every entry's id and MIME types, sorted by id.
+    Entries(Vec<(String, Vec<String>)>),
+}
+
+impl Declared {
+    fn read(dir: &Path) -> Self {
+        if let Ok(cache) = std::fs::read_to_string(dir.join("mimeinfo.cache")) {
+            return Self::Cache(cache);
+        }
+        let Ok(files) = std::fs::read_dir(dir) else { return Self::Entries(Vec::new()) };
+        let mut entries: Vec<(String, Vec<String>)> = files
+            .flatten()
+            .filter_map(|f| {
+                let id = f.file_name().to_string_lossy().into_owned();
+                let text = id.ends_with(".desktop").then(|| crate::store::read_to_string_capped(&f.path(), DESKTOP_MAX_BYTES).ok()).flatten()?;
+                let mime_types = parse_desktop(&id, &text).mime_types;
+                Some((id, mime_types))
+            })
+            .collect();
+        entries.sort_by(|a, b| a.0.cmp(&b.0));
+        Self::Entries(entries)
     }
-    let Ok(files) = std::fs::read_dir(dir) else { return Vec::new() };
-    let mut ids: Vec<String> = files
-        .flatten()
-        .filter_map(|f| {
-            let id = f.file_name().to_string_lossy().into_owned();
-            let text = id.ends_with(".desktop").then(|| std::fs::read_to_string(f.path()).ok()).flatten()?;
-            parse_desktop(&id, &text).mime_types.iter().any(|m| m == mime).then_some(id)
-        })
-        .collect();
-    ids.sort();
-    ids
+
+    /// Desktop ids that declare `mime`.
+    fn ids_for(&self, mime: &str) -> Vec<String> {
+        match self {
+            Self::Cache(cache) => listed(cache, "[MIME Cache]", mime).map(String::from).collect(),
+            Self::Entries(entries) => entries.iter().filter(|(_, types)| types.iter().any(|m| m == mime)).map(|(id, _)| id.clone()).collect(),
+        }
+    }
 }
 
 /// The file manager: Studio → Applications → Preferred apps (a desktop id

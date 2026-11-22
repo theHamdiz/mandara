@@ -445,7 +445,7 @@ fn every_setting_survives_export_and_import() {
         let expected = registry::get(&next, s);
         for changes_only in [true, false] {
             let (text, _) = export_text(&next, ExportOptions { changes_only, redact: false }).unwrap();
-            match import_text(&text) {
+            match import_text(&text, &base) {
                 Ok(back) if same(&registry::get(&back, s), &expected) => {}
                 Ok(back) => {
                     failures.insert((s.path, changes_only), format!("exported {expected}, imported {}", registry::get(&back, s)));
@@ -472,7 +472,7 @@ fn unset_optionals_survive_a_changes_only_export() {
         }
         let Ok(next) = registry::set(&base, s, Value::Null) else { continue };
         let (text, _) = export_text(&next, ExportOptions { changes_only: true, redact: false }).unwrap();
-        let back = import_text(&text).unwrap();
+        let back = import_text(&text, &base).unwrap();
         if !registry::get(&back, s).is_null() {
             failures.push(s.path);
         }

@@ -475,6 +475,9 @@ mod affinity {
 
 /// Debounce of the config file watcher.
 const CONFIG_WATCH_DEBOUNCE: Duration = Duration::from_millis(150);
+/// How long after startup a "settings were reset" notice waits, so the
+/// notification service of the session is up to show it.
+const REPAIRED_NOTICE_DELAY: Duration = Duration::from_secs(5);
 
 /// Every shipped plugin and command.
 fn build_registry() -> PluginRegistry {
@@ -492,6 +495,7 @@ fn run_shell() -> Result<()> {
     let outputs = std::thread::Builder::new().name("mandara-outputs".into()).spawn(mandara_core::query_outputs).context("spawning the output query")?;
     let store = ConfigStore::open_default().context("opening config")?;
     tracing::info!("config: {} (allocator: {})", store.path().display(), alloc::NAME);
+    let repaired = store.repaired().cloned();
     alloc::start_upkeep();
     // A new Studio icon reaches installs the updater only swapped the binary of.
     let _ = std::thread::Builder::new().name("mandara-icon".into()).spawn(|| {
@@ -529,6 +533,13 @@ fn run_shell() -> Result<()> {
         cx.set_global(Fonts::resolve(&cfg.typography, cx));
         cx.set_global(build_registry());
         let (config, _shell) = mandara_ui::init_state(store, cx);
+        if let Some(repaired) = repaired {
+            cx.spawn(async move |cx| {
+                cx.background_executor().timer(REPAIRED_NOTICE_DELAY).await;
+                cx.update(|cx| mandara_ui::state::announce_repaired_config(&repaired, cx));
+            })
+            .detach();
+        }
         mandara_ui::hub::init_hub(cx);
         cx.set_global(mandara_ui::overlays::Outputs(outputs.clone()));
         mandara_ui::overlays::init_overlays(cx);

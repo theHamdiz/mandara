@@ -64,5 +64,5 @@ mod validator_tests;
 
 pub use motion::MotionConfig;
 pub use schema::*;
-pub use store::{ConfigStore, ConfigWatcher, ReloadOutcome, write_atomic};
+pub use store::{ConfigStore, ConfigWatcher, Repaired, ReloadOutcome, write_atomic};
 pub mod agent;

@@ -4492,6 +4492,7 @@ dependencies = [
  "rustix",
  "serde",
  "serde_json",
+ "sha2",
  "smallvec",
  "tempfile",
  "toml 1.2.0+spec-1.1.0",

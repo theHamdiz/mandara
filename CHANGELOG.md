@@ -16,6 +16,7 @@ About → What's new shows it too.
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 Mandara's default typefaces are Inter, Alexandria (including Arabic) and
 CaskaydiaCove Nerd Font Mono, with Nerd Font substitutes until Maintenance
 downloads the real face. Opt-in system font sync can push those families to
@@ -206,6 +207,44 @@ Mandara Login is sturdier: switching to it can be undone cleanly if it fails, th
 - **The restore-previous-manager record is protected.** It is kept in the root-only backup folder and validated before use.
 - **The no-session fallback uses your own login shell** instead of the login screen's.
 >>>>>>> pr-223
+=======
+Your settings are safer: imports can't grant plugin permissions, a damaged
+settings file is repaired instead of ignored, and failed saves are retried and
+reported.
+
+### Fixed
+
+- **Importing settings can no longer grant plugin permissions.** An imported
+  file, a full profile or a hand-made profile now keeps the plugin
+  permissions and the on/off state of plugins you already have; permissions
+  are only given in Studio → Plugins.
+- **A settings file with one bad value no longer resets everything.** Mandara
+  keeps every value it can read, puts the others back to their defaults, tells
+  you which ones, and keeps your original file next to it
+  (`config.toml.invalid-…`). Settings a newer version added are kept when an
+  older one saves.
+- **A settings change that can't be saved is no longer lost silently.** Mandara
+  retries, and if it still fails it shows a notification that opens Studio.
+- **Import, profiles and backups are safer.** Studio no longer freezes while
+  importing a settings file or writing the support report; two profiles whose
+  names look alike (“Work” and “work!”) can't overwrite or delete each other;
+  backups follow symlinked dotfiles, skip regenerated files and keep only the
+  last 20; Maintenance repair, restore and factory reset check the file the
+  way the shell does and write it under the same lock as a save.
+- **Fixing your compositor config is safer.** Retiring conflicting lines
+  changes all files or none, keeps Windows line endings, refuses lines that
+  changed since the scan and no longer waits forever for a stuck checker; the
+  include line is only taken back if you haven't edited the file meanwhile;
+  Config doctor reports a rollback that failed instead of claiming success
+  and keeps 20 backups.
+- **Downloaded fonts are checked.** Studio installs fonts from a pinned
+  release and refuses a file whose checksum differs.
+- **Smaller fixes.** Setting a default app or an autostart entry no longer
+  replaces a file Mandara couldn't read; autostart ids can't point outside
+  the autostart folder; with no home folder Mandara writes nowhere instead of
+  into `/tmp`; saving no longer waits forever on another process's lock;
+  the theme list is read once instead of on every lookup.
+>>>>>>> pr-224
 
 ## 0.37.0 — 2026-11-22
 

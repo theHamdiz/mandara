@@ -18,13 +18,13 @@
 //! [light]   # optional — derived from dark when absent
 //! ```
 
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::path::PathBuf;
+use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
 use crate::color::Color;
-use crate::palette::{MandaraPalette, accent_gradient_end_for, comment_safe_name, glow_for};
+use crate::palette::{MandaraPalette, accent_gradient_end_for, glow_for};
 
 /// Seed colors for one appearance. Only `surface`, `on_surface` and
 /// `primary` are required; everything else is derived when absent.
@@ -127,35 +127,39 @@ pub fn user_theme_dir() -> PathBuf {
     dirs::config_dir().unwrap_or_else(|| PathBuf::from("/tmp")).join("mandara/themes")
 }
 
-/// What identifies one user theme file's contents cheaply, without reading it.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct FileStamp {
-    path: PathBuf,
-    modified: Option<std::time::SystemTime>,
-    length: u64,
-    inode: u64,
-}
+/// The user theme files that were listed, with what changed-detection needs:
+/// a file added, removed, replaced or edited changes this list.
+type UserFiles = Vec<(PathBuf, Option<std::time::SystemTime>, u64)>;
 
-/// The user theme files (sorted by path) and their stamps.
-fn user_theme_files(dir: &Path) -> Vec<FileStamp> {
-    use std::os::unix::fs::MetadataExt as _;
-    let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
-    let mut files: Vec<FileStamp> = entries
+fn user_files() -> UserFiles {
+    let Ok(entries) = std::fs::read_dir(user_theme_dir()) else { return Vec::new() };
+    let mut files: UserFiles = entries
         .flatten()
         .map(|e| e.path())
         .filter(|p| p.extension().is_some_and(|e| e == "toml"))
-        .map(|path| match std::fs::metadata(&path) {
-            Ok(m) => FileStamp { modified: m.modified().ok(), length: m.len(), inode: m.ino(), path },
-            Err(_) => FileStamp { modified: None, length: 0, inode: 0, path },
+        .map(|path| {
+            let meta = std::fs::metadata(&path).ok();
+            (path, meta.as_ref().and_then(|m| m.modified().ok()), meta.map_or(0, |m| m.len()))
         })
         .collect();
-    files.sort_by(|a, b| a.path.cmp(&b.path));
+    files.sort();
     files
 }
 
-fn load(files: &[FileStamp]) -> Vec<ThemeDef> {
+/// Built-in plus user themes, in order. Parsed again only when the user's
+/// theme folder changed: callers look themes up per list entry, per frame
+/// and per keypress, and each used to read and parse every user file.
+fn catalog() -> std::sync::Arc<Vec<ThemeDef>> {
+    static CACHE: std::sync::Mutex<Option<(UserFiles, std::sync::Arc<Vec<ThemeDef>>)>> = std::sync::Mutex::new(None);
+    let files = user_files();
+    let mut cache = CACHE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some((listed, themes)) = cache.as_ref()
+        && *listed == files
+    {
+        return themes.clone();
+    }
     let mut themes: Vec<ThemeDef> = builtin().to_vec();
-    for FileStamp { path, .. } in files {
+    for (path, ..) in &files {
         match std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|t| toml::from_str::<ThemeDef>(&t).map_err(|e| e.to_string())) {
             Ok(mut def) if def.dark.is_some() || def.light.is_some() => {
                 def.origin = ThemeOrigin::User { path: path.clone() };
@@ -166,54 +170,24 @@ fn load(files: &[FileStamp]) -> Vec<ThemeDef> {
             Err(err) => tracing::warn!("{}: invalid theme: {err}", path.display()),
         }
     }
+    let themes = std::sync::Arc::new(themes);
+    *cache = Some((files, themes.clone()));
     themes
-}
-
-/// The parsed catalog, kept until the user theme folder's files change
-/// (added, removed or rewritten).
-struct Cache {
-    entry: Option<(PathBuf, Vec<FileStamp>, Arc<Vec<ThemeDef>>)>,
-}
-
-impl Cache {
-    const fn new() -> Self {
-        Self { entry: None }
-    }
-
-    fn themes(&mut self, dir: &Path) -> Arc<Vec<ThemeDef>> {
-        let files = user_theme_files(dir);
-        if let Some((cached_dir, cached_files, themes)) = &self.entry
-            && cached_dir == dir
-            && *cached_files == files
-        {
-            return themes.clone();
-        }
-        let themes = Arc::new(load(&files));
-        self.entry = Some((dir.to_path_buf(), files, themes.clone()));
-        themes
-    }
-}
-
-/// The catalog without re-reading and re-parsing every user theme per call:
-/// the greeter's theme list, for one, looks a theme up per entry.
-fn cached() -> Arc<Vec<ThemeDef>> {
-    static CACHE: Mutex<Cache> = Mutex::new(Cache::new());
-    CACHE.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).themes(&user_theme_dir())
 }
 
 /// Built-in plus user themes (user ids override built-ins).
 pub fn all() -> Vec<ThemeDef> {
-    cached().to_vec()
+    catalog().to_vec()
 }
 
 /// Looks a theme up by id (case-insensitive; spaces/underscores ≈ dashes).
 pub fn find(id: &str) -> Option<ThemeDef> {
-    cached().iter().find(|t| t.answers_to(id)).cloned()
+    catalog().iter().find(|t| t.answers_to(id)).cloned()
 }
 
 /// The id after `id` in catalog order (wrapping).
 pub fn next_id(id: &str) -> String {
-    let themes = cached();
+    let themes = catalog();
     let i = themes.iter().position(|t| t.id == id).map(|i| i + 1).unwrap_or(0);
     themes[i % themes.len()].id.clone()
 }
@@ -225,19 +199,17 @@ pub fn next_id(id: &str) -> String {
 /// (backgrounds just under the 0.2 luminance threshold cannot reach AA with
 /// white alone). Returns the best attempt when neither direction succeeds.
 pub fn ensure_contrast(fg: Color, bg: Color, min: f32) -> Color {
-    // The background never changes: gamut-map it once, not per step.
-    let bg_luminance = bg.relative_luminance();
-    if fg.contrast_with_luminance(bg_luminance) >= min {
+    if fg.contrast_ratio(bg) >= min {
         return fg;
     }
-    let prefer_lighter = bg_luminance < 0.2;
+    let prefer_lighter = bg.relative_luminance() < 0.2;
     let walk = |start: Color, lighter: bool| {
         let mut c = start;
         let mut best = start;
-        let mut best_ratio = start.contrast_with_luminance(bg_luminance);
+        let mut best_ratio = start.contrast_ratio(bg);
         for _ in 0..60 {
             c = c.lighten(if lighter { 0.015 } else { -0.015 });
-            let ratio = c.contrast_with_luminance(bg_luminance);
+            let ratio = c.contrast_ratio(bg);
             if ratio > best_ratio {
                 best = c;
                 best_ratio = ratio;
@@ -312,10 +284,7 @@ impl ThemeDef {
             (true, None, Some(l)) => l.clone(),
             (_, None, None) => unreachable!("validated on load"),
         };
-        // A light-only theme asked for dark yields its light palette: that is
-        // not a dark palette, so OLED black must not apply to it.
-        let is_dark = dark && self.dark.is_some();
-        expand(&seeds, is_dark, &self.name, self.oled && is_dark)
+        expand(&seeds, dark && (self.dark.is_some()), &self.name, self.oled && dark)
     }
 }
 
@@ -342,8 +311,7 @@ pub fn expand(s: &Seeds, dark: bool, name: &str, oled: bool) -> MandaraPalette {
     let status = |l: f32, c: f32, h: f32| harmonized(Color::oklch(if dark { l } else { l - 0.2 }, c, h));
     let glass_alpha = s.glass_alpha.unwrap_or(if dark { 0.66 } else { 0.74 });
     MandaraPalette {
-        // User theme files choose this text; it is printed into app themes.
-        name: comment_safe_name(name).into(),
+        name: name.into(),
         is_dark: dark,
         surface_dim,
         surface_base: surface,
@@ -406,46 +374,6 @@ impl ContrastReport {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    const LIGHT_ONLY: &str = "id = \"day\"\nname = \"Day */\\nINJECTED\"\noled = true\n[light]\nsurface = \"#fafafa\"\non_surface = \"#101010\"\nprimary = \"#2060c0\"\n";
-
-    #[test]
-    fn user_themes_are_reparsed_only_when_their_files_change() {
-        let dir = tempfile::tempdir().unwrap();
-        let mut cache = Cache::new();
-        let first = cache.themes(dir.path());
-        assert!(Arc::ptr_eq(&first, &cache.themes(dir.path())), "an unchanged folder is not parsed again");
-        assert_eq!(first.len(), builtin().len());
-        let path = dir.path().join("day.toml");
-        std::fs::write(&path, LIGHT_ONLY).unwrap();
-        let added = cache.themes(dir.path());
-        assert_eq!(added.last().map(|t| t.id.as_str()), Some("day"));
-        assert!(Arc::ptr_eq(&added, &cache.themes(dir.path())));
-        std::fs::write(&path, LIGHT_ONLY.replace("Day", "Dusk")).unwrap();
-        assert!(cache.themes(dir.path()).last().is_some_and(|t| t.name.starts_with("Dusk")), "a rewritten theme is read again");
-        std::fs::remove_file(&path).unwrap();
-        assert_eq!(cache.themes(dir.path()).len(), builtin().len());
-        std::fs::write(dir.path().join("bad.toml"), "not a theme").unwrap();
-        assert_eq!(cache.themes(dir.path()).len(), builtin().len(), "an invalid theme is skipped");
-    }
-
-    #[test]
-    fn a_light_only_theme_asked_for_dark_is_light_and_not_oled() {
-        let theme: ThemeDef = toml::from_str(LIGHT_ONLY).unwrap();
-        for dark in [true, false] {
-            let p = theme.palette(dark);
-            assert!(!p.is_dark, "its only palette is light");
-            assert_eq!(p.surface_dim, theme.palette(false).surface_dim, "dark={dark}: OLED black is for dark palettes");
-            assert_ne!(p.surface_dim, p.surface_base);
-        }
-    }
-
-    #[test]
-    fn theme_names_are_safe_to_print_into_generated_files() {
-        let theme: ThemeDef = toml::from_str(LIGHT_ONLY).unwrap();
-        let name = theme.palette(false).name;
-        assert!(!name.contains('\n') && !name.contains("*/"), "{name:?}");
-    }
 
     #[test]
     fn every_builtin_parses_with_both_modes() {

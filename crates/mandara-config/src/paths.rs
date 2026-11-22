@@ -4,8 +4,14 @@ use std::path::{Path, PathBuf};
 
 const APP_DIR: &str = "mandara";
 
+/// The place standing in for a home directory when the account has none (no
+/// `$HOME`, no passwd entry). It is never writable, so config, data and cache
+/// writes fail with an error instead of landing in a world-writable folder
+/// such as `/tmp`, where another user could plant files or symlinks first.
+const NO_HOME: &str = "/nonexistent";
+
 pub(crate) fn home() -> PathBuf {
-    dirs::home_dir().unwrap_or_else(|| PathBuf::from("/tmp"))
+    dirs::home_dir().unwrap_or_else(|| PathBuf::from(NO_HOME))
 }
 
 /// `$XDG_CONFIG_HOME/mandara` (usually `~/.config/mandara`).
@@ -37,9 +43,15 @@ pub fn cache_dir() -> PathBuf {
     dirs::cache_dir().unwrap_or_else(|| home().join(".cache")).join(APP_DIR)
 }
 
+/// `$XDG_DATA_HOME` (usually `~/.local/share`): the folder other programs
+/// look in too (fonts, icons, applications).
+pub fn data_home() -> PathBuf {
+    dirs::data_dir().unwrap_or_else(|| home().join(".local/share"))
+}
+
 /// User data that is not configuration (notes, to-dos), `~/.local/share/mandara/`.
 pub fn data_dir() -> PathBuf {
-    dirs::data_dir().unwrap_or_else(|| home().join(".local/share")).join(APP_DIR)
+    data_home().join(APP_DIR)
 }
 
 /// Per-user state that is neither config nor data (last sidebar tab…),
