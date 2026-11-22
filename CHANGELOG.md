@@ -6,6 +6,9 @@ About → What's new shows it too.
 
 ## Unreleased
 
+The bar stays up on Umbriel and other wlroots compositors at fractional
+scales, and a lost display connection now restarts the shell.
+
 ### Fixed
 
 - **The bar no longer vanishes for good on Umbriel and other wlroots
