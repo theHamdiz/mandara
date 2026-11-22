@@ -540,8 +540,11 @@ fn new_buffer(shm: &wl_shm::WlShm, qh: &QueueHandle<State>, width: u32, height: 
 /// laptop) must not make up the repeats it missed in one burst: that would
 /// type extra characters into the password.
 fn next_repeat(due: Instant, now: Instant, rate_hz: i32) -> Instant {
-    let next = due + Duration::from_secs_f32(1.0 / rate_hz.max(1) as f32);
-    if next > now { next } else { now + Duration::from_secs_f32(1.0 / rate_hz.max(1) as f32) }
+    // Integer nanos avoid f32 rounding (1/25 ≠ 40 ms in float), which made
+    // the catch-up test fail on aarch64 by a single nanosecond.
+    let period = Duration::from_nanos(1_000_000_000 / u64::from(rate_hz.max(1) as u32));
+    let next = due + period;
+    if next > now { next } else { now + period }
 }
 
 /// Copies premultiplied RGBA into the shm buffer (`ARGB8888` is BGRA in

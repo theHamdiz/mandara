@@ -192,8 +192,10 @@ impl Restarts {
 /// (`nanosleep` is cut short by the signal handler).
 fn sleep_unless_stopped(duration: Duration, stop: &std::sync::atomic::AtomicBool) {
     use std::sync::atomic::Ordering;
+    // Avoid `libc::time_t`: deprecated on musl (width will change); `tv_sec`
+    // still accepts the same integer via `as _` on every libc we ship.
     let mut left = libc::timespec {
-        tv_sec: libc::time_t::try_from(duration.as_secs()).unwrap_or(libc::time_t::MAX),
+        tv_sec: i64::try_from(duration.as_secs()).unwrap_or(i64::MAX) as _,
         tv_nsec: libc::c_long::try_from(duration.subsec_nanos()).unwrap_or(0),
     };
     while !stop.load(Ordering::SeqCst) {
