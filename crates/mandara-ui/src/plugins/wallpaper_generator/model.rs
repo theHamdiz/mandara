@@ -65,7 +65,7 @@ pub fn resolution(size: WallgenSize, custom: (u32, u32), display: Option<(u32, u
         WallgenSize::Uhd8k => Resolution::Uhd8k,
         WallgenSize::Ultrawide1440 => Resolution::Ultrawide1440,
         WallgenSize::Portrait4k => Resolution::Portrait4k,
-        WallgenSize::Custom => Resolution::from_id(&format!("{}x{}", custom.0, custom.1)).unwrap_or_default(),
+        WallgenSize::Custom => Resolution::custom(custom.0, custom.1),
     }
 }
 
@@ -305,6 +305,13 @@ mod tests {
         let spec = theme_palette(&p);
         assert!(spec.is_valid(), "{spec:?}");
         assert!(matches!(spec, PaletteSpec::Theme(_)));
+    }
+
+    #[test]
+    fn custom_size_budget_matches_the_engine() {
+        assert_eq!(mandara_config::wallgen::defaults::CUSTOM_MAX_PIXELS, mandara_wallgen::MAX_PIXELS);
+        let (w, h) = resolution(WallgenSize::Custom, (16384, 16384), None).size();
+        assert!(u64::from(w) * u64::from(h) <= mandara_wallgen::MAX_PIXELS);
     }
 
     #[test]

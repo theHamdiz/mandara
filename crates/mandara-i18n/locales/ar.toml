@@ -11325,3 +11325,5 @@
 "Random transition each change" = "تأثير انتقال عشوائي في كل تغيير"
 "Pick a different effect every time the wallpaper changes (keeps your chosen transition when this is off)" = "يختار تأثيراً مختلفاً في كل مرة تتغير فيها الخلفية (ويحتفظ بالانتقال الذي اخترته عند إيقاف هذا)"
 "A random effect plays each time" = "يُشغَّل تأثير عشوائي في كل مرة"
+"The administrator action took too long and was stopped" = "استغرق إجراء المسؤول وقتًا طويلًا جدًا فتم إيقافه"
+"This took too long, so Studio stopped waiting for it" = "استغرق هذا وقتًا طويلًا جدًا، لذا توقف Studio عن انتظاره"

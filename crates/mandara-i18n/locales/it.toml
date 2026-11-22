@@ -10981,3 +10981,5 @@
 "A random effect plays each time" = "Ogni volta viene riprodotto un effetto casuale"
 "{n} folders checked" = "{n} cartelle controllate"
 "Named after El-Mandara (المندرة), the coastal district of Alexandria." = "Prende il nome da El-Mandara (المندرة), il quartiere costiero di Alessandria."
+"The administrator action took too long and was stopped" = "L'azione di amministratore ha impiegato troppo tempo ed è stata interrotta"
+"This took too long, so Studio stopped waiting for it" = "L'operazione ha impiegato troppo tempo, quindi Studio ha smesso di attenderla"

@@ -11079,3 +11079,5 @@
 "Random transition each change" = "바꿀 때마다 무작위 전환"
 "Pick a different effect every time the wallpaper changes (keeps your chosen transition when this is off)" = "벽지가 바뀔 때마다 다른 효과를 고릅니다(꺼져 있으면 선택한 전환을 유지합니다)"
 "A random effect plays each time" = "매번 무작위 효과가 재생됩니다"
+"The administrator action took too long and was stopped" = "관리자 작업이 너무 오래 걸려 중지되었습니다"
+"This took too long, so Studio stopped waiting for it" = "시간이 너무 오래 걸려 Studio가 기다리기를 중단했습니다"

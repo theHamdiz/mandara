@@ -682,7 +682,7 @@ are clamped to their ranges.
 | `recipe` | *(empty)* | The current recipe as the engine's TOML table (`style`, hex `seed`, `palette = { named = "…" }` / `{ custom = [hex…] }` / `{ theme = […] }`, `[params]`); empty: a mesh gradient in Mandara Corniche |
 | `tone` | `theme` | `theme` (follow light / dark mode), `dark`, `light` |
 | `size` | `display` | `display` (the 4K class fitted to the primary display's shape), `1080p`, `1440p`, `4k`, `5k`, `8k`, `uw1440`, `portrait4k`, `custom` |
-| `custom_width`, `custom_height` | `3840`, `2160` | For `custom` (640–16384 px) |
+| `custom_width`, `custom_height` | `3840`, `2160` | For `custom` (640–16384 px per side, at most 7680 × 4320 = 33 177 600 px in total; a larger area is shortened) |
 | `format` | `webp` | `webp` (lossless), `png` (lossless), `jpeg` |
 | `jpeg_quality` | `92` | 60–100 |
 | `directory` | *(empty)* | Output folder (`~` allowed); empty: `Generated` inside the wallpaper folder, which the picker lists |

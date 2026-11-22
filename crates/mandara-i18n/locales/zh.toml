@@ -11317,3 +11317,5 @@
 "Random transition each change" = "每次更换随机过渡"
 "Pick a different effect every time the wallpaper changes (keeps your chosen transition when this is off)" = "每次更换壁纸时选用不同效果（关闭时保留你选择的过渡）"
 "A random effect plays each time" = "每次播放随机效果"
+"The administrator action took too long and was stopped" = "管理员操作耗时过长，已被停止"
+"This took too long, so Studio stopped waiting for it" = "此操作耗时过长，因此 Studio 不再等待"

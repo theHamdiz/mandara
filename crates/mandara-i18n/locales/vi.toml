@@ -10980,3 +10980,5 @@
 "Random transition each change" = "Chuyển cảnh ngẫu nhiên mỗi lần đổi"
 "Pick a different effect every time the wallpaper changes (keeps your chosen transition when this is off)" = "Chọn hiệu ứng khác mỗi khi hình nền đổi (giữ chuyển cảnh bạn chọn khi tắt)"
 "A random effect plays each time" = "Mỗi lần phát một hiệu ứng ngẫu nhiên"
+"The administrator action took too long and was stopped" = "Thao tác quản trị mất quá nhiều thời gian nên đã bị dừng"
+"This took too long, so Studio stopped waiting for it" = "Việc này mất quá nhiều thời gian nên Studio đã ngừng chờ"

@@ -11081,3 +11081,5 @@
 "Random transition each change" = "প্রতিবার পরিবর্তনে এলোমেলো ট্রানজিশন"
 "Pick a different effect every time the wallpaper changes (keeps your chosen transition when this is off)" = "ওয়ালপেপার বদলালেই অন্য প্রভাব বেছে নেয় (বন্ধ থাকলে আপনার বেছে নেওয়া ট্রানজিশনই থাকে)"
 "A random effect plays each time" = "প্রতিবার একটি এলোমেলো প্রভাব চলে"
+"The administrator action took too long and was stopped" = "অ্যাডমিনিস্ট্রেটরের কাজটি অনেক বেশি সময় নেওয়ায় থামিয়ে দেওয়া হয়েছে"
+"This took too long, so Studio stopped waiting for it" = "এটি অনেক বেশি সময় নিয়েছে, তাই Studio আর অপেক্ষা করছে না"

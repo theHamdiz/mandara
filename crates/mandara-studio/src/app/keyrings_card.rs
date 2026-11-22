@@ -45,19 +45,6 @@ pub(super) fn keyring_command(exe: &Path, action: Action, dry_run: bool) -> (OsS
     if dry_run { (exe.as_os_str().to_owned(), tail) } else { (PKEXEC.into(), std::iter::once(exe.as_os_str().to_owned()).chain(tail).collect()) }
 }
 
-/// Runs argv; Ok(stdout) on success, Err(stderr or stdout) otherwise.
-fn run(prog: OsString, args: Vec<OsString>) -> Result<String, String> {
-    match std::process::Command::new(&prog).args(&args).stdin(std::process::Stdio::null()).output() {
-        Ok(o) if o.status.success() => Ok(String::from_utf8_lossy(&o.stdout).trim().to_string()),
-        Ok(o) => {
-            let out = String::from_utf8_lossy(&o.stdout).trim().to_string();
-            let err = String::from_utf8_lossy(&o.stderr).trim().to_string();
-            Err([out, err].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n"))
-        }
-        Err(e) => Err(format!("{}: {e}", prog.to_string_lossy())),
-    }
-}
-
 /// The plan waiting for "Apply".
 #[derive(Clone)]
 struct Confirm {
@@ -145,7 +132,7 @@ impl KeyringsCard {
         self.message = Some((true, t("Preparing the plan…").to_string()));
         let exe = std::env::current_exe().unwrap_or_else(|_| "mandara".into());
         let (prog, args) = keyring_command(&exe, action, true);
-        let task = cx.background_executor().spawn(async move { run(prog, args) });
+        let task = cx.background_executor().spawn(async move { super::admin_run::run(prog, args) });
         cx.spawn(async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |this, cx| {
@@ -176,7 +163,7 @@ impl KeyringsCard {
         let (prog, args) = keyring_command(&exe, confirm.action, dry);
         // The change runs as root through a root-owned Mandara, never this
         // (user-writable) binary: `[exe, args…]` → `args…`.
-        let task = cx.background_executor().spawn(async move { if dry { run(prog, args) } else { super::admin_run::as_root(args.into_iter().skip(1).collect()) } });
+        let task = cx.background_executor().spawn(async move { if dry { super::admin_run::run(prog, args) } else { super::admin_run::as_root(args.into_iter().skip(1).collect()) } });
         cx.spawn(async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |this, cx| {
@@ -201,11 +188,7 @@ impl KeyringsCard {
             self.message = Some((false, t("Mandara isn't running, so its dialog can't open.").to_string()));
             return cx.notify();
         };
-        std::thread::spawn(move || {
-            if let Err(err) = (ipc.0)(vec!["keepassxc".into(), "unlock".into()]) {
-                tracing::warn!("keepassxc unlock: {err}");
-            }
-        });
+        ipc.fire(vec!["keepassxc".into(), "unlock".into()]);
     }
 
     fn button(p: &MandaraPalette, id: &'static str, label: String, ic: &'static str, primary: bool) -> gpui::Stateful<gpui::Div> {

@@ -70,6 +70,15 @@ const MAX_BUFFERS_PER_PLANE: usize = 3;
 /// A frame callback that has not arrived after this long is given up on:
 /// a fully covered background gets none (the compositor skips it).
 pub const FRAME_TIMEOUT: Duration = Duration::from_millis(100);
+/// First wait before a canvas the compositor closed is made again; it
+/// doubles with every close that follows a short life.
+const CLOSED_RETRY_BASE: Duration = Duration::from_millis(250);
+/// Longest wait between attempts to make a canvas that keeps being closed.
+const CLOSED_RETRY_MAX: Duration = Duration::from_secs(30);
+/// A canvas that lived this long before being closed (an output that was
+/// unplugged, a compositor restarted) isn't a close loop: the next one is
+/// made at once.
+const CANVAS_STABLE: Duration = Duration::from_secs(5);
 /// `wp_alpha_modifier_surface_v1` multiplier for full opacity.
 const ALPHA_ONE: f32 = u32::MAX as f32;
 /// Newest `wl_seat` version used (pointer frames, seat names).
@@ -401,6 +410,36 @@ struct Canvas {
     awaiting_since: Option<Instant>,
     /// The geometry the planes' positions and viewports were last sent for.
     placed_for: Option<CanvasGeometry>,
+    /// When it was made.
+    created: Instant,
+}
+
+/// How often the compositor closed an output's canvas right after it was
+/// made, so a compositor that refuses it isn't asked again in a loop.
+#[derive(Default)]
+struct CloseBackoff {
+    /// Closes in a row that came soon after the canvas was made.
+    quick: u32,
+    /// No new canvas before this.
+    retry_at: Option<Instant>,
+}
+
+impl CloseBackoff {
+    /// Records that a canvas made at `created` was closed at `now`.
+    fn closed(&mut self, created: Instant, now: Instant) {
+        if now.saturating_duration_since(created) >= CANVAS_STABLE {
+            *self = Self::default();
+            return;
+        }
+        let wait = CLOSED_RETRY_BASE.saturating_mul(1u32 << self.quick.min(16)).min(CLOSED_RETRY_MAX);
+        self.quick = self.quick.saturating_add(1);
+        self.retry_at = Some(now + wait);
+    }
+
+    /// Time left before a canvas may be made again.
+    fn remaining(&self, now: Instant) -> Option<Duration> {
+        self.retry_at.map(|at| at.saturating_duration_since(now)).filter(|d| !d.is_zero())
+    }
 }
 
 /// What a plane's logical position and viewport are computed from: the
@@ -466,6 +505,7 @@ struct Output {
     xdg_output: Option<zxdg_output_v1::ZxdgOutputV1>,
     logical: Option<(u32, u32)>,
     canvas: Option<Canvas>,
+    backoff: CloseBackoff,
 }
 
 struct LegacyOutputSize {
@@ -587,7 +627,7 @@ struct State {
 impl State {
     fn add_output(&mut self, output: wl_output::WlOutput, global: u32) {
         let xdg_output = self.xdg_output.as_ref().map(|manager| manager.get_xdg_output(&output, &self.qh, global));
-        self.outputs.push(Output { global, output, name: String::new(), description: String::new(), identity: String::new(), legacy: LegacyOutputSize::default(), xdg_output, logical: None, canvas: None });
+        self.outputs.push(Output { global, output, name: String::new(), description: String::new(), identity: String::new(), legacy: LegacyOutputSize::default(), xdg_output, logical: None, canvas: None, backoff: CloseBackoff::default() });
     }
 
     fn canvas_mut(&mut self, global: u32) -> Option<&mut Canvas> {
@@ -743,6 +783,11 @@ impl Host {
             return false;
         }
         let Some((width, height)) = s.outputs[i].logical_size() else { return false };
+        // A compositor that keeps closing the canvas is retried after a wait
+        // ([`Host::next_canvas_retry`] says when), not in a tight loop.
+        if s.outputs[i].canvas.is_none() && s.outputs[i].backoff.remaining(Instant::now()).is_some() {
+            return false;
+        }
         let previous = s.outputs[i].canvas.take();
         let remapped = previous.is_some();
         if let Some(canvas) = previous {
@@ -798,9 +843,16 @@ impl Host {
             frame_pending: None,
             awaiting_since: None,
             placed_for: None,
+            created: Instant::now(),
         });
         s.changed = true;
         remapped
+    }
+
+    /// How long until a canvas the compositor closed may be made again, the
+    /// soonest over all outputs (`None` when none is waiting).
+    pub fn next_canvas_retry(&self, now: Instant) -> Option<Duration> {
+        self.state.outputs.iter().filter(|o| o.canvas.is_none()).filter_map(|o| o.backoff.remaining(now)).min()
     }
 
     /// Destroys output `id`'s canvas.
@@ -1224,7 +1276,7 @@ impl Host {
         {
             let fd = guard.connection_fd();
             let mut fds = [rustix::event::PollFd::new(&fd, rustix::event::PollFlags::IN), rustix::event::PollFd::new(&waker.0, rustix::event::PollFlags::IN)];
-            let ts = timeout.map(|t| rustix::event::Timespec { tv_sec: t.as_secs() as i64, tv_nsec: t.subsec_nanos() as i64 });
+            let ts = timeout.map(|t| rustix::event::Timespec { tv_sec: i64::try_from(t.as_secs()).unwrap_or(i64::MAX), tv_nsec: t.subsec_nanos() as i64 });
             match rustix::event::poll(&mut fds, ts.as_ref()) {
                 Ok(_) => {}
                 Err(rustix::io::Errno::INTR) => {}
@@ -1454,7 +1506,10 @@ impl Dispatch<zwlr_layer_surface_v1::ZwlrLayerSurfaceV1, u32> for State {
                 state.changed = true;
             }
             zwlr_layer_surface_v1::Event::Closed => {
-                if let Some(c) = state.outputs.iter_mut().find(|o| o.global == *global).and_then(|o| o.canvas.take()) {
+                if let Some(output) = state.outputs.iter_mut().find(|o| o.global == *global)
+                    && let Some(c) = output.canvas.take()
+                {
+                    output.backoff.closed(c.created, Instant::now());
                     c.destroy();
                 }
                 state.changed = true;
@@ -1650,6 +1705,29 @@ ignore_events!(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_canvas_closed_again_and_again_is_retried_after_longer_waits() {
+        let t0 = Instant::now();
+        let mut backoff = CloseBackoff::default();
+        assert_eq!(backoff.remaining(t0), None, "nothing closed yet");
+        let mut waits = Vec::new();
+        for _ in 0..12 {
+            // Closed the moment it was made.
+            backoff.closed(t0, t0);
+            waits.push(backoff.remaining(t0).unwrap());
+        }
+        assert_eq!(waits[0], CLOSED_RETRY_BASE);
+        assert_eq!(waits[1], CLOSED_RETRY_BASE * 2);
+        assert!(waits.windows(2).all(|w| w[0] <= w[1]), "never shorter than before");
+        assert_eq!(*waits.last().unwrap(), CLOSED_RETRY_MAX, "capped");
+        assert_eq!(backoff.remaining(t0 + CLOSED_RETRY_MAX), None, "free again once the wait is over");
+        // A canvas that lived a while before it was closed starts over.
+        backoff.closed(t0, t0 + CANVAS_STABLE);
+        assert_eq!(backoff.remaining(t0 + CANVAS_STABLE), None);
+        backoff.closed(t0 + CANVAS_STABLE, t0 + CANVAS_STABLE);
+        assert_eq!(backoff.remaining(t0 + CANVAS_STABLE), Some(CLOSED_RETRY_BASE));
+    }
 
     #[test]
     fn a_scale_change_at_the_same_physical_size_re_places_full_planes() {

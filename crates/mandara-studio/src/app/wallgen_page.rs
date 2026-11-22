@@ -66,6 +66,10 @@ const VARIATIONS: usize = 5;
 const RECENT_MAX: usize = 12;
 /// How often a running job's progress is asked for.
 const POLL: Duration = Duration::from_millis(400);
+/// A job still running after this long is no longer followed: the page
+/// reports a failure instead of waiting for it forever (a long video loop
+/// fits well within it).
+const POLL_DEADLINE: Duration = Duration::from_secs(2 * 60 * 60);
 
 /// The hero: preview and controls side by side from this column width
 /// (else stacked), the preview taking this share of the row.
@@ -606,8 +610,18 @@ impl StudioView {
     /// Follows job `id` through `wallgen status` until it ends.
     fn wallgen_poll(&mut self, id: u64, cx: &mut Context<Self>) {
         let task = cx.spawn(async move |this, cx| {
+            let started = Instant::now();
             loop {
                 cx.background_executor().timer(POLL).await;
+                if started.elapsed() >= POLL_DEADLINE {
+                    let _ = this.update(cx, |_, cx| {
+                        let g = st(cx);
+                        g.job = None;
+                        g.result = Some(Err(t("This took too long, so Studio stopped waiting for it").into()));
+                        cx.notify();
+                    });
+                    break;
+                }
                 let Ok(Some(query)) = this.update(cx, |_, cx| crate::perf::query(&["wallgen", "status"], cx)) else { break;
                 };
                 let status = query.await;

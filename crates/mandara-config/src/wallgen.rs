@@ -35,6 +35,9 @@ pub mod defaults {
     pub const CUSTOM_W_PX: u32 = 3840;
     pub const CUSTOM_H_PX: u32 = 2160;
     pub const CUSTOM_SIDE_RANGE_PX: (u32, u32) = (640, 16384);
+    /// Largest custom area, px: 8K (7680 × 4320). Bounds the encoder's
+    /// memory (about 1 GiB); equals `mandara_wallgen::MAX_PIXELS`.
+    pub const CUSTOM_MAX_PIXELS: u64 = 7680 * 4320;
     /// Video loops: length, frame rate and quality (0 smallest – 100 best).
     pub const VIDEO_SECONDS: f32 = 10.0;
     pub const VIDEO_SECONDS_RANGE: (f32, f32) = (2.0, 60.0);
@@ -389,6 +392,9 @@ impl WallgenSettings {
         let side = defaults::CUSTOM_SIDE_RANGE_PX;
         self.custom_width = self.custom_width.clamp(side.0, side.1);
         self.custom_height = self.custom_height.clamp(side.0, side.1);
+        // Over the area budget: shorten the height, keeping the width.
+        let max_height = (defaults::CUSTOM_MAX_PIXELS / u64::from(self.custom_width)) as u32;
+        self.custom_height = self.custom_height.min(max_height.max(side.0));
         self.jpeg_quality = self.jpeg_quality.clamp(defaults::JPEG_QUALITY_RANGE.0, defaults::JPEG_QUALITY_RANGE.1);
         self.variation = clamp_f32(self.variation, defaults::VARIATION_RANGE, defaults::VARIATION);
         let every = defaults::SCHEDULE_EVERY_RANGE_MIN;
@@ -475,6 +481,8 @@ mod tests {
         assert_eq!(s.variation, defaults::VARIATION_RANGE.1);
         assert_eq!(s.jpeg_quality, defaults::JPEG_QUALITY_RANGE.0);
         assert_eq!((s.custom_width, s.custom_height), (defaults::CUSTOM_SIDE_RANGE_PX.0, defaults::CUSTOM_SIDE_RANGE_PX.1));
+        let big = with("custom_width = 16384\ncustom_height = 16384\n");
+        assert!(u64::from(big.custom_width) * u64::from(big.custom_height) <= defaults::CUSTOM_MAX_PIXELS);
         assert_eq!(s.schedule.every_minutes, defaults::SCHEDULE_EVERY_RANGE_MIN.0);
         assert_eq!(s.schedule.keep, defaults::KEEP_RANGE.1);
         assert_eq!(s.video.seconds, defaults::VIDEO_SECONDS_RANGE.1);

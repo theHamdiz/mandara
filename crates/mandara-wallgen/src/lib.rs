@@ -38,7 +38,7 @@ pub use output::{DEFAULT_JPEG_QUALITY, Format, Generated, OutputOptions, encode,
 pub use palette::{DEFAULT_PALETTE, MAX_STOPS, MIN_STOPS, NamedPalette, PALETTES, PaletteSpec, named_palette, palettes, parse_hex};
 pub use params::{COMMON_PARAMS, ParamSpec};
 pub use recipe::{RECIPE_VERSION, Recipe};
-pub use resolution::Resolution;
+pub use resolution::{Resolution, MAX_PIXELS};
 pub use schedule::{is_due, next_due};
 pub use style::Style;
 pub use video::{VideoOptions, render_video};

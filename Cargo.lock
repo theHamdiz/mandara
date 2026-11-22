@@ -4315,7 +4315,6 @@ name = "mandara-i18n"
 version = "0.36.0"
 dependencies = [
  "mandara-version",
- "memmap2",
  "tempfile",
  "toml 1.2.0+spec-1.1.0",
 ]
@@ -4497,6 +4496,7 @@ dependencies = [
  "toml 1.2.0+spec-1.1.0",
  "tracing",
  "ureq",
+ "zeroize",
 ]
 
 [[package]]

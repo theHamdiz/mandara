@@ -22,7 +22,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use gpui::{AnyElement, ClickEvent, Context, FontWeight, Global, InteractiveElement, IntoElement, ParentElement, RenderImage, SharedString, StatefulInteractiveElement, Styled, StyledImage as _, anchored, deferred, div, img, point, prelude::FluentBuilder as _, px};
 use mandara_config::ShellConfig;
@@ -60,6 +60,9 @@ const MENU_SIZES: [(u32, u32); 3] = [(1920, 1080), (2560, 1440), (3840, 2160)];
 /// Image sizes offered (share of the screen height).
 const IMAGE_SCALES: [(f32, &str); 3] = [(0.18, tk("Small")), (0.28, tk("Medium")), (0.42, tk("Large"))];
 const JOB_REPAINT: Duration = Duration::from_millis(120);
+/// A theme download still running after this long is cancelled and reported
+/// as failed, so the card never stays on "downloading" forever.
+const JOB_DEADLINE: Duration = Duration::from_secs(30 * 60);
 const PERMILLE: f32 = 1000.0;
 const PERCENT_PER_PERMILLE: u32 = 10;
 const DIAGONAL_DEG: f32 = 135.0;
@@ -418,15 +421,30 @@ impl StudioView {
         let s = st(cx);
         s.errors.remove(name);
         s.jobs.insert(name, Job { progress: progress.clone(), cancel: cancel.clone() });
+        let (watched, finished) = (cancel.clone(), cancel.clone());
         let task = cx.background_executor().spawn(async move { stage::stage_catalog(theme, variant, &stage::Env::current(), &|f| progress.store((f * PERMILLE) as u32, Ordering::Relaxed), &cancel) });
-        cx.spawn(async move |this, cx| loop {
-            cx.background_executor().timer(JOB_REPAINT).await;
-            let running = this.update(cx, |_, cx| {
-                cx.notify();
-                st(cx).jobs.contains_key(name)
-            });
-            if !matches!(running, Ok(true)) {
-                break;
+        cx.spawn(async move |this, cx| {
+            let started = Instant::now();
+            loop {
+                cx.background_executor().timer(JOB_REPAINT).await;
+                let overdue = started.elapsed() >= JOB_DEADLINE;
+                let running = this.update(cx, |_, cx| {
+                    if overdue {
+                        // Asks the download to stop and frees the card even
+                        // if it never answers.
+                        watched.store(true, Ordering::Relaxed);
+                        let s = st(cx);
+                        if s.jobs.get(name).is_some_and(|job| Arc::ptr_eq(&job.cancel, &watched)) {
+                            s.jobs.remove(name);
+                            s.errors.insert(name.to_string(), t("This took too long, so Studio stopped waiting for it").to_string());
+                        }
+                    }
+                    cx.notify();
+                    !overdue && st(cx).jobs.contains_key(name)
+                });
+                if !matches!(running, Ok(true)) {
+                    break;
+                }
             }
         })
         .detach();
@@ -434,7 +452,13 @@ impl StudioView {
             let result = task.await;
             let _ = this.update(cx, |_, cx| {
                 let s = st(cx);
-                s.jobs.remove(name);
+                // Past its deadline the job was already reported and freed
+                // (and may have been started again): only a failure is then
+                // dropped.
+                let ours = s.jobs.get(name).is_some_and(|job| Arc::ptr_eq(&job.cancel, &finished));
+                if ours {
+                    s.jobs.remove(name);
+                }
                 match result {
                     Ok(staged) => {
                         let kind = theme.kind;
@@ -443,9 +467,10 @@ impl StudioView {
                         }
                         st(cx).staged.insert((kind, staged.name));
                     }
-                    Err(e) => {
+                    Err(e) if ours => {
                         s.errors.insert(name.to_string(), e);
                     }
+                    Err(_) => {}
                 }
                 cx.notify();
             });

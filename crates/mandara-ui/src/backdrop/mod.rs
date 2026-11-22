@@ -1776,6 +1776,10 @@ impl Renderer {
         if let Some(d) = self.videos.next_wake(now) {
             at(d);
         }
+        // A canvas the compositor closed is made again after a wait.
+        if let Some(d) = host.next_canvas_retry(now) {
+            at(d);
+        }
         for out in &self.outs {
             let animating = out.trans.is_some() || out.slots.iter().flatten().any(|s| matches!(s.cut_fade, CutFade::In(_) | CutFade::Out(_)));
             if animating {

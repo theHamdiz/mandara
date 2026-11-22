@@ -215,18 +215,17 @@ fn swap_in(root: &Path, u: &PluginUpdate) -> Result<(), String> {
     let io = |e: std::io::Error| e.to_string();
     std::fs::write(root.join(".source"), format!("{}\n{}\n", u.repo, u.latest)).map_err(io)?;
     let parent = u.dir.parent().map(Path::to_path_buf).unwrap_or_else(marketplace::install_dir);
-    let staging = parent.join(format!(".{}.new", u.id));
-    let _ = std::fs::remove_dir_all(&staging);
-    std::fs::rename(root, &staging).or_else(|_| marketplace::copy_tree(root, &staging)).map_err(io)?;
+    let staged = marketplace::staging_dir(&parent, &u.id).map_err(io)?;
+    let staging = staged.path();
+    std::fs::rename(root, staging).or_else(|_| marketplace::copy_tree(root, staging)).map_err(io)?;
     let backup = rollback_path(&u.id);
     let _ = std::fs::remove_dir_all(&backup);
     if let Some(d) = backup.parent() {
         std::fs::create_dir_all(d).map_err(io)?;
     }
     std::fs::rename(&u.dir, &backup).map_err(io)?;
-    if let Err(e) = std::fs::rename(&staging, &u.dir) {
+    if let Err(e) = std::fs::rename(staging, &u.dir) {
         let _ = std::fs::rename(&backup, &u.dir);
-        let _ = std::fs::remove_dir_all(&staging);
         return Err(e.to_string());
     }
     Ok(())

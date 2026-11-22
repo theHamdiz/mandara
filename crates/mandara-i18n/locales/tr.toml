@@ -11321,3 +11321,5 @@
 "Random transition each change" = "Her değişimde rastgele geçiş"
 "Pick a different effect every time the wallpaper changes (keeps your chosen transition when this is off)" = "Duvar kağıdı her değiştiğinde farklı bir efekt seçer (kapalıyken seçtiğiniz geçişi korur)"
 "A random effect plays each time" = "Her seferinde rastgele bir efekt oynar"
+"The administrator action took too long and was stopped" = "Yönetici işlemi çok uzun sürdü ve durduruldu"
+"This took too long, so Studio stopped waiting for it" = "Bu işlem çok uzun sürdü, bu yüzden Studio beklemeyi bıraktı"

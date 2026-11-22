@@ -500,7 +500,7 @@ impl StudioView {
         cx.spawn(async move |this, cx| {
             let (path, created, opened) = mandara_services::runtime::unblock(move || {
                 let created = std::fs::create_dir_all(&path);
-                let opened = (created.is_ok() && open).then(|| mandara_services::session::open_uri(&format!("file://{}", path.display())));
+                let opened = (created.is_ok() && open).then(|| mandara_services::session::open_uri(&format!("file://{}", mandara_services::app_uninstall::percent_encode(&path))));
                 (path, created, opened)
             }).await;
             let _ = this.update(cx, |this, cx| {
@@ -662,7 +662,7 @@ impl StudioView {
             let mut actions = div().row().flex_wrap().gap(px(8.0));
             if report.exists {
                 actions = actions.child(button(format!("folder-open-{i}"), "external", t("Open folder"), false, p).on_click(move |_, _, _| {
-                    let _ = mandara_services::session::open_uri(&format!("file://{}", open_dir.display()));
+                    let _ = mandara_services::session::open_uri(&format!("file://{}", mandara_services::app_uninstall::percent_encode(&open_dir)));
                 }));
             } else if report.source != Source::System {
                 actions = actions.child(button(format!("folder-create-{i}"), "plus", t("Create folder"), true, p).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
@@ -1046,7 +1046,7 @@ impl StudioView {
             })
             .collect();
         let local_guide = authoring::GUIDE_LOCAL_PATHS.iter().map(PathBuf::from).find(|p| p.is_file());
-        let guide_uri = local_guide.as_ref().map(|p| format!("file://{}", p.display())).unwrap_or_else(|| authoring::GUIDE_URL.to_string());
+        let guide_uri = local_guide.as_ref().map(|p| format!("file://{}", mandara_services::app_uninstall::percent_encode(p))).unwrap_or_else(|| authoring::GUIDE_URL.to_string());
         let example_uri = format!("{}/tree/main/{}", authoring::REPOSITORY, authoring::EXAMPLE_DIR);
         let open_dev = dev.clone();
         let links = div()
@@ -1223,7 +1223,7 @@ impl StudioView {
                     let test = r.plugin.as_ref().and_then(|_| self.local.tests.get(&r.dir).cloned());
                     let open_dir = r.dir.clone();
                     let mut actions = div().row().flex_wrap().gap(px(8.0)).child(button(format!("local-row-open-{i}"), "folder", t("Open folder"), false, p).on_click(move |_, _, _| {
-                        let _ = mandara_services::session::open_uri(&format!("file://{}", open_dir.display()));
+                        let _ = mandara_services::session::open_uri(&format!("file://{}", mandara_services::app_uninstall::percent_encode(&open_dir)));
                     }));
                     if let Some(plugin) = r.plugin.clone() {
                         let running = matches!(test, Some(TestState::Running));

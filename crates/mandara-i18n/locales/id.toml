@@ -11080,3 +11080,5 @@
 "Random transition each change" = "Transisi acak setiap perubahan"
 "Pick a different effect every time the wallpaper changes (keeps your chosen transition when this is off)" = "Memilih efek berbeda setiap kali wallpaper berubah (menyimpan transisi pilihan Anda saat ini dimatikan)"
 "A random effect plays each time" = "Setiap kali diputar efek acak"
+"The administrator action took too long and was stopped" = "Tindakan administrator memakan waktu terlalu lama dan dihentikan"
+"This took too long, so Studio stopped waiting for it" = "Ini memakan waktu terlalu lama, jadi Studio berhenti menunggunya"

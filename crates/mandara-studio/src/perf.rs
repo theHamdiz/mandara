@@ -42,6 +42,43 @@ impl Global for ShellLink {}
 pub struct ShellIpc(pub Arc<dyn Fn(Vec<String>) -> Result<(), String> + Send + Sync>);
 impl Global for ShellIpc {}
 
+/// Commands whose IPC round trip is still running.
+static IPC_IN_FLIGHT: std::sync::Mutex<Vec<Vec<String>>> = std::sync::Mutex::new(Vec::new());
+
+/// Takes a command out of [`IPC_IN_FLIGHT`] when its call ends.
+struct InFlight(Vec<String>);
+
+impl Drop for InFlight {
+    fn drop(&mut self) {
+        let mut running = IPC_IN_FLIGHT.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(i) = running.iter().position(|c| *c == self.0) {
+            running.swap_remove(i);
+        }
+    }
+}
+
+impl ShellIpc {
+    /// Sends `args` from a thread of its own and logs a failure. A click on a
+    /// button whose command is still running is ignored, so repeated clicks
+    /// never pile up threads.
+    pub(crate) fn fire(&self, args: Vec<String>) {
+        {
+            let mut running = IPC_IN_FLIGHT.lock().unwrap_or_else(|e| e.into_inner());
+            if running.contains(&args) {
+                return;
+            }
+            running.push(args.clone());
+        }
+        let ipc = self.0.clone();
+        std::thread::spawn(move || {
+            let _done = InFlight(args.clone());
+            if let Err(err) = ipc(args.clone()) {
+                tracing::warn!("`{}` failed: {err}", args.join(" "));
+            }
+        });
+    }
+}
+
 /// Runs a shell command over IPC and returns its JSON result
 /// (`["compositor", "clients"]`, `["diagnostics", "frames"]`); installed by
 /// the app. Called off the UI thread.

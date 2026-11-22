@@ -3,7 +3,7 @@
 //! fallback, so it sees exactly what a release build sees):
 //!
 //! - a language without a pack falls back to English and asks for it once;
-//! - a pack installed for the running version is mapped, swapped in by
+//! - a pack installed for the running version is loaded, swapped in by
 //!   `reload` and announced to listeners;
 //! - packs for another version, damaged packs and packs of another language
 //!   are ignored;
@@ -66,7 +66,7 @@ fn packs_are_found_validated_and_swapped_in() {
     assert!(!packs::reload(Lang::Ar), "Persian under Arabic's name is ignored");
     assert_eq!(t_in(Lang::Ar, "Settings"), "Settings");
 
-    // The right pack: mapped, swapped in, announced.
+    // The right pack: loaded, swapped in, announced.
     let path = packs::install(Lang::Ar, version, &ar, &dir).unwrap();
     assert!(packs::reload(Lang::Ar));
     assert_eq!(loaded.load(Ordering::SeqCst), 1);
@@ -166,4 +166,20 @@ fn lookup_speed() {
     let _ = std::hint::black_box(mandara_i18n::pack::Pack::parse(&bytes, "bench", Lang::Ar).unwrap());
     let check_ms = check.elapsed().as_secs_f64() * 1e3;
     println!("{} keys: HashMap {map_ns:.1} ns/lookup, pack {pack_ns:.1} ns/lookup; load: TOML parse {parse_ms:.2} ms, pack validation {check_ms:.3} ms ({} bytes)", keys.len(), bytes.len());
+}
+
+#[test]
+fn a_pack_overwritten_in_place_after_loading_cannot_fault_readers() {
+    let dir = tempfile::tempdir().unwrap();
+    let version = packs::running_version();
+    let bytes = mandara_i18n::compile(Lang::Ar, version, &source(Lang::Ar)).unwrap();
+    let path = dir.path().join("ar.mlang");
+    std::fs::write(&path, &bytes).unwrap();
+    let pack = packs::open(&path, version, Lang::Ar).unwrap();
+    let key = pack.iter().next().map(|(k, v)| (k.to_string(), v.to_string())).unwrap();
+    // A `cp` onto the pack truncates it under a live reader; a mapped file
+    // would deliver SIGBUS on the next lookup.
+    std::fs::File::create(&path).unwrap();
+    assert_eq!(pack.get(&key.0), Some(key.1.as_str()));
+    assert!(packs::open(&path, version, Lang::Ar).is_err(), "the truncated file itself is rejected");
 }

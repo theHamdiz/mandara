@@ -163,22 +163,25 @@ pub(crate) fn engine() -> Result<&'static Engine> {
     let mut config = Config::new();
     config.wasm_component_model(true).epoch_interruption(true);
     let engine = w(Engine::new(&config), "starting the wasmtime engine")?;
-    let engine = ENGINE.get_or_init(|| engine);
     let ticker = engine.clone();
-    if let Ok(handle) = std::thread::Builder::new().name("mandara-wasm-epoch".into()).spawn(move || {
-        loop {
-            if ACTIVE_CALLS.load(Ordering::Acquire) == 0 {
-                // Spurious wake-ups just re-check the counter.
-                std::thread::park();
-                continue;
+    // Without the ticker nothing interrupts a runaway guest, so a failed
+    // spawn fails every load (and is retried by the next one).
+    let handle = std::thread::Builder::new()
+        .name("mandara-wasm-epoch".into())
+        .spawn(move || {
+            loop {
+                if ACTIVE_CALLS.load(Ordering::Acquire) == 0 {
+                    // Spurious wake-ups just re-check the counter.
+                    std::thread::park();
+                    continue;
+                }
+                std::thread::sleep(TICK);
+                ticker.increment_epoch();
             }
-            std::thread::sleep(TICK);
-            ticker.increment_epoch();
-        }
-    }) {
-        let _ = TICKER.set(handle.thread().clone());
-    }
-    Ok(engine)
+        })
+        .context("starting the plugin epoch ticker (plugins cannot run without it)")?;
+    let _ = TICKER.set(handle.thread().clone());
+    Ok(ENGINE.get_or_init(|| engine))
 }
 
 /// Most linear memory one plugin may use: plenty for a widget, and a
@@ -320,6 +323,30 @@ fn non_blocking_waits(linker: &mut Linker<HostState>) -> wasmtime::Result<()> {
     Ok(())
 }
 
+/// Compiled components kept in the cache: every distinct plugin build
+/// adds one file, so only the most recently used `MAX_CACHED_COMPONENTS`
+/// stay (a pruned build just compiles again on its next load).
+const MAX_CACHED_COMPONENTS: usize = 64;
+
+/// Deletes all but the `keep` most recently modified `.cwasm` files in
+/// `dir` (ties broken by name, so the result is deterministic).
+fn prune_cache(dir: &Path, keep: usize) {
+    let Ok(read) = std::fs::read_dir(dir) else { return };
+    let mut files: Vec<(std::time::SystemTime, PathBuf)> = read
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "cwasm"))
+        .filter_map(|p| Some((p.metadata().ok()?.modified().ok()?, p)))
+        .collect();
+    if files.len() <= keep {
+        return;
+    }
+    files.sort_by(|a, b| b.cmp(a));
+    for (_, path) in files.into_iter().skip(keep) {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
 /// Compiles (or loads the cached native code for) a component.
 pub(crate) fn load_component(path: &Path) -> Result<Component> {
     let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
@@ -336,6 +363,8 @@ pub(crate) fn load_component(path: &Path) -> Result<Component> {
         // SAFETY: the file was produced by `precompile_component` with this
         // engine configuration and lives in our own cache directory.
         if let Ok(c) = unsafe { Component::deserialize_file(engine()?, &cache) } {
+            // Recently used: the newest files survive pruning.
+            let _ = std::fs::File::open(&cache).and_then(|f| f.set_modified(std::time::SystemTime::now()));
             return Ok(c);
         }
     }
@@ -351,6 +380,8 @@ pub(crate) fn load_component(path: &Path) -> Result<Component> {
     // Either step failing (a full disk) leaves no partial file behind.
     if std::fs::write(&tmp, &compiled).and_then(|()| std::fs::rename(&tmp, &cache)).is_err() {
         let _ = std::fs::remove_file(&tmp);
+    } else if let Some(dir) = cache.parent() {
+        prune_cache(dir, MAX_CACHED_COMPONENTS);
     }
     // SAFETY: bytes just produced by `precompile_component` above.
     w(unsafe { Component::deserialize(engine()?, &compiled) }, "loading compiled plugin")
@@ -764,7 +795,11 @@ pub fn valid_id(id: &str) -> bool {
 impl ManifestFile {
     /// Parses plugin.toml text.
     pub fn parse(text: &str) -> Result<Self, String> {
-        toml::from_str(text).map_err(|e| e.to_string().trim().to_string())
+        let file: Self = toml::from_str(text).map_err(|e| e.to_string().trim().to_string())?;
+        if !mandara_services::app_install::archive::safe_relative(Path::new(&file.entry)) {
+            return Err(format!("entry `{}` must be a relative path inside the plugin folder (no root, no `..`)", file.entry));
+        }
+        Ok(file)
     }
 
     /// Problems that don't stop the plugin from loading but that its
@@ -917,6 +952,34 @@ pub fn discover() -> Vec<Discovered> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn manifest_entry_must_stay_inside_the_plugin_folder() {
+        let parse = |entry: &str| ManifestFile::parse(&format!("id = \"x\"\nname = \"X\"\nentry = \"{entry}\"\n"));
+        assert!(parse("plugin.wasm").is_ok());
+        assert!(parse("build/plugin.wasm").is_ok());
+        for bad in ["/etc/plugin.wasm", "../plugin.wasm", "a/../../b.wasm", ""] {
+            assert!(parse(bad).unwrap_err().contains("entry"), "{bad}");
+        }
+    }
+
+    #[test]
+    fn cache_pruning_keeps_the_newest_components() {
+        let dir = std::env::temp_dir().join(format!("mandara-plugins-prune-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let base = std::time::SystemTime::now() - Duration::from_secs(1000);
+        for i in 0..5u64 {
+            let f = std::fs::File::create(dir.join(format!("{i}.cwasm"))).unwrap();
+            f.set_modified(base + Duration::from_secs(i)).unwrap();
+        }
+        std::fs::write(dir.join("other.txt"), b"x").unwrap();
+        prune_cache(&dir, 2);
+        let mut left: Vec<String> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+        left.sort();
+        assert_eq!(left, ["3.cwasm", "4.cwasm", "other.txt"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn discovers_and_shadows_by_precedence() {

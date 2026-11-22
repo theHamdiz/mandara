@@ -10981,3 +10981,5 @@
 "Random transition each change" = "ప్రతి మార్పుకు యాదృచ్ఛిక ట్రాన్జిషన్"
 "Pick a different effect every time the wallpaper changes (keeps your chosen transition when this is off)" = "వాల్‌పేపర్ మారిన ప్రతిసారీ వేరే ప్రభావాన్ని ఎంచుకుంటుంది (ఇది ఆఫ్‌లో ఉన్నప్పుడు మీ ఎంచుకున్న ట్రాన్జిషన్‌ను ఉంచుతుంది)"
 "A random effect plays each time" = "ప్రతిసారీ యాదృచ్ఛిక ప్రభావం నడుస్తుంది"
+"The administrator action took too long and was stopped" = "నిర్వాహక చర్యకు చాలా సమయం పట్టడంతో దానిని ఆపివేశారు"
+"This took too long, so Studio stopped waiting for it" = "దీనికి చాలా సమయం పట్టింది, కాబట్టి Studio వేచి ఉండటం ఆపివేసింది"

@@ -10981,3 +10981,5 @@
 "Random transition each change" = "प्रत्येक बदलावर यादृच्छिक संक्रमण"
 "Pick a different effect every time the wallpaper changes (keeps your chosen transition when this is off)" = "वॉलपेपर बदलताना प्रत्येक वेळी वेगळा प्रभाव निवडतो (बंद असताना तुमचे निवडलेले संक्रमण ठेवतो)"
 "A random effect plays each time" = "प्रत्येक वेळी यादृच्छिक प्रभाव चालतो"
+"The administrator action took too long and was stopped" = "प्रशासकाच्या कृतीला खूप वेळ लागला म्हणून ती थांबवण्यात आली"
+"This took too long, so Studio stopped waiting for it" = "यास खूप वेळ लागला, म्हणून Studio ने वाट पाहणे थांबवले"

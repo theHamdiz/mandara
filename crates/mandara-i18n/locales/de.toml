@@ -11320,3 +11320,5 @@
 "Random transition each change" = "Zufälliger Übergang bei jedem Wechsel"
 "Pick a different effect every time the wallpaper changes (keeps your chosen transition when this is off)" = "Wählt bei jedem Hintergrundwechsel einen anderen Effekt (behält Ihren gewählten Übergang, wenn dies aus ist)"
 "A random effect plays each time" = "Jedes Mal spielt ein zufälliger Effekt"
+"The administrator action took too long and was stopped" = "Die Administratoraktion hat zu lange gedauert und wurde gestoppt"
+"This took too long, so Studio stopped waiting for it" = "Das hat zu lange gedauert, daher wartet Studio nicht länger darauf"

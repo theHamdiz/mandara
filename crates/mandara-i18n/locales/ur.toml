@@ -11080,3 +11080,5 @@
 "Random transition each change" = "ہر تبدیلی پر تصادفی منتقلی"
 "Pick a different effect every time the wallpaper changes (keeps your chosen transition when this is off)" = "وال پیپر بدلتے ہی ہر بار مختلف اثر چنتا ہے (بند ہونے پر آپ کی منتخب منتقلی رکھتا ہے)"
 "A random effect plays each time" = "ہر بار ایک تصادفی اثر چلتا ہے"
+"The administrator action took too long and was stopped" = "منتظم کی کارروائی میں بہت زیادہ وقت لگا اور اسے روک دیا گیا"
+"This took too long, so Studio stopped waiting for it" = "اس میں بہت زیادہ وقت لگا، اس لیے Studio نے انتظار کرنا چھوڑ دیا"

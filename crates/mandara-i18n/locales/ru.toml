@@ -11321,3 +11321,5 @@
 "Random transition each change" = "Случайный переход при каждой смене"
 "Pick a different effect every time the wallpaper changes (keeps your chosen transition when this is off)" = "Выбирает другой эффект при каждой смене обоев (сохраняет выбранный переход, когда это выключено)"
 "A random effect plays each time" = "Каждый раз воспроизводится случайный эффект"
+"The administrator action took too long and was stopped" = "Действие администратора заняло слишком много времени и было остановлено"
+"This took too long, so Studio stopped waiting for it" = "Это заняло слишком много времени, поэтому Studio перестала его ждать"

@@ -11323,3 +11323,5 @@
 "Random transition each change" = "切り替えごとにランダムな遷移"
 "Pick a different effect every time the wallpaper changes (keeps your chosen transition when this is off)" = "壁紙が変わるたびに別の効果を選びます（オフのときは選んだ遷移を保ちます）"
 "A random effect plays each time" = "毎回ランダムな効果が再生されます"
+"The administrator action took too long and was stopped" = "管理者の操作に時間がかかりすぎたため、停止しました"
+"This took too long, so Studio stopped waiting for it" = "時間がかかりすぎたため、Studio は待つのをやめました"
