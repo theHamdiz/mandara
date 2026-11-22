@@ -24,7 +24,7 @@ use std::sync::OnceLock;
 use serde::{Deserialize, Serialize};
 
 use crate::color::Color;
-use crate::palette::{MandaraPalette, accent_gradient_end_for, glow_for};
+use crate::palette::{MandaraPalette, accent_gradient_end_for, comment_safe_name, glow_for};
 
 /// Seed colors for one appearance. Only `surface`, `on_surface` and
 /// `primary` are required; everything else is derived when absent.
@@ -199,17 +199,19 @@ pub fn next_id(id: &str) -> String {
 /// (backgrounds just under the 0.2 luminance threshold cannot reach AA with
 /// white alone). Returns the best attempt when neither direction succeeds.
 pub fn ensure_contrast(fg: Color, bg: Color, min: f32) -> Color {
-    if fg.contrast_ratio(bg) >= min {
+    // The background never changes: gamut-map it once, not per step.
+    let bg_luminance = bg.relative_luminance();
+    if fg.contrast_with_luminance(bg_luminance) >= min {
         return fg;
     }
-    let prefer_lighter = bg.relative_luminance() < 0.2;
+    let prefer_lighter = bg_luminance < 0.2;
     let walk = |start: Color, lighter: bool| {
         let mut c = start;
         let mut best = start;
-        let mut best_ratio = start.contrast_ratio(bg);
+        let mut best_ratio = start.contrast_with_luminance(bg_luminance);
         for _ in 0..60 {
             c = c.lighten(if lighter { 0.015 } else { -0.015 });
-            let ratio = c.contrast_ratio(bg);
+            let ratio = c.contrast_with_luminance(bg_luminance);
             if ratio > best_ratio {
                 best = c;
                 best_ratio = ratio;
@@ -284,7 +286,10 @@ impl ThemeDef {
             (true, None, Some(l)) => l.clone(),
             (_, None, None) => unreachable!("validated on load"),
         };
-        expand(&seeds, dark && (self.dark.is_some()), &self.name, self.oled && dark)
+        // A light-only theme asked for dark yields its light palette: that is
+        // not a dark palette, so OLED black must not apply to it.
+        let is_dark = dark && self.dark.is_some();
+        expand(&seeds, is_dark, &self.name, self.oled && is_dark)
     }
 }
 
@@ -311,7 +316,8 @@ pub fn expand(s: &Seeds, dark: bool, name: &str, oled: bool) -> MandaraPalette {
     let status = |l: f32, c: f32, h: f32| harmonized(Color::oklch(if dark { l } else { l - 0.2 }, c, h));
     let glass_alpha = s.glass_alpha.unwrap_or(if dark { 0.66 } else { 0.74 });
     MandaraPalette {
-        name: name.into(),
+        // User theme files choose this text; it is printed into app themes.
+        name: comment_safe_name(name).into(),
         is_dark: dark,
         surface_dim,
         surface_base: surface,
@@ -374,6 +380,26 @@ impl ContrastReport {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const LIGHT_ONLY: &str = "id = \"day\"\nname = \"Day */\\nINJECTED\"\noled = true\n[light]\nsurface = \"#fafafa\"\non_surface = \"#101010\"\nprimary = \"#2060c0\"\n";
+
+    #[test]
+    fn a_light_only_theme_asked_for_dark_is_light_and_not_oled() {
+        let theme: ThemeDef = toml::from_str(LIGHT_ONLY).unwrap();
+        for dark in [true, false] {
+            let p = theme.palette(dark);
+            assert!(!p.is_dark, "its only palette is light");
+            assert_eq!(p.surface_dim, theme.palette(false).surface_dim, "dark={dark}: OLED black is for dark palettes");
+            assert_ne!(p.surface_dim, p.surface_base);
+        }
+    }
+
+    #[test]
+    fn theme_names_are_safe_to_print_into_generated_files() {
+        let theme: ThemeDef = toml::from_str(LIGHT_ONLY).unwrap();
+        let name = theme.palette(false).name;
+        assert!(!name.contains('\n') && !name.contains("*/"), "{name:?}");
+    }
 
     #[test]
     fn every_builtin_parses_with_both_modes() {

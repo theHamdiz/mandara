@@ -3112,7 +3112,7 @@
 "Most apps" = "Максимум приложений"
 "Most launched results with their frecency scores" = "Чаще всего запускаемые результаты с их оценками частоты и давности"
 "Most pinned entries kept" = "Максимум закреплённых записей"
-"Music or video playing over MPRIS holds every idle stage back" = "Музыка или видео, играющие через MPRIS, откладывают все этапы бездействия"
+"Music or video playing over MPRIS holds back screen-off and sleep, never the lock" = "Музыка или видео через MPRIS откладывают выключение экрана и сон, но не блокировку"
 "My command" = "Моя команда"
 "Name (optional)" = "Имя (необязательно)"
 "Name a VPN: no VPN was used yet" = "Укажите VPN: ни один VPN ещё не использовался"

@@ -46,9 +46,9 @@ const SHUTDOWN_GRACE: libc::c_uint = 8;
 /// What one probe of the shell found.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Probe {
-    /// The UI thread answered.
+    /// The shell replied (a refusal counts).
     Answered,
-    /// No answer in time, an error, or nobody listening.
+    /// No reply in time, or nobody listening.
     Silent,
 }
 
@@ -137,10 +137,14 @@ impl Prober {
 
 /// One probe over the IPC socket.
 fn probe_socket(socket: &std::path::Path) -> Probe {
-    match ipc::send(socket, &[ipc::WATCHDOG_COMMAND.to_string()]) {
-        Ok(reply) if reply.ok => Probe::Answered,
-        _ => Probe::Silent,
-    }
+    probe_of(ipc::send(socket, &[ipc::WATCHDOG_COMMAND.to_string()]))
+}
+
+/// Any reply proves the shell's IPC thread is alive, including a refusal
+/// ("too busy", "too many requests"): a shell saturated with other clients
+/// must not be killed. Only a timeout or a failed connection is a miss.
+fn probe_of<E>(reply: Result<ipc::WireResponse, E>) -> Probe {
+    if reply.is_ok() { Probe::Answered } else { Probe::Silent }
 }
 
 /// How long to wait before the next start, or that supervision gives up.
@@ -484,6 +488,14 @@ mod tests {
         assert_eq!(spawned.load(Ordering::SeqCst), 1);
         // Finished: the next probe is a new one.
         assert_eq!(prober.probe(Duration::from_secs(5), || Probe::Answered), Probe::Answered);
+    }
+
+    #[test]
+    fn a_refusal_is_an_answer_and_only_a_failed_exchange_is_silence() {
+        assert_eq!(probe_of::<()>(Ok(ipc::WireResponse::ok(serde_json::json!("pong")))), Probe::Answered);
+        assert_eq!(probe_of::<()>(Ok(ipc::WireResponse::err("the shell is too busy to take another request"))), Probe::Answered);
+        assert_eq!(probe_of::<()>(Ok(ipc::WireResponse::err("too many requests at once"))), Probe::Answered);
+        assert_eq!(probe_of(Err("timed out")), Probe::Silent);
     }
 
     #[test]

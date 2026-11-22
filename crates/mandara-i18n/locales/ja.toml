@@ -3188,7 +3188,7 @@
 "Most apps" = "最大アプリ数"
 "Most launched results with their frecency scores" = "最も多く起動した結果とその frecency スコア"
 "Most pinned entries kept" = "ピン留め項目の最大保持数"
-"Music or video playing over MPRIS holds every idle stage back" = "MPRIS で音楽や動画を再生中は、すべてのアイドル段階を保留します"
+"Music or video playing over MPRIS holds back screen-off and sleep, never the lock" = "MPRIS で音楽や動画を再生中は、画面オフとスリープを保留しますが、ロックは保留しません"
 "My command" = "マイコマンド"
 "Name (optional)" = "名前（任意）"
 "Name a VPN: no VPN was used yet" = "VPN 名を指定してください：まだ VPN が使用されていません"

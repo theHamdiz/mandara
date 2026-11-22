@@ -3105,7 +3105,7 @@
 "Most apps" = "A maioria dos apps"
 "Most launched results with their frecency scores" = "Resultados mais abertos, com a pontuação de frequência"
 "Most pinned entries kept" = "Mais itens fixados guardados"
-"Music or video playing over MPRIS holds every idle stage back" = "Música ou vídeo no MPRIS segura todas as etapas de repouso"
+"Music or video playing over MPRIS holds back screen-off and sleep, never the lock" = "Música ou vídeo no MPRIS segura o desligamento da tela e a suspensão, mas nunca o bloqueio"
 "My command" = "Meu comando"
 "Name (optional)" = "Nome (opcional)"
 "Name a VPN: no VPN was used yet" = "Dê um nome à VPN: nenhuma VPN foi usada ainda"

@@ -5437,6 +5437,7 @@ Open Mandara Studio, optionally on a section
 Open PLUGINS.md
 Open Reddit's app page
 Open Reddit's app page and choose “create another app”.
+Open Studio
 Open Studio to download the required models
 Open a community or a post in the Reddit panel
 Open a copied image in your image editor (`[clipboard] image_command`)
@@ -7326,6 +7327,7 @@ Solved!
 Some clouds, some sun. Easy weather.
 Some compositor shortcuts cannot be resolved safely. Edit them in their source configuration first.
 Some folders
+Some of your settings were reset
 Something went wrong while installing. The details say what.
 Somewhere in your config
 Soothing pastel cursors in the Catppuccin flavors and accents
@@ -7894,6 +7896,7 @@ The adhan is playing
 The adhan isn't downloaded
 The adhan isn't downloaded: turn it on in Studio, or run `prayer adhan download`
 The adhan: whether it is on, downloaded or playing, and where it comes from
+The administrator action took too long and was stopped
 The ancient lighthouse: a luminous beam across deep night navy and harbour lights.
 The app and tool tiles wear a Kufic word instead of their geometric pattern
 The app each kind of file or link opens in, for every app that asks the system (mimeapps.list).
@@ -8522,6 +8525,7 @@ This tab is empty
 This text is too large to send to a phone
 This theme has no sound for that
 This thread is very long; open it on Reddit to read the rest
+This took too long, so Studio stopped waiting for it
 This update wasn't checked against Mandara's signature; check for updates again
 This username is already in use
 This version ({version}) isn't recommended: {class}: {reason}
@@ -9546,6 +9550,7 @@ Your kernel command line has no splash option, so the splash won't show until yo
 Your keyring may ask you to unlock it
 Your keys
 Your khatm as a ring, with the surah you're reading and a click to continue
+Your latest changes are not saved yet ({error}).
 Your local repositories at a glance: branch, uncommitted changes, unpushed commits
 Your location
 Your logo or picture at boot
@@ -9570,6 +9575,7 @@ Your recent notes as tabs on the screen's edge
 Your saved verses and hadith, newest first
 Your session starts these (systemd's xdg-autostart).
 Your session's units
+Your settings couldn't be saved
 Your shell at a glance
 Your sound theme
 Your status (empty: Online / Do not disturb)
@@ -10079,6 +10085,7 @@ the compositor returned an unexpected frame size
 the compositor's own hot corner
 the count for clean
 the feed's structure is broken
+the file doesn't match its checksum
 the file to share
 the installed copy isn't the published {version} build
 the new name
@@ -10535,6 +10542,7 @@ your default
 {running} of {count} running
 {running} running · {finished} finished
 {seconds}s timer
+{settings} fell back to their defaults. Your original file is kept as {file}.
 {setting} must be a number
 {size} MB
 {size} in {secs} s · first byte {ms} ms
@@ -10636,5 +10644,3 @@ your default
 …or an image path, e.g. ~/Pictures/logo.svg
 ↑/↓ change · enter select · esc cancel
 ≈ {size}
-The administrator action took too long and was stopped
-This took too long, so Studio stopped waiting for it
