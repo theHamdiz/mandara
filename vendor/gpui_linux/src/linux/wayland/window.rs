@@ -1782,6 +1782,9 @@ impl PlatformWindow for WaylandWindow {
     }
 
     fn resize(&mut self, size: Size<Pixels>) {
+        // Mandara patch 3: one whole-pixel size for the positioner, the window geometry and the
+        // stored bounds, so the compositor and GPUI agree on it.
+        let size = whole_pixels(size);
         let state = self.borrow();
         let state_ptr = self.0.clone();
 
