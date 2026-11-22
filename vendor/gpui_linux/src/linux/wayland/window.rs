@@ -1531,6 +1531,15 @@ impl WaylandWindowStatePtr {
     }
 
     pub fn set_size_and_scale(&self, size: Option<Size<Pixels>>, scale: Option<f32>) {
+        // Mandara patch 3: Wayland surface sizes are whole logical pixels. A fractional size
+        // (e.g. 351.5) rounds to an odd buffer under an integer `set_buffer_scale(2)`, and the
+        // compositor kills the connection with `wl_surface` error `invalid_size`.
+        let size = size.map(|size| {
+            Size::new(
+                px(f32::from(size.width).round()),
+                px(f32::from(size.height).round()),
+            )
+        });
         let (size, scale) = {
             let mut state = self.state.borrow_mut();
             if size.is_none_or(|size| size == state.bounds.size)

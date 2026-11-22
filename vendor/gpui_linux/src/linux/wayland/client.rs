@@ -1422,9 +1422,20 @@ impl WaylandConnection {
             .log_err();
 
         client.register_source(
-            handle.insert_source(WaylandSource::new(conn, event_queue), {
+            handle.insert_source(WaylandSource::new(conn.clone(), event_queue), {
                 let mut client = pointer;
-                move |_, queue, _| queue.dispatch_pending(&mut client)
+                move |_, queue, _| {
+                    // Mandara patch 4: calloop-wayland-source 0.4.1 ignores a protocol error
+                    // from `flush`, and a dead display keeps failing `prepare_read`, so the
+                    // source wakes the loop forever with nothing to dispatch. Surface the
+                    // error so the event loop ends instead of spinning.
+                    if let Some(error) = conn.protocol_error() {
+                        return Err(wayland_client::DispatchError::Backend(
+                            wayland_client::backend::WaylandError::Protocol(error),
+                        ));
+                    }
+                    queue.dispatch_pending(&mut client)
+                }
             }),
             "failed to register Wayland connection source",
         )?;
