@@ -111,6 +111,37 @@ The Wayland side of GPUI core's patch 13 (Stash's shelves).
 * **Margins.** `set_layer_margin` sets the layer surface's margins and
   commits (`WaylandSurfaceState::set_margin`).
 
+## 3. Whole-pixel surface sizes (`wayland/window.rs`)
+
+`WaylandWindowStatePtr::set_size_and_scale` stored the requested logical
+size as given, so a size like 275×351.5 became a 550×703 buffer under an
+integer `wl_surface.set_buffer_scale(2)` (used when the compositor has no
+`wp_fractional_scale_v1`). The buffer is not a multiple of the scale, which
+is the `wl_surface.invalid_size` protocol error: wlroots-based compositors
+(Umbriel, for one) disconnect the client, taking every Mandara surface — bar,
+wallpaper, lock screen — with it. The size is now rounded to whole logical
+pixels (`whole_pixels`) both when the window is created (`WaylandWindow::new`,
+since a scale-only rescale keeps the initial size) and in
+`set_size_and_scale`, before it reaches the renderer, the viewport and the
+resize callback;
+Wayland window geometry, configure sizes and viewport destinations are whole
+logical pixels anyway.
+
+## 4. A fatal protocol error ends the event loop (`wayland/client.rs`)
+
+After the compositor posts a protocol error, `calloop-wayland-source` 0.4.1
+drops it: `flush_queue` only forwards `WaylandError::Io`, and
+`prepare_read` keeps failing on the dead display, so the source reports
+pending events on every iteration and the loop wakes forever with nothing to
+dispatch. The process stayed alive with no surfaces, at 100% CPU, logging
+`Protocol error … on object wl_surface@…` on every wakeup (millions of lines
+an hour), so the `mandara` supervisor never saw an exit to restart. The
+dispatch callback now returns the connection's protocol error, which ends
+`EventLoop::run`; `ShellLifetime::finished` then fails the run and the
+supervisor restarts the shell. Upstream fixed `flush_queue` after 0.4.1
+(Smithay/calloop-wayland-source `master`); drop this patch once a release
+ships it.
+
 ## 5. Drag and clipboard protocol robustness (`wayland/client.rs`, `wayland/clipboard.rs`)
 
 * **Finishing a drop.** `wl_data_offer.finish` is a fatal protocol error
