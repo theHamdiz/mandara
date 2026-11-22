@@ -226,7 +226,12 @@ fn font_family_match(font: &Font, installed: &[String]) -> bool {
 }
 
 fn font_present_in(font: &Font, installed: &[String], dir: &Path) -> bool {
-    font_family_match(font, installed) || dir.join(font.file).exists()
+    match font.package {
+        // Archive installs: only the Regular marker means the package is complete.
+        // A partial unpack can register the family name without the marker face.
+        FontPackage::NerdTarXz => dir.join(font.file).exists(),
+        FontPackage::File => font_family_match(font, installed) || dir.join(font.file).exists(),
+    }
 }
 
 fn font_present(font: &Font, installed: &[String]) -> bool {
@@ -655,17 +660,21 @@ mod tests {
     #[test]
     fn fonts_have_https_urls_and_sizes() {
         assert!(FONTS.iter().all(|f| f.url.starts_with("https://") && f.size > 0));
-        assert!(missing_fonts(&FONTS.iter().map(|f| f.family.to_string()).collect::<Vec<_>>()).is_empty());
+        let names: Vec<String> = FONTS.iter().map(|f| f.family.to_string()).collect();
+        // File fonts are satisfied by family name; Nerd archives need the Regular marker.
+        assert!(missing_fonts(&names).iter().all(|f| matches!(f.package, FontPackage::NerdTarXz)));
         let caskaydia = FONTS.iter().find(|f| f.family == "CaskaydiaCove Nerd Font Mono").expect("default mono is downloadable");
         assert!(matches!(caskaydia.package, FontPackage::NerdTarXz));
         assert!(caskaydia.url.contains("CascadiaCode.tar.xz"));
-        // Family / alias match must not touch the real fonts directory.
+        // Family names alone must not mark an incomplete Nerd archive as installed.
         assert!(font_family_match(caskaydia, &["CaskaydiaCove Nerd Font".into()]));
-        assert!(!font_family_match(caskaydia, &["JetBrains Mono".into()]));
         let empty = tempfile::tempdir().unwrap();
-        assert!(!font_present_in(caskaydia, &["JetBrains Mono".into()], empty.path()));
+        assert!(!font_present_in(caskaydia, &["CaskaydiaCove Nerd Font Mono".into()], empty.path()));
         std::fs::write(empty.path().join(caskaydia.file), b"marker").unwrap();
-        assert!(font_present_in(caskaydia, &["JetBrains Mono".into()], empty.path()));
+        assert!(font_present_in(caskaydia, &[], empty.path()));
+        // Single-file fonts still accept a family / alias match without a marker file.
+        let jetbrains = FONTS.iter().find(|f| f.family == "JetBrains Mono").unwrap();
+        assert!(font_present_in(jetbrains, &["JetBrains Mono".into()], empty.path()));
     }
 
     /// A sandbox: nothing here touches the user's own folders.

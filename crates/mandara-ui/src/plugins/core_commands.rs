@@ -496,8 +496,9 @@ pub fn register(r: &mut PluginRegistry) {
             let cfg = config(cx).read(cx).get().clone();
             let (tx, rx) = async_channel::bounded(1);
             let _ = std::thread::Builder::new().name("mandara-fonts-sync-cmd".into()).spawn(move || {
-                let env = mandara_services::font_sync::ApplyEnv::current();
-                let result = mandara_services::font_sync::reconcile(&cfg, &env, &mandara_services::font_sync::FontGsettingsCommand).map(|report| {
+                // Same ordered worker as automatic sync — never races the ownership record.
+                let result = crate::font_sync::reconcile_wait(cfg.clone()).map(|report| {
+                    let env = mandara_services::font_sync::ApplyEnv::current();
                     json!({
                         "enabled": cfg.typography.sync.enabled,
                         "active": mandara_services::font_sync::active(&env),

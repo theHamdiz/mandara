@@ -120,18 +120,44 @@ pub struct Report {
     pub kept: Vec<String>,
 }
 
+/// Outcome of reading one gsettings key.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum GsettingsRead {
+    /// Schema/key present with this value.
+    Value(String),
+    /// gsettings / schema unavailable — skip this target.
+    Unavailable,
+}
+
 /// `gsettings` for the three interface font keys.
 pub trait FontGsettings {
-    fn get(&self, key: &str) -> Option<String>;
+    fn get(&self, key: &str) -> Result<GsettingsRead, String>;
     fn set(&self, key: &str, value: &str) -> bool;
 }
 
 pub struct FontGsettingsCommand;
 
 impl FontGsettings for FontGsettingsCommand {
-    fn get(&self, key: &str) -> Option<String> {
-        let out = std::process::Command::new("gsettings").args(["get", GSETTINGS_SCHEMA, key]).stdin(std::process::Stdio::null()).stderr(std::process::Stdio::null()).output().ok()?;
-        out.status.success().then(|| unquote(String::from_utf8_lossy(&out.stdout).trim()))
+    fn get(&self, key: &str) -> Result<GsettingsRead, String> {
+        let out = match std::process::Command::new("gsettings")
+            .args(["get", GSETTINGS_SCHEMA, key])
+            .stdin(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
+            .output()
+        {
+            Ok(out) => out,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(GsettingsRead::Unavailable),
+            Err(e) => return Err(format!("gsettings get {GSETTINGS_SCHEMA} {key}: {e}")),
+        };
+        if out.status.success() {
+            return Ok(GsettingsRead::Value(unquote(String::from_utf8_lossy(&out.stdout).trim())));
+        }
+        let err = String::from_utf8_lossy(&out.stderr);
+        // Missing schema / key: treat as unavailable so apply/restore skip it.
+        if err.contains("No such schema") || err.contains("does not contain") || err.contains("No such key") {
+            return Ok(GsettingsRead::Unavailable);
+        }
+        Err(format!("gsettings get {GSETTINGS_SCHEMA} {key} failed: {}", err.trim()))
     }
 
     fn set(&self, key: &str, value: &str) -> bool {
@@ -265,7 +291,10 @@ fn apply_ini(env: &ApplyEnv, record: &mut Record, report: &mut Report, w: IniWri
 
 fn apply_gsettings(env: &ApplyEnv, gs: &dyn FontGsettings, record: &mut Record, report: &mut Report, key: &str, value: &str) -> Result<(), String> {
     let target = format!("gsettings:{key}");
-    let Some(previous) = gs.get(key) else { return Ok(()) };
+    let previous = match gs.get(key)? {
+        GsettingsRead::Value(v) => v,
+        GsettingsRead::Unavailable => return Ok(()),
+    };
     remember(record, &target, "gtk", Some(previous.clone()), false);
     checkpoint(env, record)?;
     if previous != value {
@@ -316,6 +345,9 @@ pub fn apply(families: &Families, targets: Targets, env: &ApplyEnv, gsettings: &
         let partial = restore_groups_inner(env, gsettings, &mut record, Some(&off))?;
         report.changed.extend(partial.changed);
         report.kept.extend(partial.kept);
+        // Selective restore may clear `families` when that group held the
+        // last entry — re-assert ownership metadata for the targets we keep.
+        record.families = Some(families.clone());
         checkpoint(env, &record)?;
     }
 
@@ -416,9 +448,19 @@ fn restore_groups_inner(env: &ApplyEnv, gsettings: &dyn FontGsettings, record: &
             let key = before.target.trim_start_matches("gsettings:").to_string();
             let target = before.target.clone();
             let previous = before.value.clone();
-            let Some(now) = gsettings.get(&key) else {
-                pending.remove(idx);
-                continue;
+            let now = match gsettings.get(&key) {
+                Ok(GsettingsRead::Value(v)) => v,
+                Ok(GsettingsRead::Unavailable) => {
+                    // Schema gone — nothing left to restore.
+                    pending.remove(idx);
+                    continue;
+                }
+                Err(err) => {
+                    keep.push(pending.remove(idx));
+                    keep.extend(pending.drain(idx..));
+                    record.before = keep;
+                    return Err(err);
+                }
             };
             let mandara = applied.as_ref().map(|f| match key.as_str() {
                 "font-name" => f.gtk_ui(),
@@ -451,9 +493,18 @@ fn restore_groups_inner(env: &ApplyEnv, gsettings: &dyn FontGsettings, record: &
         }
         if before.target == FONTCONFIG_REL {
             let path = env.config.join(FONTCONFIG_REL);
-            let Ok(now) = std::fs::read_to_string(&path) else {
-                pending.remove(idx);
-                continue;
+            let now = match std::fs::read_to_string(&path) {
+                Ok(text) => text,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    pending.remove(idx);
+                    continue;
+                }
+                Err(e) => {
+                    keep.push(pending.remove(idx));
+                    keep.extend(pending.drain(idx..));
+                    record.before = keep;
+                    return Err(format!("{}: {e}", path.display()));
+                }
             };
             let ours = applied.as_ref().map(fontconfig_body);
             if ours.as_deref() != Some(now.as_str()) {
@@ -490,9 +541,18 @@ fn restore_groups_inner(env: &ApplyEnv, gsettings: &dyn FontGsettings, record: &
             continue;
         };
         let path = env.config.join(rel);
-        let Ok(text) = std::fs::read_to_string(&path) else {
-            pending.remove(idx);
-            continue;
+        let text = match std::fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                pending.remove(idx);
+                continue;
+            }
+            Err(e) => {
+                keep.push(pending.remove(idx));
+                keep.extend(pending.drain(idx..));
+                record.before = keep;
+                return Err(format!("{}: {e}", path.display()));
+            }
         };
         let now = ini_get(&text, section, key);
         let expected = applied.as_ref().and_then(|f| expected_ini(rel, key, f));
@@ -583,12 +643,22 @@ mod tests {
     struct FakeGs(RefCell<std::collections::BTreeMap<String, String>>);
 
     impl FontGsettings for FakeGs {
-        fn get(&self, key: &str) -> Option<String> {
-            self.0.borrow().get(key).cloned()
+        fn get(&self, key: &str) -> Result<GsettingsRead, String> {
+            Ok(match self.0.borrow().get(key) {
+                Some(v) => GsettingsRead::Value(v.clone()),
+                None => GsettingsRead::Unavailable,
+            })
         }
         fn set(&self, key: &str, value: &str) -> bool {
             self.0.borrow_mut().insert(key.into(), value.into());
             true
+        }
+    }
+
+    fn gs_value(gs: &impl FontGsettings, key: &str) -> Option<String> {
+        match gs.get(key).ok()? {
+            GsettingsRead::Value(v) => Some(v),
+            GsettingsRead::Unavailable => None,
         }
     }
 
@@ -615,13 +685,13 @@ mod tests {
         assert!(report.changed.iter().any(|c| c.contains("fontconfig")));
         assert!(cfg.join(FONTCONFIG_REL).exists());
         assert!(std::fs::read_to_string(cfg.join("gtk-3.0/settings.ini")).unwrap().contains("Inter 11"));
-        assert_eq!(gs.get("font-name").as_deref(), Some("Inter 11"));
+        assert_eq!(gs_value(&gs, "font-name").as_deref(), Some("Inter 11"));
         assert!(active(&env));
 
         let back = restore(&env, &gs).unwrap();
         assert!(back.changed.iter().any(|c| c.contains("gtk-3.0")));
         assert_eq!(std::fs::read_to_string(cfg.join("gtk-3.0/settings.ini")).unwrap(), "[Settings]\ngtk-font-name=Old 10\n");
-        assert_eq!(gs.get("font-name").as_deref(), Some("Old 10"));
+        assert_eq!(gs_value(&gs, "font-name").as_deref(), Some("Old 10"));
         assert!(!cfg.join(FONTCONFIG_REL).exists());
         assert!(!active(&env));
     }
@@ -659,11 +729,22 @@ mod tests {
     struct FailSetGs(FakeGs);
 
     impl FontGsettings for FailSetGs {
-        fn get(&self, key: &str) -> Option<String> {
+        fn get(&self, key: &str) -> Result<GsettingsRead, String> {
             self.0.get(key)
         }
         fn set(&self, _key: &str, _value: &str) -> bool {
             false
+        }
+    }
+
+    struct FailGetGs(FakeGs);
+
+    impl FontGsettings for FailGetGs {
+        fn get(&self, _key: &str) -> Result<GsettingsRead, String> {
+            Err("gsettings temporarily unavailable".into())
+        }
+        fn set(&self, key: &str, value: &str) -> bool {
+            self.0.set(key, value)
         }
     }
 
@@ -690,11 +771,40 @@ mod tests {
         gs.0.borrow_mut().insert("font-name".into(), "Old 10".into());
         let targets = Targets { fontconfig: false, gtk: true, qt: false, kde: false, browsers: false };
         apply(&families(), targets, &env, &gs).unwrap();
-        assert_eq!(gs.get("font-name").as_deref(), Some("Inter 11"));
+        assert_eq!(gs_value(&gs, "font-name").as_deref(), Some("Inter 11"));
         let failing = FailSetGs(FakeGs(RefCell::new(gs.0.borrow().clone())));
         assert!(restore(&env, &failing).is_err());
         assert!(active(&env), "failed restore must keep the record");
         let record = load(&env.record).expect("record");
         assert!(record.before.iter().any(|b| b.target == "gsettings:font-name"));
+    }
+
+    #[test]
+    fn selective_restore_reasserts_family_metadata() {
+        let root = tempfile::tempdir().unwrap();
+        let env = ApplyEnv::under(root.path());
+        let gs = FakeGs::default();
+        let fc_only = Targets { fontconfig: true, gtk: false, qt: false, kde: false, browsers: false };
+        apply(&families(), fc_only, &env, &gs).unwrap();
+        let gtk_only = Targets { fontconfig: false, gtk: true, qt: false, kde: false, browsers: false };
+        apply(&families(), gtk_only, &env, &gs).unwrap();
+        let record = load(&env.record).expect("record");
+        assert_eq!(record.families.as_ref(), Some(&families()), "gtk apply after dropping fontconfig keeps family metadata");
+        assert!(record.before.iter().any(|b| b.group == "gtk"));
+        assert!(!record.before.iter().any(|b| b.group == "fontconfig"));
+    }
+
+    #[test]
+    fn gsettings_read_failure_keeps_ownership() {
+        let root = tempfile::tempdir().unwrap();
+        let env = ApplyEnv::under(root.path());
+        let gs = FakeGs::default();
+        gs.0.borrow_mut().insert("font-name".into(), "Old 10".into());
+        let targets = Targets { fontconfig: false, gtk: true, qt: false, kde: false, browsers: false };
+        apply(&families(), targets, &env, &gs).unwrap();
+        let failing = FailGetGs(FakeGs(RefCell::new(gs.0.borrow().clone())));
+        assert!(restore(&env, &failing).is_err());
+        assert!(active(&env));
+        assert!(load(&env.record).unwrap().before.iter().any(|b| b.target == "gsettings:font-name"));
     }
 }
