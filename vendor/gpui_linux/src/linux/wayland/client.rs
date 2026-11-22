@@ -196,10 +196,6 @@ fn set_ime_cursor_rectangle_after_done(
     }
 }
 
-/// Pacing for retry ticks: a fixed 60Hz interval. Retries only occur for throttled or
-/// failed-present frames, so matching the output's actual refresh rate wouldn't be observable.
-const FRAME_RETRY_INTERVAL: Duration = Duration::from_micros(16_667);
-
 pub(crate) fn take_startup_activation_token_from_environment() -> Option<String> {
     let token = std::env::var(XDG_ACTIVATION_TOKEN_ENV_VAR)
         .ok()
@@ -499,7 +495,7 @@ impl ExternalDataSource for WaylandDropData {
 impl Drop for WaylandDropData {
     fn drop(&mut self) {
         if self.phase.get() == DropPhase::Dropped {
-            self.offer.finish();
+            finish_offer(&self.offer);
         }
         self.offer.destroy();
         self.connection.flush().log_err();
@@ -563,9 +559,43 @@ trait FileDragDataOffer {
     fn destroy(&self);
 }
 
+/// Mandara patch 5: what the compositor settled on for a drag's offer
+/// (`wl_data_offer.action`), kept as the offer's user data. `finish` is a
+/// protocol error (`invalid_finish`, fatal for the whole connection) unless
+/// an action was chosen, which a source that offers only `move` or `ask`
+/// never gets from an offer that asked for `copy`.
+#[derive(Default)]
+pub(crate) struct DataOfferState {
+    action: std::sync::atomic::AtomicU32,
+}
+
+impl DataOfferState {
+    fn set_action(&self, action: WEnum<DndAction>) {
+        let bits = match action {
+            WEnum::Value(action) => action.bits(),
+            WEnum::Unknown(bits) => bits,
+        };
+        self.action.store(bits, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Whether the compositor chose an action, which `finish` requires.
+    fn can_finish(&self) -> bool {
+        self.action.load(std::sync::atomic::Ordering::Relaxed) != DndAction::None.bits()
+    }
+}
+
+/// Mandara patch 5: finishes a dropped offer when the protocol allows it.
+fn finish_offer(offer: &wl_data_offer::WlDataOffer) {
+    if offer.data::<DataOfferState>().is_some_and(DataOfferState::can_finish) {
+        offer.finish();
+    } else {
+        log::warn!("not finishing a drop: the source's actions never matched ours");
+    }
+}
+
 impl FileDragDataOffer for wl_data_offer::WlDataOffer {
     fn finish(&self) {
-        wl_data_offer::WlDataOffer::finish(self);
+        finish_offer(self);
     }
 
     fn destroy(&self) {
@@ -682,6 +712,16 @@ pub(crate) struct ExternalDrag {
     source: wl_data_source::WlDataSource,
     content: ExternalDragContent,
     window: WaylandWindowStatePtr,
+    /// Mandara patch 5: the action the receiver and the compositor settled on
+    /// last (`wl_data_source.action`); `None` until one is chosen.
+    action: DndAction,
+}
+
+/// Mandara patch 5: whether a finished drop moved its data, which is what
+/// `FileDropEvent::Delivered` reports. A copy leaves the dragged items where
+/// they were.
+fn drop_moved(action: DndAction) -> bool {
+    action == DndAction::Move
 }
 
 /// Mandara patch 13: what an outbound drag sends.
@@ -801,28 +841,48 @@ impl WaylandClientStatePtr {
         }
     }
 
-    /// Queue a retry tick for `surface_id` one refresh interval from now. An immediate
-    /// retry would spin against the frame-rate throttle that deferred the draw in the
-    /// first place.
-    pub fn schedule_frame_retry(&self, surface_id: &ObjectId) {
-        let client = self.get_client();
+    /// Queue a retry tick for `surface_id` after `delay`. An immediate retry would spin
+    /// against the frame-rate throttle that deferred the draw in the first place, and
+    /// Mandara patch 7: the window grows the delay while its draws keep failing.
+    pub fn schedule_frame_retry(&self, surface_id: &ObjectId, delay: Duration) {
+        self.schedule_window_timer(surface_id, delay, |window, deadline| {
+            window.retry_timer_fired(deadline);
+        });
+    }
+
+    /// Mandara patch 8: run `window.idle_release_fired()` after `delay`, which
+    /// frees the window's idle GPU memory without drawing a frame.
+    pub fn schedule_idle_release(&self, surface_id: &ObjectId, delay: Duration) {
+        self.schedule_window_timer(surface_id, delay, |window, _| window.idle_release_fired());
+    }
+
+    fn schedule_window_timer(
+        &self,
+        surface_id: &ObjectId,
+        delay: Duration,
+        fire: fn(&WaylandWindowStatePtr, Instant),
+    ) {
+        // Mandara patch 6: no client means no event loop to arm.
+        let Some(client) = self.try_get_client() else {
+            return;
+        };
         let state = client.borrow();
         let surface_id = surface_id.clone();
         let this = self.clone();
         if let Err(err) = state.loop_handle.insert_source(
-            Timer::from_duration(FRAME_RETRY_INTERVAL),
+            Timer::from_duration(delay),
             move |deadline, _, _| {
                 let Some(client) = this.0.upgrade() else {
                     return TimeoutAction::Drop;
                 };
                 let window = get_window(&mut client.borrow_mut(), &surface_id);
                 if let Some(window) = window {
-                    window.retry_timer_fired(deadline);
+                    fire(&window, deadline);
                 }
                 TimeoutAction::Drop
             },
         ) {
-            log::error!("Failed to schedule frame retry: {err}");
+            log::error!("Failed to schedule a window timer: {err}");
         }
     }
 
@@ -882,6 +942,7 @@ impl WaylandClientStatePtr {
             source,
             content,
             window,
+            action: DndAction::None,
         }) {
             previous.source.destroy();
         }
@@ -986,9 +1047,18 @@ impl WaylandClientStatePtr {
     }
 
     pub fn drop_window(&self, surface_id: &ObjectId) {
-        let client = self.get_client();
+        // Mandara patch 6: a window can be dropped after its connection went
+        // away (a fatal protocol error ends the event loop, then the client
+        // and its window map are dropped before the windows' owners): there
+        // is nothing left to unregister it from, and a panic in `Drop` would
+        // abort the shutdown.
+        let Some(client) = self.try_get_client() else {
+            return;
+        };
         let mut state = client.borrow_mut();
-        let closed_window = state.windows.remove(surface_id).unwrap();
+        let Some(closed_window) = state.windows.remove(surface_id) else {
+            return;
+        };
         if let Some(window) = state.mouse_focused_window.take()
             && !window.ptr_eq(&closed_window)
         {
@@ -3397,19 +3467,25 @@ impl Dispatch<wl_data_device::WlDataDevice, ()> for WaylandClientStatePtr {
     }
 
     event_created_child!(WaylandClientStatePtr, wl_data_device::WlDataDevice, [
-        wl_data_device::EVT_DATA_OFFER_OPCODE => (wl_data_offer::WlDataOffer, ()),
+        wl_data_device::EVT_DATA_OFFER_OPCODE => (wl_data_offer::WlDataOffer, DataOfferState::default()),
     ]);
 }
 
-impl Dispatch<wl_data_offer::WlDataOffer, ()> for WaylandClientStatePtr {
+impl Dispatch<wl_data_offer::WlDataOffer, DataOfferState> for WaylandClientStatePtr {
     fn event(
         this: &mut Self,
         data_offer: &wl_data_offer::WlDataOffer,
         event: wl_data_offer::Event,
-        _: &(),
+        offer_state: &DataOfferState,
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
+        // Mandara patch 5: the action the compositor chose for the drop.
+        if let wl_data_offer::Event::Action { dnd_action } = event {
+            offer_state.set_action(dnd_action);
+            return;
+        }
+
         let client = this.get_client();
         let mut state = client.borrow_mut();
 
@@ -3466,7 +3542,8 @@ impl Dispatch<wl_data_source::WlDataSource, DataSourceKind> for WaylandClientSta
                     ExternalDragContent::Data(data) => match data.offer(&mime_type) {
                         Some(offer) => match &offer.content {
                             DragContent::Bytes(bytes) => {
-                                let bytes = bytes.to_vec();
+                                // Mandara patch 5: shared, not copied.
+                                let bytes = bytes.clone();
                                 state.clipboard.send_bytes(fd, bytes);
                             }
                             DragContent::File(path) => {
@@ -3488,6 +3565,19 @@ impl Dispatch<wl_data_source::WlDataSource, DataSourceKind> for WaylandClientSta
                     },
                 }
             }
+            // Mandara patch 5: what the receiver chose for the drop.
+            (DataSourceKind::Drag, wl_data_source::Event::Action { dnd_action }) => {
+                if let Some(drag) = state
+                    .external_drag
+                    .as_mut()
+                    .filter(|drag| drag.source == *data_source)
+                {
+                    drag.action = match dnd_action {
+                        WEnum::Value(action) => action,
+                        WEnum::Unknown(_) => DndAction::None,
+                    };
+                }
+            }
             (
                 DataSourceKind::Drag,
                 event @ (wl_data_source::Event::DndFinished | wl_data_source::Event::Cancelled),
@@ -3504,12 +3594,16 @@ impl Dispatch<wl_data_source::WlDataSource, DataSourceKind> for WaylandClientSta
                     return;
                 };
                 external_drag.source.destroy();
-                // Mandara patch 13: tell the source window the drop was taken.
+                // Mandara patch 13: tell the source window the drop was taken
+                // (patch 5: and moved).
                 if matches!(event, wl_data_source::Event::DndFinished) {
+                    let moved = drop_moved(external_drag.action);
                     drop(state);
-                    external_drag
-                        .window
-                        .handle_input(PlatformInput::FileDrop(FileDropEvent::Delivered));
+                    if moved {
+                        external_drag
+                            .window
+                            .handle_input(PlatformInput::FileDrop(FileDropEvent::Delivered));
+                    }
                     external_drag
                         .window
                         .handle_input(PlatformInput::FileDrop(FileDropEvent::Ended));
@@ -3736,6 +3830,29 @@ mod tests {
         fn receive(&self, _: &str) -> Option<Box<dyn std::io::Read + Send>> {
             None
         }
+    }
+
+    #[test]
+    fn an_offer_is_finished_only_once_the_compositor_chose_an_action() {
+        let offer = DataOfferState::default();
+        assert!(!offer.can_finish(), "no action chosen yet: finishing is invalid_finish");
+        offer.set_action(WEnum::Value(DndAction::None));
+        assert!(!offer.can_finish(), "a source that offers only move or ask never matches copy");
+        offer.set_action(WEnum::Value(DndAction::Copy));
+        assert!(offer.can_finish());
+        // The compositor can change its mind (a modifier key) and give up.
+        offer.set_action(WEnum::Value(DndAction::None));
+        assert!(!offer.can_finish());
+        offer.set_action(WEnum::Unknown(DndAction::Copy.bits()));
+        assert!(offer.can_finish());
+    }
+
+    #[test]
+    fn only_a_move_is_delivered() {
+        assert!(drop_moved(DndAction::Move));
+        assert!(!drop_moved(DndAction::Copy));
+        assert!(!drop_moved(DndAction::Ask));
+        assert!(!drop_moved(DndAction::None));
     }
 
     fn data_drag_state() -> DragState<FakeDataOffer, &'static str, FakeData> {

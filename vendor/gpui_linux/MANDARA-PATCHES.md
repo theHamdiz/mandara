@@ -104,17 +104,81 @@ The Wayland side of GPUI core's patch 13 (Stash's shelves).
 * **Data out.** `start_external_drag` offers every type of an
   `ExternalDragPayload::Data` (`ExternalDragContent`); `Send` writes bytes
   through the clipboard's writer or streams a file on the background
-  executor. `DndFinished` sends `FileDropEvent::Delivered` before `Ended`. A
+  executor. `DndFinished` sends `FileDropEvent::Delivered` before `Ended` when the drop
+  was a move (patch 5). A
   drag that replaces one that never ended destroys the old source, and the
   events of a replaced source are ignored.
 * **Margins.** `set_layer_margin` sets the layer surface's margins and
   commits (`WaylandSurfaceState::set_margin`).
+
+## 5. Drag and clipboard protocol robustness (`wayland/client.rs`, `wayland/clipboard.rs`)
+
+* **Finishing a drop.** `wl_data_offer.finish` is a fatal protocol error
+  (`invalid_finish`, the whole connection) unless the compositor chose an
+  action. The offers ask for `copy` only, so a source that offers just `move`
+  or `ask` (or a drop the compositor never settled) used to kill the shell's
+  connection. The offer's user data (`DataOfferState`) records
+  `wl_data_offer.action`, and `finish_offer` finishes (data drops and file
+  drops alike) only when one was chosen; otherwise the offer is only destroyed.
+* **Outbound bytes.** `send_bytes` (`write_when_writable`) makes the receiver's
+  pipe non-blocking before registering its calloop write source, so the
+  `WouldBlock` path works: a large or stalled receiver no longer blocks the
+  event loop (and with it Wayland dispatch and rendering) in `write`. It takes
+  the bytes by `AsRef<[u8]>`, so a drag's `Arc<[u8]>` is shared instead of
+  copied per request.
+* **Delivered means moved.** `wl_data_source.action` is recorded and
+  `FileDropEvent::Delivered` is sent on `DndFinished` only when the final
+  action is `move`; a copy leaves the dragged items where they were.
+* **Clipboard reads.** `read_bytes` no longer unwraps `connection.flush()`: a
+  full socket or a dead connection used to panic on a paste or a selection
+  change.
+
+## 6. Closing windows after the connection (`wayland/client.rs`)
+
+A fatal protocol error ends the event loop, then the client and its window map
+are dropped while windows may still be alive. `drop_window` and the frame timers
+returned through `get_client`, which panics on a dead client, or unwrapped the
+missing window, so the shutdown panicked in `Drop`. They now do nothing when
+the client or the window is already gone.
+
+## 7. Backing off failed draws (`wayland/window.rs`, `wayland/client.rs`)
+
+A draw that failed (`Lost`, `Outdated`, `Timeout`, `Occluded`, a validation
+error, a render error) re-armed the frame retry timer every 16.7 ms, with an
+error logged each time, for as long as it kept failing: a surface that never
+presented (a powered-off output) or a dead connection spun at 60 Hz per window.
+The retry delay now doubles with every failed draw in a row (16.7 ms, 33 ms, …)
+up to one second (`frame_retry_delay`), and the window logs once, after eight
+failures, that it retries slowly. The first successful draw resets it.
+`schedule_frame_retry` takes the delay. GPU device-loss recovery (`gpui_wgpu`
+patch 19) hands the window its own delay the same way, instead of sleeping.
+Each retry still inserts its own one-shot calloop timer; at one a second that
+is not worth a persistent source.
+
+## 8. Idle GPU memory released on a timer (`wayland/window.rs`, `wayland/client.rs`)
+
+After a draw, a window asks the renderer when its idle path textures and
+transition resources are due for release (`gpui_wgpu` patch 20) and arms one
+timer (`schedule_idle_release`, `idle_release_fired`) that frees them without
+drawing a frame and re-arms for whatever is left. The X11 window has no such
+timer and keeps the release-on-next-draw behaviour.
 
 ## Tests
 
 `linux::wayland::client::tests`: a data drag enters and drops without
 finishing its offer itself, one that leaves (or goes stale) lets its transfer
 go, and a typed drag offers each type once.
+
+`linux::wayland::client::tests` (patch 5): an offer is finished only once the
+compositor chose an action (none, `none` and a later `none` after a `copy` do
+not count); only a `move` is delivered.
+
+`linux::wayland::clipboard::tests` (patch 5): a 2 MiB payload written through
+`write_when_writable` never blocks the event loop while nobody reads, arrives
+intact as the reader drains it, and ends with the writer's close.
+
+`linux::wayland::window::presentation_state_tests` (patch 7): the retry delay
+starts at one frame interval, doubles per failed draw and stays at the cap.
 
 `linux::wayland::touch::tests` (9 unit tests): a tap starts and ends where
 the finger lifted; motions are coalesced per frame and flushed before `up`;

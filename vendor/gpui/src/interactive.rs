@@ -893,7 +893,8 @@ pub enum FileDropEvent {
         data: ExternalData,
     },
     /// Mandara patch 13: sent to the window an outbound drag came from, just
-    /// before [`FileDropEvent::Ended`], when the receiver took the drop.
+    /// before [`FileDropEvent::Ended`], when the receiver took the drop and
+    /// moved the data (a copy leaves the dragged items where they were).
     Delivered,
 }
 

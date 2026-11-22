@@ -157,6 +157,16 @@ vendored renderer (`gpui_wgpu` patch 16) draws it with one fragment shader.
 * Other renderers: only the vendored `gpui_wgpu` consumes `PrimitiveBatch`
   in Mandara's build; upstream's Metal and DirectX renderers are not built.
 
+## 14. Boxed transition primitive (`scene.rs`)
+
+Patch 7 stored `TransitionSprite` (about 270 bytes: three atlas tiles, the
+parameters, bounds and mask) inline in `Primitive`, which grew every primitive
+by about half (`Quad`, the largest before, is 176 bytes). Each primitive is
+kept twice per frame (in its typed list and in `paint_operations`) and copied
+on every insert and on every replay of a cached view. `Primitive::Transition`
+now holds a `Box<TransitionSprite>`; the typed `Scene::transitions` list keeps
+the plain sprites, and a transition is a few seconds of a wallpaper change.
+
 ## Tests
 
 `elements::div::tests::hover_without_an_id_updates_its_cached_view` (patch 2,
@@ -179,6 +189,10 @@ without the patch.
   radii, at 1.5× the child's quad carries a device-pixel mask snapped onto the
   card's own background quad, and without overflow (or with one hidden axis)
   nothing is rounded.
+
+`scene::tests` (patch 14): `Primitive` is no bigger than its largest variant
+other than the transition, and transitions keep their draw order through a
+replay.
 
 `window::subpixel::tests::fractional_sdf_bounds_keep_the_legacy_clip_and_opacity`
 checks actual painted scene quads at 1×, 1.25×, 1.5× and 2×: precise bounds,
@@ -331,8 +345,8 @@ dragged in, give anything back out, and follow the pointer around the screen.
   at once (`DragOffer`, the first of a type wins), each from shared bytes or a
   file streamed when the receiver asks (`DragContent::File`), so a large
   picture is never held in memory. `FileDropEvent::Delivered` reaches the
-  source window just before `Ended` when the receiver took the drop (the
-  shelf removes items moved out).
+  source window just before `Ended` when the receiver took the drop and
+  moved the data (the shelf removes items moved out; a copy leaves them).
 * **Moving layer surfaces.** `Window::set_layer_margin((top, right, bottom,
   left))` sets a layer surface's margins and commits at once
   (`PlatformWindow::set_layer_margin`, a no-op elsewhere).

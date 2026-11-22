@@ -154,7 +154,7 @@ impl Scene {
             }
             Primitive::Transition(transition) => {
                 transition.order = order;
-                self.transitions.push(*transition);
+                self.transitions.push(**transition);
             }
         }
         self.paint_operations
@@ -255,7 +255,9 @@ pub enum Primitive {
     SubpixelSprite(SubpixelSprite),
     PolychromeSprite(PolychromeSprite),
     Surface(PaintSurface),
-    Transition(TransitionSprite),
+    /// Mandara patch 14: boxed, as the sprite (about 270 bytes) is larger than
+    /// every other variant and would grow each primitive of the frame.
+    Transition(Box<TransitionSprite>),
 }
 
 #[expect(missing_docs)]
@@ -853,7 +855,7 @@ pub struct TransitionSprite {
 
 impl From<TransitionSprite> for Primitive {
     fn from(transition: TransitionSprite) -> Self {
-        Primitive::Transition(transition)
+        Primitive::Transition(Box::new(transition))
     }
 }
 
@@ -1095,5 +1097,78 @@ impl PathVertex<Pixels> {
             st_position: self.st_position,
             content_mask: self.content_mask.scale(factor),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{AtlasTextureKind, TileId};
+
+    fn transition_sprite() -> TransitionSprite {
+        let tile = AtlasTile {
+            texture_id: AtlasTextureId {
+                index: 0,
+                kind: AtlasTextureKind::Polychrome,
+            },
+            tile_id: TileId(0),
+            padding: 0,
+            bounds: Bounds::default(),
+        };
+        let bounds = Bounds {
+            origin: Point::default(),
+            size: Size {
+                width: ScaledPixels(10.0),
+                height: ScaledPixels(10.0),
+            },
+        };
+        TransitionSprite {
+            order: 0,
+            pad: 0,
+            bounds,
+            content_mask: ContentMask { bounds },
+            from: tile,
+            to: tile,
+            aux: tile,
+            params: TransitionParams::default(),
+        }
+    }
+
+    /// Mandara patch 14: the transition sprite is boxed in `Primitive`, so a
+    /// primitive is no bigger than the biggest of the others, instead of
+    /// every primitive of every frame paying for the one rarely drawn.
+    #[test]
+    fn a_transition_does_not_grow_every_primitive() {
+        let others = [
+            size_of::<Shadow>(),
+            size_of::<Quad>(),
+            size_of::<Path<ScaledPixels>>(),
+            size_of::<Underline>(),
+            size_of::<MonochromeSprite>(),
+            size_of::<SubpixelSprite>(),
+            size_of::<PolychromeSprite>(),
+            size_of::<PaintSurface>(),
+        ];
+        let largest = others.into_iter().max().unwrap();
+        assert!(size_of::<TransitionSprite>() > largest, "the premise of boxing it");
+        assert!(
+            size_of::<Primitive>() <= largest + 16,
+            "Primitive is {} bytes, its largest other variant {largest}",
+            size_of::<Primitive>()
+        );
+    }
+
+    #[test]
+    fn transitions_keep_their_draw_order_through_a_replay() {
+        let mut scene = Scene::default();
+        scene.insert_primitive(transition_sprite());
+        scene.insert_primitive(transition_sprite());
+        assert_eq!(scene.transitions.len(), 2);
+        assert!(scene.transitions[0].order < scene.transitions[1].order);
+
+        let mut replayed = Scene::default();
+        replayed.replay(0..scene.paint_operations.len(), &scene);
+        assert_eq!(replayed.transitions.len(), 2);
+        assert!(replayed.transitions[0].order < replayed.transitions[1].order);
     }
 }

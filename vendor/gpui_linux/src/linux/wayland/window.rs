@@ -4,7 +4,7 @@ use std::{
     ptr::NonNull,
     rc::Rc,
     sync::Arc,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use calloop::ping::Ping;
@@ -44,7 +44,7 @@ use gpui::{
     popup::PopupOptions,
     px, size,
 };
-use gpui_wgpu::{CompositorGpuHint, WgpuRenderer, WgpuSurfaceConfig, wgpu};
+use gpui_wgpu::{CompositorGpuHint, Recovery, WgpuRenderer, WgpuSurfaceConfig, wgpu};
 
 #[derive(Default)]
 pub(crate) struct Callbacks {
@@ -133,6 +133,14 @@ pub struct WaylandWindowState {
     hovered: bool,
     redraw_requested: bool,
     presentation: PresentationState,
+    /// Mandara patch 7: draws that failed in a row; sets the retry delay.
+    failed_draws: u32,
+    /// Mandara patch 7: when GPU recovery asked to be called again.
+    gpu_retry_in: Option<Duration>,
+    /// Mandara patch 8: when the renderer's idle GPU memory is due for
+    /// release, until a timer is armed for it.
+    idle_release_in: Option<Duration>,
+    idle_release_armed: bool,
     pending_frame_callback: Option<wl_callback::WlCallback>,
     in_progress_configure: Option<InProgressConfigure>,
     resize_throttle: bool,
@@ -572,6 +580,13 @@ pub struct WaylandWindowStatePtr {
 }
 
 impl WaylandWindowState {
+    /// Mandara patch 7: how long the next retry tick waits.
+    fn take_retry_delay(&mut self) -> Duration {
+        self.gpu_retry_in
+            .take()
+            .unwrap_or_else(|| frame_retry_delay(self.failed_draws))
+    }
+
     pub(crate) fn new(
         handle: AnyWindowHandle,
         surface: wl_surface::WlSurface,
@@ -655,6 +670,10 @@ impl WaylandWindowState {
             hovered: false,
             redraw_requested: false,
             presentation: PresentationState::Unpresented,
+            failed_draws: 0,
+            gpu_retry_in: None,
+            idle_release_in: None,
+            idle_release_armed: false,
             pending_frame_callback: None,
             in_progress_window_controls: None,
             window_controls: WindowControls::default(),
@@ -711,6 +730,31 @@ impl WaylandWindowState {
     }
 }
 
+/// Pacing for retry ticks: a fixed 60Hz interval. Retries only occur for throttled or
+/// failed-present frames, so matching the output's actual refresh rate wouldn't be observable.
+const FRAME_RETRY_INTERVAL: Duration = Duration::from_micros(16_667);
+
+/// Mandara patch 7: the slowest retry of a window whose draws keep failing
+/// (a surface on a powered-off output, a dead connection): one tick a second.
+const FAILED_DRAW_RETRY_MAX: Duration = Duration::from_secs(1);
+
+/// Mandara patch 7: consecutive failed draws after which the window logs once
+/// that it is retrying at the slow pace.
+const FAILED_DRAWS_BEFORE_WARNING: u32 = 8;
+
+/// Mandara patch 7: how long to wait before ticking a window again: one frame
+/// interval, doubling with every failed draw in a row up to
+/// [`FAILED_DRAW_RETRY_MAX`], so a persistent failure costs one wakeup a second
+/// per window instead of sixty.
+fn frame_retry_delay(failed_draws: u32) -> Duration {
+    match failed_draws {
+        0 => FRAME_RETRY_INTERVAL,
+        n => FRAME_RETRY_INTERVAL
+            .saturating_mul(1 << (n - 1).min(6))
+            .min(FAILED_DRAW_RETRY_MAX),
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PresentationState {
     Unpresented,
@@ -737,7 +781,24 @@ impl PresentationState {
 
 #[cfg(test)]
 mod presentation_state_tests {
-    use super::PresentationState;
+    use super::{
+        FAILED_DRAW_RETRY_MAX, FRAME_RETRY_INTERVAL, PresentationState, frame_retry_delay,
+    };
+
+    #[test]
+    fn retries_back_off_with_failed_draws_up_to_a_cap() {
+        assert_eq!(frame_retry_delay(0), FRAME_RETRY_INTERVAL);
+        assert_eq!(frame_retry_delay(1), FRAME_RETRY_INTERVAL);
+        assert_eq!(frame_retry_delay(2), FRAME_RETRY_INTERVAL * 2);
+        assert_eq!(frame_retry_delay(4), FRAME_RETRY_INTERVAL * 8);
+        let mut previous = frame_retry_delay(0);
+        for failures in 1..=1000 {
+            let delay = frame_retry_delay(failures);
+            assert!(delay >= previous && delay <= FAILED_DRAW_RETRY_MAX);
+            previous = delay;
+        }
+        assert_eq!(frame_retry_delay(u32::MAX), FAILED_DRAW_RETRY_MAX);
+    }
 
     #[test]
     fn failure_tracks_whether_the_surface_has_presented() {
@@ -989,6 +1050,7 @@ impl WaylandWindowStatePtr {
     }
 
     fn complete_frame(&self) {
+        self.arm_idle_release();
         let mut state = self.state.borrow_mut();
 
         let frame_loop = self.frame_loop.get();
@@ -1015,8 +1077,9 @@ impl WaylandWindowStatePtr {
             self.frame_loop.set(FrameLoop::RetryScheduled);
             let surface_id = state.surface.id();
             let client = state.client.clone();
+            let delay = state.take_retry_delay();
             drop(state);
-            client.schedule_frame_retry(&surface_id);
+            client.schedule_frame_retry(&surface_id, delay);
             return;
         }
 
@@ -1024,12 +1087,43 @@ impl WaylandWindowStatePtr {
             self.frame_loop.set(FrameLoop::RetryScheduled);
             let surface_id = state.surface.id();
             let client = state.client.clone();
+            let delay = state.take_retry_delay();
             drop(state);
-            client.schedule_frame_retry(&surface_id);
+            client.schedule_frame_retry(&surface_id, delay);
             return;
         }
 
         self.frame_loop.set(FrameLoop::Parked);
+    }
+
+    /// Mandara patch 8: arms the timer that frees the renderer's idle GPU
+    /// memory, when the last draw left some due for release.
+    fn arm_idle_release(&self) {
+        let mut state = self.state.borrow_mut();
+        if state.idle_release_armed {
+            return;
+        }
+        let Some(delay) = state.idle_release_in.take() else {
+            return;
+        };
+        state.idle_release_armed = true;
+        let surface_id = state.surface.id();
+        let client = state.client.clone();
+        drop(state);
+        client.schedule_idle_release(&surface_id, delay);
+    }
+
+    /// Mandara patch 8: the idle-release timer fired: free what has been idle
+    /// long enough (no frame is drawn) and wait again for the rest.
+    pub fn idle_release_fired(&self) {
+        let mut state = self.state.borrow_mut();
+        state.idle_release_armed = false;
+        state.idle_release_in = state.renderer.as_mut().and_then(|renderer| {
+            renderer.release_idle_resources();
+            renderer.idle_release_in()
+        });
+        drop(state);
+        self.arm_idle_release();
     }
 
     pub fn frame_callback_fired(&self, signal_at: Option<Instant>) {
@@ -2052,11 +2146,10 @@ impl PlatformWindow for WaylandWindow {
                     .display_ptr()
                     .cast::<std::ffi::c_void>(),
             };
-            match renderer.recover(&raw_window) {
-                Ok(()) => {}
-                Err(err) => {
-                    log::warn!("GPU recovery failed, will retry on next frame: {err}");
-                }
+            // Mandara patch 7: recovery never sleeps; when it is not done it says
+            // when to call again, and the frame retry timer waits that long.
+            if let Recovery::RetryIn(delay) = renderer.recover(&raw_window) {
+                state.gpu_retry_in = Some(delay);
             }
 
             state.redraw_requested = true;
@@ -2070,15 +2163,31 @@ impl PlatformWindow for WaylandWindow {
             state.pending_frame_callback = Some(callback);
         }
         if renderer.draw(scene) {
+            if state.failed_draws >= FAILED_DRAWS_BEFORE_WARNING {
+                log::info!("drawing works again after {} failed frames", state.failed_draws);
+            }
+            state.failed_draws = 0;
             state.presentation = PresentationState::Presented;
             self.0.frame_loop.set(FrameLoop::AwaitingCallback);
         } else {
+            state.failed_draws = state.failed_draws.saturating_add(1);
+            if state.failed_draws == FAILED_DRAWS_BEFORE_WARNING {
+                log::warn!(
+                    "{FAILED_DRAWS_BEFORE_WARNING} frames in a row failed to draw; retrying \
+                     once every {FAILED_DRAW_RETRY_MAX:?} until one does"
+                );
+            }
             state.presentation = state.presentation.failed();
             self.0.frame_loop.set(FrameLoop::PresentationFailed);
         }
 
         if renderer.needs_redraw() {
             state.redraw_requested = true;
+        }
+        // Mandara patch 8: a surface that draws nothing more still frees its
+        // idle GPU memory.
+        if let Some(delay) = renderer.idle_release_in() {
+            state.idle_release_in = Some(delay);
         }
     }
 

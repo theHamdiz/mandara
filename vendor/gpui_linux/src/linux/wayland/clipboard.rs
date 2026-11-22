@@ -1,17 +1,17 @@
 use std::{
-    fs::File,
     io::{ErrorKind, Write},
-    os::fd::{AsRawFd, BorrowedFd, OwnedFd},
+    os::fd::{AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd},
 };
 
 use calloop::{LoopHandle, PostAction};
-use filedescriptor::Pipe;
+use filedescriptor::{FileDescriptor, Pipe};
 use strum::IntoEnumIterator;
 use wayland_client::{Connection, protocol::wl_data_offer::WlDataOffer};
 use wayland_protocols::wp::primary_selection::zv1::client::zwp_primary_selection_offer_v1::ZwpPrimarySelectionOfferV1;
 
 use crate::linux::platform::{PIPE_READ_TIMEOUT, read_fd_with_timeout};
 use gpui::{ClipboardEntry, ClipboardItem, Image, ImageFormat, hash};
+use gpui_util::ResultExt as _;
 
 /// Text mime types that we'll offer to other programs.
 pub(crate) const TEXT_MIME_TYPES: [&str; 3] =
@@ -89,7 +89,9 @@ impl<T: ReceiveData> DataOffer<T> {
         let fd = pipe.read;
         drop(pipe.write);
 
-        connection.flush().unwrap();
+        // Mandara patch 5: a full socket or a dead connection is no reason to
+        // panic on a paste; the read below then simply times out.
+        connection.flush().log_err();
 
         match read_fd_with_timeout(fd, PIPE_READ_TIMEOUT) {
             Ok(bytes) => Some(bytes),
@@ -236,32 +238,98 @@ impl Clipboard {
         &self.connection
     }
 
-    pub fn send_bytes(&self, fd: OwnedFd, bytes: Vec<u8>) {
-        let mut written = 0;
-        self.loop_handle
-            .insert_source(
-                calloop::generic::Generic::new(
-                    File::from(fd),
-                    calloop::Interest::WRITE,
-                    calloop::Mode::Level,
-                ),
-                move |_, file, _| {
-                    let file = unsafe { file.get_mut() };
-                    loop {
-                        match file.write(&bytes[written..]) {
-                            Ok(n) if written + n == bytes.len() => {
-                                written += n;
-                                break Ok(PostAction::Remove);
-                            }
-                            Ok(n) => written += n,
-                            Err(err) if err.kind() == ErrorKind::WouldBlock => {
-                                break Ok(PostAction::Continue);
-                            }
-                            Err(_) => break Ok(PostAction::Remove),
-                        }
+    /// Writes `bytes` to `fd` from the event loop as the receiver drains the
+    /// pipe; see [`write_when_writable`].
+    pub fn send_bytes(&self, fd: OwnedFd, bytes: impl AsRef<[u8]> + 'static) {
+        write_when_writable(&self.loop_handle, fd, bytes);
+    }
+}
+
+/// Mandara patch 5: writes `bytes` to `fd` as the receiver drains the pipe.
+/// The fd is made non-blocking first, so a large or stalled receiver never
+/// blocks the event loop in `write` (a blocking pipe would hold it until the
+/// receiver had read every byte), and the bytes are shared (`Arc<[u8]>`), never
+/// copied per request.
+pub(crate) fn write_when_writable<D: 'static>(
+    loop_handle: &LoopHandle<'static, D>,
+    fd: OwnedFd,
+    bytes: impl AsRef<[u8]> + 'static,
+) {
+    // SAFETY: `into_raw_fd` hands over sole ownership of an open fd.
+    let mut fd = unsafe { FileDescriptor::from_raw_fd(fd.into_raw_fd()) };
+    if let Err(err) = fd.set_non_blocking(true) {
+        log::error!("cannot make the data pipe non-blocking: {err:#}");
+        return;
+    }
+    let mut written = 0;
+    if let Err(err) = loop_handle.insert_source(
+        calloop::generic::Generic::new(fd, calloop::Interest::WRITE, calloop::Mode::Level),
+        move |_, fd, _| {
+            let bytes = bytes.as_ref();
+            // SAFETY: the descriptor is only written to, never replaced.
+            let fd = unsafe { fd.get_mut() };
+            loop {
+                if written == bytes.len() {
+                    break Ok(PostAction::Remove);
+                }
+                match fd.write(&bytes[written..]) {
+                    Ok(0) => break Ok(PostAction::Remove),
+                    Ok(n) => written += n,
+                    Err(err) if err.kind() == ErrorKind::Interrupted => {}
+                    Err(err) if err.kind() == ErrorKind::WouldBlock => {
+                        break Ok(PostAction::Continue);
                     }
-                },
-            )
-            .unwrap();
+                    Err(_) => break Ok(PostAction::Remove),
+                }
+            }
+        },
+    ) {
+        log::error!("cannot send data through the pipe: {err}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{io::Read, os::fd::FromRawFd as _, sync::Arc, time::Duration};
+
+    /// Mandara patch 5: a payload far larger than the pipe's buffer is
+    /// written as the reader drains it, and a reader that has not read yet
+    /// never blocks the event loop.
+    #[test]
+    fn a_large_payload_never_blocks_the_event_loop() {
+        let payload: Arc<[u8]> = (0..2 * 1024 * 1024u32).map(|i| (i % 251) as u8).collect();
+        let mut event_loop = calloop::EventLoop::<()>::try_new().unwrap();
+        let pipe = Pipe::new().unwrap();
+        // SAFETY: the pipe's write end is owned and handed over here.
+        let write = unsafe { OwnedFd::from_raw_fd(pipe.write.into_raw_fd()) };
+        write_when_writable(&event_loop.handle(), write, payload.clone());
+
+        // Nobody reads yet: the loop fills the pipe, then returns instead of blocking.
+        for _ in 0..4 {
+            event_loop.dispatch(Some(Duration::from_millis(10)), &mut ()).unwrap();
+        }
+
+        let mut read = pipe.read;
+        read.set_non_blocking(true).unwrap();
+        let mut received = Vec::with_capacity(payload.len());
+        let mut chunk = [0u8; 16 * 1024];
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while received.len() < payload.len() {
+            assert!(std::time::Instant::now() < deadline, "the payload never arrived");
+            event_loop.dispatch(Some(Duration::from_millis(10)), &mut ()).unwrap();
+            loop {
+                match read.read(&mut chunk) {
+                    Ok(0) => break,
+                    Ok(n) => received.extend_from_slice(&chunk[..n]),
+                    Err(err) if err.kind() == ErrorKind::WouldBlock => break,
+                    Err(err) => panic!("read failed: {err}"),
+                }
+            }
+        }
+        assert_eq!(received.as_slice(), &payload[..]);
+        // The writer is done and closed its end: the reader sees the end.
+        event_loop.dispatch(Some(Duration::from_millis(10)), &mut ()).unwrap();
+        assert_eq!(read.read(&mut chunk).unwrap(), 0);
     }
 }

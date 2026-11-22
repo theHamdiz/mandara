@@ -1764,12 +1764,9 @@ impl PlatformWindow for X11Window {
                 window_id: self.0.x_window,
                 visual_id: inner.visual_id,
             };
-            match renderer.recover(&raw_window) {
-                Ok(()) => {}
-                Err(err) => {
-                    log::warn!("GPU recovery failed, will retry on next frame: {err}");
-                }
-            }
+            // Mandara patch 19: recovery paces itself (it returns at once
+            // until its next attempt is due), so the next frame retries.
+            renderer.recover(&raw_window);
 
             inner.force_render_after_recovery = true;
             return;
