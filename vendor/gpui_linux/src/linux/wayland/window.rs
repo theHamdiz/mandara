@@ -855,12 +855,15 @@ impl WaylandWindow {
         gpu_context: gpui_wgpu::GpuContext,
         compositor_gpu: Option<CompositorGpuHint>,
         client: WaylandClientStatePtr,
-        params: WindowParams,
+        mut params: WindowParams,
         appearance: WindowAppearance,
         parent: Option<WaylandWindowStatePtr>,
         popup_grab: Option<(u32, wl_seat::WlSeat)>,
         target_output: Option<wl_output::WlOutput>,
     ) -> anyhow::Result<(Self, ObjectId)> {
+        // Mandara patch 3: the initial size is whole logical pixels too; a scale-only rescale
+        // keeps it, so it must not start fractional.
+        params.bounds.size = whole_pixels(params.bounds.size);
         let surface = globals.compositor.create_surface(&globals.qh, ());
         let surface_state = WaylandSurfaceState::new(
             &surface,
@@ -1534,12 +1537,7 @@ impl WaylandWindowStatePtr {
         // Mandara patch 3: Wayland surface sizes are whole logical pixels. A fractional size
         // (e.g. 351.5) rounds to an odd buffer under an integer `set_buffer_scale(2)`, and the
         // compositor kills the connection with `wl_surface` error `invalid_size`.
-        let size = size.map(|size| {
-            Size::new(
-                px(f32::from(size.width).round()),
-                px(f32::from(size.height).round()),
-            )
-        });
+        let size = size.map(whole_pixels);
         let (size, scale) = {
             let mut state = self.state.borrow_mut();
             if size.is_none_or(|size| size == state.bounds.size)
@@ -2443,6 +2441,15 @@ fn compute_outer_size(
 
         new_size
     })
+}
+
+/// Mandara patch 3: a Wayland surface size in whole logical pixels, so its buffer is a multiple
+/// of any integer buffer scale.
+fn whole_pixels(size: Size<Pixels>) -> Size<Pixels> {
+    Size::new(
+        px(f32::from(size.width).round()),
+        px(f32::from(size.height).round()),
+    )
 }
 
 fn inset_by_tiling(mut bounds: Bounds<Pixels>, inset: Pixels, tiling: Tiling) -> Bounds<Pixels> {

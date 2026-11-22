@@ -119,7 +119,10 @@ integer `wl_surface.set_buffer_scale(2)` (used when the compositor has no
 is the `wl_surface.invalid_size` protocol error: wlroots-based compositors
 (Umbriel, for one) disconnect the client, taking every Mandara surface — bar,
 wallpaper, lock screen — with it. The size is now rounded to whole logical
-pixels before it reaches the renderer, the viewport and the resize callback;
+pixels (`whole_pixels`) both when the window is created (`WaylandWindow::new`,
+since a scale-only rescale keeps the initial size) and in
+`set_size_and_scale`, before it reaches the renderer, the viewport and the
+resize callback;
 Wayland window geometry, configure sizes and viewport destinations are whole
 logical pixels anyway.
 
