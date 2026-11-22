@@ -5,6 +5,29 @@ use std::sync::Arc;
 
 use crate::color::{Color, lerp};
 
+/// A palette name that is safe to print into a generated file's comment
+/// header or attribute: control characters (a newline would end a `#` or `//`
+/// comment and let the rest of the name be read as configuration), Unicode
+/// line and paragraph separators and bidirectional overrides become spaces,
+/// and `*/` can no longer close a `/* */` comment early. Names come from
+/// wallpaper file names and user theme files, so no template may print
+/// [`MandaraPalette::name`] without this.
+pub fn comment_safe_name(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    for c in name.chars() {
+        let hostile = c.is_control()
+            || matches!(c, '\u{2028}' | '\u{2029}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}');
+        if hostile {
+            out.push(' ');
+        } else if c == '/' && out.ends_with('*') {
+            out.push_str(" /");
+        } else {
+            out.push(c);
+        }
+    }
+    out.trim().to_owned()
+}
+
 /// Every semantic design token the shell renders with.
 ///
 /// Surfaces form an elevation ladder; glass and rim tokens drive the
@@ -162,6 +185,12 @@ pub fn glow_for(primary: Color, is_dark: bool) -> Color {
 }
 
 impl MandaraPalette {
+    /// [`Self::name`] made safe to print into a generated file; see
+    /// [`comment_safe_name`].
+    pub fn template_name(&self) -> String {
+        comment_safe_name(&self.name)
+    }
+
     /// Recomputes the tokens that are defined relative to `primary`. Call after
     /// overriding `primary` by hand.
     pub fn rederive_accents(&mut self) {
@@ -313,6 +342,20 @@ mod ownership_tests;
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn comment_safe_names_lose_line_breaks_and_comment_terminators() {
+        assert_eq!(super::comment_safe_name("Rosé Pine · Vibrant"), "Rosé Pine · Vibrant");
+        assert_eq!(super::comment_safe_name("a\nb\r\nc\td"), "a b  c d");
+        assert_eq!(super::comment_safe_name("x */ y"), "x * / y");
+        assert_eq!(super::comment_safe_name("**/"), "** /");
+        assert_eq!(super::comment_safe_name("a\u{2028}b\u{2029}c\u{202e}d"), "a b c d");
+        assert_eq!(super::comment_safe_name("\n"), "");
+        for hostile in ["*/", "\n\n*/\n/", "*\n/", "*\u{2028}/"] {
+            let safe = super::comment_safe_name(hostile);
+            assert!(!safe.contains("*/") && !safe.chars().any(char::is_control), "{safe:?}");
+        }
+    }
+
     use super::*;
     use crate::catalog;
 

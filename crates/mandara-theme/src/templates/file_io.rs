@@ -45,6 +45,25 @@ pub(super) fn write_recorded(path: &Path,body: &str) -> std::io::Result<Option<s
     Ok(Some(super::PublishedWrite { target, stamp }))
 }
 
+/// Copies `source` (through a symlink: the backup holds the content the user
+/// sees) to a new file at `backup`, with the source's permissions. `backup`
+/// is created exclusively, so nothing planted there, not even a dangling
+/// symlink, is written through; an existing path is `AlreadyExists`.
+pub(super) fn copy_new(source: &Path, backup: &Path) -> std::io::Result<()> {
+    let mut from = std::fs::File::open(source)?;
+    let mut to = std::fs::OpenOptions::new().write(true).create_new(true).open(backup)?;
+    let result = (|| {
+        to.set_permissions(from.metadata()?.permissions())?;
+        std::io::copy(&mut from, &mut to)?;
+        to.sync_all()?;
+        sync_parent(backup)
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(backup);
+    }
+    result
+}
+
 pub(super) fn sync_parent(path: &Path) -> std::io::Result<()> {
     let parent = path.parent().ok_or_else(|| std::io::Error::other("app theme target has no parent"))?;
     std::fs::File::open(parent)?.sync_all()

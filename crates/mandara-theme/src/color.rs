@@ -284,14 +284,22 @@ impl Color {
 
     /// WCAG 2.x relative luminance of the opaque color.
     pub fn relative_luminance(self) -> f32 {
-        let linear = Srgb::new(self.to_srgba().red, self.to_srgba().green, self.to_srgba().blue)
-            .into_linear::<f32>();
+        // `to_srgba` gamut-maps (a bisection): do it once, not per channel.
+        let srgb = self.to_srgba();
+        let linear = Srgb::new(srgb.red, srgb.green, srgb.blue).into_linear::<f32>();
         0.2126 * linear.red + 0.7152 * linear.green + 0.0722 * linear.blue
     }
 
     /// WCAG 2.x contrast ratio between two opaque colors, `1.0..=21.0`.
     pub fn contrast_ratio(self, other: Color) -> f32 {
-        let (a, b) = (self.relative_luminance(), other.relative_luminance());
+        self.contrast_with_luminance(other.relative_luminance())
+    }
+
+    /// [`Self::contrast_ratio`] against a color whose
+    /// [`relative_luminance`](Self::relative_luminance) is already known, for
+    /// loops that test many colors against one background.
+    pub fn contrast_with_luminance(self, other_luminance: f32) -> f32 {
+        let (a, b) = (self.relative_luminance(), other_luminance);
         let (hi, lo) = if a > b { (a, b) } else { (b, a) };
         (hi + 0.05) / (lo + 0.05)
     }

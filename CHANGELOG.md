@@ -11,6 +11,7 @@ About → What's new shows it too.
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 Mandara's default typefaces are Inter, Alexandria (including Arabic) and
 CaskaydiaCove Nerd Font Mono, with Nerd Font substitutes until Maintenance
 downloads the real face. Opt-in system font sync can push those families to
@@ -107,6 +108,17 @@ A frozen Mandara shell now restarts by itself, and the control socket and the su
 - A second `mandara studio` now brings the open Studio forward even when another client is stuck on its socket, and two Studios started together no longer race for it.
 - The idle shell no longer wakes up every 30 seconds to compact its memory unless something freed a meaningful amount of it.
 >>>>>>> pr-218
+=======
+App themes can no longer be tampered with through a wallpaper or theme name, and an interrupted shortcut change is undone on the next edit.
+
+### Fixed
+
+- A wallpaper file name or a community theme name can no longer smuggle extra lines into the app themes Mandara writes (kitty, Neovim, GTK, Qt, Kvantum, Firefox, Vesktop and the rest): line breaks and comment endings in the name are neutralised, so a downloaded wallpaper cannot make another app run code.
+- App themes keep a config file's Windows (CRLF) line endings instead of rewriting the whole file on every theme change, and backups of your configs are never written through a symlink someone placed at the backup path.
+- Light-only themes no longer get dark-mode OLED black applied when the shell asks for a dark palette, and theme lookups (login screen, menus) re-read your theme folder only when its files change, so they cost far less.
+- A wallpaper that crashes the image decoder no longer leaves later theme changes waiting for it, and the message for an interrupted theme write whose backup is gone now names the files involved and how to continue.
+- If Mandara is killed in the middle of a two-file shortcut change, the next shortcut edit puts the half-written files back from their recovery copies instead of leaving a mismatched pair.
+>>>>>>> pr-219
 
 ## 0.37.0 — 2026-11-22
 
