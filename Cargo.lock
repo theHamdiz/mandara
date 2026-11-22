@@ -4168,6 +4168,7 @@ dependencies = [
  "anyhow",
  "async-channel",
  "clap",
+ "futures",
  "gpui",
  "gpui_platform",
  "libc",

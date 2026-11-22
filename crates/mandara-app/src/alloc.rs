@@ -3,7 +3,9 @@
 //!
 //! * `alloc-system-tuned` (default) — glibc malloc with at most [`ARENA_MAX`]
 //!   arenas and a fixed [`MMAP_THRESHOLD`]. Released caches request a trim;
-//!   [`TRIM_EVERY`] provides a fallback for other freed storage.
+//!   a [`TRIM_EVERY`] check requests one for other freed storage, but only
+//!   when the heap's free bytes have grown by [`TRIM_GROWTH`] since the last
+//!   check, so an idle shell never walks its heap.
 //! * `alloc-mimalloc` — mimalloc v3 (C, vendored by the `mimalloc` crate);
 //!   frees return to the OS through its own page purging.
 //! * `alloc-mimalloc-v2` — the same, on the older v2 line.
@@ -55,9 +57,30 @@ pub const ARENA_MAX: libc::c_int = 2;
 /// opening the dock's Applications grid left ~16 MiB behind for good.
 #[cfg(all(feature = "alloc-system-tuned", target_env = "gnu"))]
 pub const MMAP_THRESHOLD: libc::c_int = 512 * 1024;
-/// How often `alloc-system-tuned` hands freed heap back to the OS.
+/// How often `alloc-system-tuned` checks whether other freed heap is worth
+/// handing back to the OS.
 #[cfg(all(feature = "alloc-system-tuned", target_env = "gnu"))]
 pub const TRIM_EVERY: std::time::Duration = std::time::Duration::from_secs(30);
+/// Growth of the heap's free bytes between two checks that earns a trim.
+#[cfg(all(feature = "alloc-system-tuned", target_env = "gnu"))]
+pub const TRIM_GROWTH: usize = 1024 * 1024;
+
+/// Whether the free bytes of the heap rose enough since `before` to trim.
+/// What a trim leaves behind is the next check's baseline, so a heap that
+/// stays fragmented but quiet is not trimmed again and again.
+#[cfg(all(feature = "alloc-system-tuned", target_env = "gnu"))]
+fn trim_due(before: usize, now: usize) -> bool {
+    now.saturating_sub(before) >= TRIM_GROWTH
+}
+
+/// Bytes malloc holds free in its arenas (mmapped chunks are returned on
+/// free and not counted).
+#[cfg(all(feature = "alloc-system-tuned", target_env = "gnu"))]
+fn free_heap_bytes() -> usize {
+    // SAFETY: mallinfo2 only reads allocator statistics and is thread-safe.
+    let info = unsafe { libc::mallinfo2() };
+    info.fordblks
+}
 
 /// Name of the allocator this binary was built with (for `--version`
 /// style diagnostics and the benchmark logs).
@@ -102,9 +125,28 @@ fn trim() {
 pub fn start_upkeep() {
     #[cfg(all(feature = "alloc-system-tuned", target_env = "gnu"))]
     mandara_services::runtime::spawn("malloc-trim", async {
+        let mut seen = free_heap_bytes();
         loop {
             mandara_services::runtime::sleep(TRIM_EVERY).await;
-            mandara_services::memory::request_trim();
+            let now = free_heap_bytes();
+            if trim_due(seen, now) {
+                mandara_services::memory::request_trim();
+            }
+            seen = now;
         }
     });
+}
+
+#[cfg(all(test, feature = "alloc-system-tuned", target_env = "gnu"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_growth_of_the_free_heap_earns_a_trim() {
+        assert!(!trim_due(10 << 20, 10 << 20));
+        assert!(!trim_due(10 << 20, (10 << 20) + TRIM_GROWTH - 1));
+        assert!(trim_due(10 << 20, (10 << 20) + TRIM_GROWTH));
+        // A shrinking heap (a trim ran, memory was reused) never does.
+        assert!(!trim_due(10 << 20, 1 << 20));
+    }
 }
