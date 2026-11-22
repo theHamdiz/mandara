@@ -13,6 +13,7 @@ About → What's new shows it too.
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 Mandara's default typefaces are Inter, Alexandria (including Arabic) and
 CaskaydiaCove Nerd Font Mono, with Nerd Font substitutes until Maintenance
 downloads the real face. Opt-in system font sync can push those families to
@@ -135,6 +136,18 @@ Mandara talks to your compositor more gently: fewer requests per burst of events
 - **A stuck compositor command no longer hangs Mandara.** River commands and `umbriel msg` fallbacks give up after two seconds, River's connection setup is bounded the same way, and oversized or endless replies are cut off.
 - **niri actions with arguments that are not JSON now say so** instead of silently running with no arguments.
 >>>>>>> pr-220
+=======
+The shell survives awkward drags, a busy or lost compositor and a GPU reset without crashing, freezing or spinning, and gives idle graphics memory back sooner.
+
+### Fixed
+
+- Dropping something onto a Stash shelf, or dragging one out, can no longer disconnect the whole shell when the other program offers only a move: the drop is just refused. Dragging out to a program that only copies leaves the items on the shelf, even with *Move items out* on, since nothing was moved.
+- Dragging a large picture or long text out of a shelf no longer freezes the shell while the other program reads it, and pasting while the compositor is busy no longer crashes it.
+- A window whose drawing keeps failing (an output that is switched off, a lost compositor connection) now retries more and more slowly, down to once a second, instead of sixty times a second with an error each time; the shell also shuts down cleanly after a lost connection.
+- After a GPU reset the shell keeps answering the compositor while it waits for the GPU to come back, trying again every few seconds instead of freezing for a third of a second per try.
+- Idle wallpaper-transition and path-drawing memory is given back about a second and a half after the last frame that used it, even when nothing else redraws, and a transition no longer gets rebuilt whenever the bar's progress rings change size.
+- A wallpaper change effect no longer makes every other drawn shape in a frame take half as much memory again.
+>>>>>>> pr-221
 
 ## 0.37.0 — 2026-11-22
 
