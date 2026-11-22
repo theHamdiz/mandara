@@ -329,19 +329,3 @@ fn the_socket_comes_only_from_the_environment() {
     assert!(AqueousDriver::from_var(Some(dir.path().join("missing.sock").into())).is_none());
     assert!(driver.jobs.lock().unwrap().is_none(), "construction never connects");
 }
-
-#[test]
-fn backoff_grows_with_jitter_up_to_a_cap() {
-    let mut b = Backoff::new(Duration::from_secs(1));
-    let first = b.delay();
-    assert!(first >= Duration::from_secs(1) && first < Duration::from_millis(1250));
-    let second = b.delay();
-    assert!(second >= Duration::from_secs(2) && second < Duration::from_millis(2500));
-    for _ in 0..10 {
-        b.delay();
-    }
-    let capped = b.delay();
-    assert!(capped >= MAX_RECONNECT_DELAY && capped < MAX_RECONNECT_DELAY + MAX_RECONNECT_DELAY / 4);
-    b.reset();
-    assert!(b.delay() < Duration::from_millis(1250));
-}

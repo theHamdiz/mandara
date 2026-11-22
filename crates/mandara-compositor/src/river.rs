@@ -28,16 +28,18 @@
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Instant;
 
 use anyhow::{Context as _, Result, anyhow, bail};
 use wayland_client::globals::{GlobalListContents, registry_queue_init};
-use wayland_client::protocol::{wl_output, wl_registry, wl_seat};
+use wayland_client::protocol::{wl_callback, wl_output, wl_registry, wl_seat};
 use wayland_client::{Connection, Dispatch, EventQueue, Proxy, QueueHandle, event_created_child};
 use wayland_protocols::xdg::xdg_output::zv1::client::{zxdg_output_manager_v1, zxdg_output_v1};
 use wayland_protocols_wlr::foreign_toplevel::v1::client::{zwlr_foreign_toplevel_handle_v1 as handle, zwlr_foreign_toplevel_manager_v1 as toplevels};
 
 use crate::backend::CompositorBackend;
 use crate::model::{ClientInfo, CompositorEvent, CompositorKind, MonitorInfo, NavigationModel, TagStatus};
+use crate::stream::Backoff;
 
 /// River's protocols, generated from the XML in River's own source tree.
 pub mod protocol {
@@ -144,55 +146,66 @@ pub struct RiverState {
     pub windows: BTreeMap<u32, RiverWindow>,
 }
 
+/// Sets `slot` to `value`; whether that changed it.
+fn put<T: PartialEq>(slot: &mut T, value: T) -> bool {
+    let changed = *slot != value;
+    if changed {
+        *slot = value;
+    }
+    changed
+}
+
 impl RiverState {
-    pub fn apply(&mut self, event: RiverEvent) {
+    /// Folds in one event; whether it changed anything (River repeats
+    /// state it has just sent, and a repeat is not worth a diff).
+    pub fn apply(&mut self, event: RiverEvent) -> bool {
         use RiverEvent::*;
         match event {
-            OutputName { output, name } => self.outputs.entry(output).or_default().name = name,
-            OutputGone { output } => {
-                self.outputs.remove(&output);
-            }
-            OutputMode { output, width, height } => {
-                let o = self.outputs.entry(output).or_default();
-                (o.mode_width, o.mode_height) = (width, height);
-            }
-            OutputPosition { output, x, y } => {
-                let o = self.outputs.entry(output).or_default();
-                (o.x, o.y) = (x, y);
-            }
-            OutputSize { output, width, height } => {
-                let o = self.outputs.entry(output).or_default();
-                (o.width, o.height) = (width, height);
-            }
-            FocusedTags { output, tags } => self.outputs.entry(output).or_default().focused_tags = tags,
-            ViewTags { output, tags } => self.outputs.entry(output).or_default().view_tags = tags,
-            UrgentTags { output, tags } => self.outputs.entry(output).or_default().urgent_tags = tags,
-            LayoutName { output, name } => self.outputs.entry(output).or_default().layout = name.unwrap_or_default(),
-            FocusedOutput(output) => self.focused_output = Some(output),
+            OutputName { output, name } => self.edit_output(output, |o| put(&mut o.name, name)),
+            OutputGone { output } => self.outputs.remove(&output).is_some(),
+            OutputMode { output, width, height } => self.edit_output(output, |o| put(&mut o.mode_width, width) | put(&mut o.mode_height, height)),
+            OutputPosition { output, x, y } => self.edit_output(output, |o| put(&mut o.x, x) | put(&mut o.y, y)),
+            OutputSize { output, width, height } => self.edit_output(output, |o| put(&mut o.width, width) | put(&mut o.height, height)),
+            FocusedTags { output, tags } => self.edit_output(output, |o| put(&mut o.focused_tags, tags)),
+            ViewTags { output, tags } => self.edit_output(output, |o| put(&mut o.view_tags, tags)),
+            UrgentTags { output, tags } => self.edit_output(output, |o| put(&mut o.urgent_tags, tags)),
+            LayoutName { output, name } => self.edit_output(output, |o| put(&mut o.layout, name.unwrap_or_default())),
+            FocusedOutput(output) => put(&mut self.focused_output, Some(output)),
             UnfocusedOutput(output) => {
-                if self.focused_output == Some(output) {
+                let focused = self.focused_output == Some(output);
+                if focused {
                     self.focused_output = None;
                 }
+                focused
             }
-            FocusedView(title) => self.focused_title = title,
-            Mode(mode) => self.mode = mode,
-            WindowTitle { window, title } => self.windows.entry(window).or_default().title = title,
-            WindowAppId { window, app_id } => self.windows.entry(window).or_default().app_id = app_id,
-            WindowState { window, activated, fullscreen } => {
-                let w = self.windows.entry(window).or_default();
-                (w.activated, w.fullscreen) = (activated, fullscreen);
-            }
-            WindowOutput { window, output, entered } => {
-                let w = self.windows.entry(window).or_default();
-                w.outputs.retain(|o| *o != output);
-                if entered {
+            FocusedView(title) => put(&mut self.focused_title, title),
+            Mode(mode) => put(&mut self.mode, mode),
+            WindowTitle { window, title } => self.edit_window(window, |w| put(&mut w.title, title)),
+            WindowAppId { window, app_id } => self.edit_window(window, |w| put(&mut w.app_id, app_id)),
+            WindowState { window, activated, fullscreen } => self.edit_window(window, |w| put(&mut w.activated, activated) | put(&mut w.fullscreen, fullscreen)),
+            WindowOutput { window, output, entered } => self.edit_window(window, |w| {
+                let was = w.outputs.contains(&output);
+                if entered && !was {
                     w.outputs.push(output);
+                } else if !entered {
+                    w.outputs.retain(|o| *o != output);
                 }
-            }
-            WindowClosed { window } => {
-                self.windows.remove(&window);
-            }
+                was != entered
+            }),
+            WindowClosed { window } => self.windows.remove(&window).is_some(),
         }
+    }
+
+    /// `edit` on output `id`, made if it is new; whether it changed.
+    fn edit_output(&mut self, id: u32, edit: impl FnOnce(&mut RiverOutput) -> bool) -> bool {
+        let created = !self.outputs.contains_key(&id);
+        edit(self.outputs.entry(id).or_default()) | created
+    }
+
+    /// `edit` on window `id`, made if it is new; whether it changed.
+    fn edit_window(&mut self, id: u32, edit: impl FnOnce(&mut RiverWindow) -> bool) -> bool {
+        let created = !self.windows.contains_key(&id);
+        edit(self.windows.entry(id).or_default()) | created
     }
 
     fn output_name(&self, id: u32) -> String {
@@ -297,14 +310,35 @@ struct Wl {
     /// Registry name → output object, to notice an output unplugged.
     output_globals: BTreeMap<u32, u32>,
     answer: Option<std::result::Result<String, String>>,
+    /// Whether an event changed [`Self::state`] since this was last cleared.
+    changed: bool,
+    /// `wl_display.sync` callbacks seen.
+    synced: u64,
+}
+
+impl crate::roundtrip::Synced for Wl {
+    fn synced(&self) -> u64 {
+        self.synced
+    }
+}
+
+impl Dispatch<wl_callback::WlCallback, ()> for Wl {
+    fn event(wl: &mut Self, _: &wl_callback::WlCallback, _: wl_callback::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
+        wl.synced = wl.synced.wrapping_add(1);
+    }
 }
 
 impl Wl {
+    fn apply(&mut self, event: RiverEvent) {
+        self.changed |= self.state.apply(event);
+    }
+
     fn watch_output(&mut self, registry: &wl_registry::WlRegistry, name: u32, version: u32, qh: &QueueHandle<Self>) {
         let output: wl_output::WlOutput = registry.bind(name, version.min(OUTPUT_VERSION), qh, name);
         let id = output.id().protocol_id();
         self.output_globals.insert(name, id);
         self.state.outputs.entry(id).or_default();
+        self.changed = true;
         if let Some(status) = &self.status {
             status.get_river_output_status(&output, qh, id);
         }
@@ -321,7 +355,7 @@ impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for Wl {
             wl_registry::Event::Global { name, interface, version } if state.full && interface == wl_output::WlOutput::interface().name => state.watch_output(registry, name, version, qh),
             wl_registry::Event::GlobalRemove { name } => {
                 if let Some(output) = state.output_globals.remove(&name) {
-                    state.state.apply(RiverEvent::OutputGone { output });
+                    state.apply(RiverEvent::OutputGone { output });
                 }
             }
             _ => {}
@@ -333,8 +367,8 @@ impl Dispatch<wl_output::WlOutput, u32> for Wl {
     fn event(state: &mut Self, proxy: &wl_output::WlOutput, event: wl_output::Event, _: &u32, _: &Connection, _: &QueueHandle<Self>) {
         let output = proxy.id().protocol_id();
         match event {
-            wl_output::Event::Name { name } => state.state.apply(RiverEvent::OutputName { output, name }),
-            wl_output::Event::Mode { flags, width, height, .. } if flags.into_result().is_ok_and(|f| f.contains(wl_output::Mode::Current)) => state.state.apply(RiverEvent::OutputMode { output, width, height }),
+            wl_output::Event::Name { name } => state.apply(RiverEvent::OutputName { output, name }),
+            wl_output::Event::Mode { flags, width, height, .. } if flags.into_result().is_ok_and(|f| f.contains(wl_output::Mode::Current)) => state.apply(RiverEvent::OutputMode { output, width, height }),
             _ => {}
         }
     }
@@ -351,7 +385,7 @@ impl Dispatch<status_manager::ZriverStatusManagerV1, ()> for Wl {
 impl Dispatch<output_status::ZriverOutputStatusV1, u32> for Wl {
     fn event(state: &mut Self, _: &output_status::ZriverOutputStatusV1, event: output_status::Event, output: &u32, _: &Connection, _: &QueueHandle<Self>) {
         let output = *output;
-        state.state.apply(match event {
+        state.apply(match event {
             output_status::Event::FocusedTags { tags } => RiverEvent::FocusedTags { output, tags },
             output_status::Event::ViewTags { tags } => RiverEvent::ViewTags { output, tags: view_tags(&tags) },
             output_status::Event::UrgentTags { tags } => RiverEvent::UrgentTags { output, tags },
@@ -363,7 +397,7 @@ impl Dispatch<output_status::ZriverOutputStatusV1, u32> for Wl {
 
 impl Dispatch<seat_status::ZriverSeatStatusV1, ()> for Wl {
     fn event(state: &mut Self, _: &seat_status::ZriverSeatStatusV1, event: seat_status::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
-        state.state.apply(match event {
+        state.apply(match event {
             seat_status::Event::FocusedOutput { output } => RiverEvent::FocusedOutput(output.id().protocol_id()),
             seat_status::Event::UnfocusedOutput { output } => RiverEvent::UnfocusedOutput(output.id().protocol_id()),
             seat_status::Event::FocusedView { title } => RiverEvent::FocusedView(title),
@@ -393,8 +427,8 @@ impl Dispatch<zxdg_output_v1::ZxdgOutputV1, u32> for Wl {
     fn event(state: &mut Self, _: &zxdg_output_v1::ZxdgOutputV1, event: zxdg_output_v1::Event, output: &u32, _: &Connection, _: &QueueHandle<Self>) {
         let output = *output;
         match event {
-            zxdg_output_v1::Event::LogicalPosition { x, y } => state.state.apply(RiverEvent::OutputPosition { output, x, y }),
-            zxdg_output_v1::Event::LogicalSize { width, height } => state.state.apply(RiverEvent::OutputSize { output, width, height }),
+            zxdg_output_v1::Event::LogicalPosition { x, y } => state.apply(RiverEvent::OutputPosition { output, x, y }),
+            zxdg_output_v1::Event::LogicalSize { width, height } => state.apply(RiverEvent::OutputSize { output, width, height }),
             _ => {}
         }
     }
@@ -415,7 +449,7 @@ impl Dispatch<toplevels::ZwlrForeignToplevelManagerV1, ()> for Wl {
 impl Dispatch<handle::ZwlrForeignToplevelHandleV1, ()> for Wl {
     fn event(state: &mut Self, proxy: &handle::ZwlrForeignToplevelHandleV1, event: handle::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
         let window = proxy.id().protocol_id();
-        state.state.apply(match event {
+        let event = match event {
             handle::Event::Title { title } => RiverEvent::WindowTitle { window, title },
             handle::Event::AppId { app_id } => RiverEvent::WindowAppId { window, app_id },
             handle::Event::State { state: bytes } => {
@@ -429,7 +463,8 @@ impl Dispatch<handle::ZwlrForeignToplevelHandleV1, ()> for Wl {
                 RiverEvent::WindowClosed { window }
             }
             _ => return,
-        });
+        };
+        state.apply(event);
     }
 }
 
@@ -439,7 +474,7 @@ fn open(full: bool) -> Result<(Connection, EventQueue<Wl>, Wl)> {
     let conn = Connection::connect_to_env().context("river: no Wayland display")?;
     let (globals, mut queue) = registry_queue_init::<Wl>(&conn).context("river: reading the globals")?;
     let qh = queue.handle();
-    let mut wl = Wl { state: RiverState::default(), seat: None, status: None, control: None, xdg: None, full, windows: BTreeMap::new(), output_globals: BTreeMap::new(), answer: None };
+    let mut wl = Wl { state: RiverState::default(), seat: None, status: None, control: None, xdg: None, full, windows: BTreeMap::new(), output_globals: BTreeMap::new(), answer: None, changed: false, synced: 0 };
     wl.seat = globals.bind(&qh, 1..=SEAT_VERSION, ()).ok();
     wl.control = globals.bind(&qh, 1..=CONTROL_VERSION, ()).ok();
     if full {
@@ -454,8 +489,8 @@ fn open(full: bool) -> Result<(Connection, EventQueue<Wl>, Wl)> {
             status.get_river_seat_status(seat, &qh, ());
         }
     }
-    queue.roundtrip(&mut wl).context("river: first round trip")?;
-    queue.roundtrip(&mut wl).context("river: second round trip")?;
+    crate::roundtrip::roundtrip(&conn, &mut queue, &mut wl).context("river: first round trip")?;
+    crate::roundtrip::roundtrip(&conn, &mut queue, &mut wl).context("river: second round trip")?;
     Ok((conn, queue, wl))
 }
 
@@ -473,15 +508,16 @@ pub fn running() -> bool {
 
 /// Runs one River command (`riverctl`'s argv) and returns its output.
 pub fn run_command(words: &[&str]) -> Result<String> {
-    let (_conn, mut queue, mut wl) = open(false)?;
+    let (conn, mut queue, mut wl) = open(false)?;
     let (Some(control), Some(seat)) = (wl.control.clone(), wl.seat.clone()) else { bail!("river: no river-control (River 0.4 and later dropped it)") };
     for w in words {
         control.add_argument(w.to_string());
     }
     control.run_command(&seat, &queue.handle(), ());
-    while wl.answer.is_none() {
-        queue.blocking_dispatch(&mut wl).context("river: waiting for the command's answer")?;
-    }
+    // A command can change what a query would answer: the watcher's copy is
+    // out of date until River's status events reach it.
+    LIVE.clear();
+    crate::roundtrip::wait_until(&conn, &mut queue, &mut wl, crate::REQUEST_TIMEOUT, |wl| wl.answer.is_some()).context("river: waiting for the command's answer")?;
     match wl.answer.take() {
         Some(Ok(output)) => Ok(output),
         Some(Err(message)) => bail!("river: {} ({})", message, words.join(" ")),
@@ -489,20 +525,28 @@ pub fn run_command(words: &[&str]) -> Result<String> {
     }
 }
 
-/// The state the status protocol, xdg-output and foreign-toplevel report.
-pub fn snapshot() -> Result<RiverState> {
-    Ok(open(true)?.2.state)
+/// The state the event watcher last saw, for queries to answer from: a
+/// connection and two round trips each would cost far more.
+static LIVE: crate::stream::Live<RiverState> = crate::stream::Live::new();
+
+/// The state the status protocol, xdg-output and foreign-toplevel report:
+/// the watcher's when one is running, else asked of River afresh.
+pub fn snapshot() -> Result<std::sync::Arc<RiverState>> {
+    match LIVE.get() {
+        Some(state) => Ok(state),
+        None => Ok(std::sync::Arc::new(open(true)?.2.state)),
+    }
 }
 
 /// What changed since the last state sent: navigation per output, the
 /// window list, focus, monitors and the mode.
 #[derive(Default)]
 pub struct RiverDiff {
-    last: Option<RiverState>,
+    last: Option<std::sync::Arc<RiverState>>,
 }
 
 impl RiverDiff {
-    pub fn events(&mut self, now: &RiverState) -> Vec<CompositorEvent> {
+    pub fn events(&mut self, now: &std::sync::Arc<RiverState>) -> Vec<CompositorEvent> {
         let first = self.last.is_none();
         let before = self.last.take().unwrap_or_default();
         let mut out = Vec::new();
@@ -527,6 +571,27 @@ impl RiverDiff {
         }
         self.last = Some(now.clone());
         out
+    }
+}
+
+/// One status connection's worth of events; `true` when the receiver is
+/// gone. The state is diffed and published only when an event changed it.
+fn watch(tx: &async_channel::Sender<CompositorEvent>) -> Result<bool> {
+    let (_conn, mut queue, mut wl) = open(true)?;
+    let mut diff = RiverDiff::default();
+    let mut changed = true;
+    loop {
+        changed |= std::mem::take(&mut wl.changed);
+        if std::mem::take(&mut changed) {
+            let now = std::sync::Arc::new(wl.state.clone());
+            LIVE.publish(now.clone());
+            for event in diff.events(&now) {
+                if tx.send_blocking(event).is_err() {
+                    return Ok(true);
+                }
+            }
+        }
+        queue.blocking_dispatch(&mut wl)?;
     }
 }
 
@@ -577,23 +642,21 @@ impl CompositorBackend for RiverDriver {
     fn subscribe_events(&self) -> async_channel::Receiver<CompositorEvent> {
         let (tx, rx) = async_channel::bounded(crate::EVENT_QUEUE);
         let _ = std::thread::Builder::new().name("river-status".into()).spawn(move || {
+            let mut backoff = Backoff::new(crate::RECONNECT_DELAY);
             loop {
-                let result = (|| -> Result<bool> {
-                    let (_conn, mut queue, mut wl) = open(true)?;
-                    let mut diff = RiverDiff::default();
-                    loop {
-                        for e in diff.events(&wl.state) {
-                            if tx.send_blocking(e).is_err() {
-                                return Ok(true);
-                            }
-                        }
-                        queue.blocking_dispatch(&mut wl)?;
-                    }
-                })();
-                if matches!(result, Ok(true)) || tx.is_closed() {
+                let began = Instant::now();
+                let result = watch(&tx);
+                // Its connection is gone: what it saw would only go stale.
+                LIVE.clear();
+                match result {
+                    Ok(true) => return,
+                    Ok(false) => {}
+                    Err(err) => tracing::debug!("river status stream ended: {err:#}"),
+                }
+                if tx.is_closed() {
                     return;
                 }
-                std::thread::sleep(crate::RECONNECT_DELAY);
+                std::thread::sleep(backoff.after(began.elapsed()));
             }
         });
         rx
@@ -837,18 +900,59 @@ mod tests {
         assert_eq!(s.monitors()[0].scale, 1.5);
     }
 
+    /// River repeats status it has just sent (a seat re-announcing its
+    /// focus, an output its tags); only a real change is worth a diff.
+    #[test]
+    fn applying_an_event_reports_whether_it_changed_anything() {
+        use RiverEvent::*;
+        let mut state = RiverState::default();
+        let events = [
+            OutputName { output: 7, name: "DP-1".into() },
+            FocusedTags { output: 7, tags: 1 },
+            ViewTags { output: 7, tags: vec![1, 2] },
+            UrgentTags { output: 7, tags: 0 },
+            LayoutName { output: 7, name: Some("rivertile".into()) },
+            OutputMode { output: 7, width: 1920, height: 1080 },
+            OutputPosition { output: 7, x: 0, y: 0 },
+            OutputSize { output: 7, width: 1920, height: 1080 },
+            FocusedOutput(7),
+            FocusedView("foot".into()),
+            Mode("normal".into()),
+            WindowTitle { window: 9, title: "zsh".into() },
+            WindowAppId { window: 9, app_id: "foot".into() },
+            WindowState { window: 9, activated: true, fullscreen: false },
+            WindowOutput { window: 9, output: 7, entered: true },
+        ];
+        // The first of each is news (a default output/window is made by the
+        // first event for it; the others set a value other than the default).
+        for event in events {
+            let again = event.clone();
+            let first = state.apply(event.clone());
+            assert!(first || matches!(event, UrgentTags { .. } | OutputPosition { .. }), "{event:?} should change a fresh state");
+            assert!(!state.apply(again), "{event:?} repeated changes nothing");
+        }
+        assert!(state.apply(FocusedTags { output: 7, tags: 2 }));
+        assert!(state.apply(WindowOutput { window: 9, output: 7, entered: false }));
+        assert!(!state.apply(WindowOutput { window: 9, output: 7, entered: false }), "leaving an output it was not on");
+        assert!(state.apply(UnfocusedOutput(7)));
+        assert!(!state.apply(UnfocusedOutput(7)));
+        assert!(state.apply(WindowClosed { window: 9 }));
+        assert!(!state.apply(WindowClosed { window: 9 }), "already gone");
+        assert!(state.apply(OutputGone { output: 7 }) && !state.apply(OutputGone { output: 7 }));
+    }
+
     #[test]
     fn the_diff_sends_only_changes() {
-        let state = recorded();
+        let state = std::sync::Arc::new(recorded());
         let mut diff = RiverDiff::default();
         let first = diff.events(&state);
         assert!(first.iter().any(|e| matches!(e, CompositorEvent::Navigation { .. })) && first.iter().any(|e| matches!(e, CompositorEvent::FocusedClient(Some(_)))));
         assert!(diff.events(&state).is_empty());
-        let mut next = state.clone();
+        let mut next = (*state).clone();
         let output = *next.outputs.keys().next().unwrap();
-        next.apply(RiverEvent::FocusedTags { output, tags: 0b10 });
-        next.apply(RiverEvent::Mode("resize".into()));
-        let out = diff.events(&next);
+        assert!(next.apply(RiverEvent::FocusedTags { output, tags: 0b10 }));
+        assert!(next.apply(RiverEvent::Mode("resize".into())));
+        let out = diff.events(&std::sync::Arc::new(next));
         assert_eq!(out.iter().filter(|e| matches!(e, CompositorEvent::Navigation { .. })).count(), 2, "the tags of one output, the mode on both: {out:#?}");
         assert!(out.contains(&CompositorEvent::Keymode("resize".into())));
         assert!(!out.iter().any(|e| matches!(e, CompositorEvent::Clients(_))));

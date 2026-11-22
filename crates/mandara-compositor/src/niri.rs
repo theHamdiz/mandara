@@ -6,10 +6,10 @@
 //! `WindowFocusChanged`, `WindowsChanged`, …).
 
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read as _, Write};
 use std::os::unix::net::UnixStream;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use anyhow::{Context as _, Result, anyhow, bail};
 use serde::Deserialize;
@@ -17,6 +17,7 @@ use serde_json::{Value, json};
 
 use crate::backend::CompositorBackend;
 use crate::model::{ClientInfo, CompositorEvent, CompositorKind, MonitorInfo, NavigationModel, WorkspaceStatus};
+use crate::stream::{Backoff, Dedup, Inbox, Next, SkipLog};
 
 mod keyboard;
 
@@ -38,7 +39,7 @@ pub struct NiriWorkspace {
     pub active_window_id: Option<u64>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct NiriWindow {
     pub id: u64,
     #[serde(default)]
@@ -143,11 +144,15 @@ impl NiriState {
         if let Some(layout) = self.keyboard.apply(&mut event)? {
             return Ok(vec![CompositorEvent::KeyboardLayout(layout)]);
         }
+        // What changed: the focused window, the window list (also carries
+        // each window's output and workspace index), the workspaces.
         let mut nav = false;
+        let mut clients = false;
         let mut focus = false;
         if let Some(ws) = event.pointer_mut("/WorkspacesChanged/workspaces") {
-            self.workspaces = serde_json::from_value(ws.take())?;
+            self.workspaces = items(ws.take())?;
             nav = true;
+            clients = true;
         } else if let Some(act) = event.get("WorkspaceActivated") {
             let id = act.get("id").and_then(Value::as_u64);
             let focused = act.get("focused").and_then(Value::as_bool).unwrap_or(false);
@@ -174,28 +179,41 @@ impl NiriState {
             }
             nav = true;
         } else if let Some(wins) = event.pointer_mut("/WindowsChanged/windows") {
-            self.windows = serde_json::from_value(wins.take())?;
+            self.windows = items(wins.take())?;
             nav = true;
+            clients = true;
             focus = true;
         } else if let Some(win) = event.pointer_mut("/WindowOpenedOrChanged/window") {
             let win: NiriWindow = serde_json::from_value(win.take())?;
             // A focused window takes focus from every other one.
             if win.is_focused {
-                self.windows.iter_mut().for_each(|w| w.is_focused = false);
-                focus = true;
+                for other in self.windows.iter_mut().filter(|w| w.is_focused && w.id != win.id) {
+                    other.is_focused = false;
+                    focus = true;
+                    clients = true;
+                }
             }
             match self.windows.iter_mut().find(|w| w.id == win.id) {
+                Some(old) if *old == win => {}
                 Some(old) => {
-                    focus |= old.is_focused != win.is_focused;
+                    focus |= old.is_focused || win.is_focused;
+                    clients = true;
+                    // Only the workspace a window is on shows in the workspace list.
+                    nav = old.workspace_id != win.workspace_id;
                     *old = win;
                 }
-                None => self.windows.push(win),
+                None => {
+                    focus |= win.is_focused;
+                    clients = true;
+                    nav = true;
+                    self.windows.push(win);
+                }
             }
-            nav = true;
         } else if let Some(id) = event.pointer("/WindowClosed/id").and_then(Value::as_u64) {
             focus = self.windows.iter().any(|w| w.id == id && w.is_focused);
             self.windows.retain(|w| w.id != id);
             nav = true;
+            clients = true;
         } else if let Some(f) = event.get("WindowFocusChanged") {
             let id = f.get("id").and_then(Value::as_u64);
             for w in self.windows.iter_mut() {
@@ -207,11 +225,45 @@ impl NiriState {
         if focus {
             out.push(CompositorEvent::FocusedClient(self.windows.iter().find(|w| w.is_focused).map(|w| w.client(&self.workspaces))));
         }
-        if nav {
+        if clients {
             out.push(CompositorEvent::Clients(self.windows.iter().map(|w| w.client(&self.workspaces)).collect()));
+        }
+        if nav {
             out.extend(navigation(&self.workspaces, &self.windows).into_iter().map(|(monitor, model)| CompositorEvent::Navigation { monitor, model }));
         }
         Ok(out)
+    }
+}
+
+/// The entries of a list that parse as `T`: one of an unknown shape must
+/// not blank the rest.
+fn items<T: serde::de::DeserializeOwned>(list: Value) -> Result<Vec<T>> {
+    let Value::Array(list) = list else { bail!("niri: expected a list, got {list}") };
+    Ok(list.into_iter().filter_map(|item| serde_json::from_value(item).map_err(|err| tracing::debug!("niri: skipping an entry: {err}")).ok()).collect())
+}
+
+/// One event-stream connection; `true` when the receiver is gone. A line
+/// that doesn't parse or apply is skipped, not a reason to drop the stream.
+fn stream_events(socket: &Path, tx: &async_channel::Sender<CompositorEvent>, dedup: &mut Dedup) -> Result<bool> {
+    let mut stream = UnixStream::connect(socket).with_context(|| format!("connecting {}", socket.display()))?;
+    writeln!(stream, "\"EventStream\"")?;
+    let mut inbox = Inbox::new(stream);
+    let mut state = NiriState::default();
+    let mut skipped = SkipLog::default();
+    loop {
+        let line = match inbox.line(None)? {
+            Next::Item(line) => line,
+            Next::Idle => continue,
+            Next::Closed => return Ok(false),
+        };
+        match serde_json::from_str::<Value>(&line).map_err(anyhow::Error::from).and_then(|event| state.apply(event)) {
+            Ok(events) => {
+                if !dedup.send(tx, events) {
+                    return Ok(true);
+                }
+            }
+            Err(err) => skipped.skip("niri event", &err),
+        }
     }
 }
 
@@ -230,7 +282,7 @@ impl NiriDriver {
         stream.set_read_timeout(Some(crate::REQUEST_TIMEOUT))?;
         writeln!(stream, "{body}")?;
         let mut line = String::new();
-        BufReader::new(stream).read_line(&mut line)?;
+        BufReader::new(stream.take(crate::stream::MAX_LINE as u64)).read_line(&mut line)?;
         Ok(serde_json::from_str(&line)?)
     }
 
@@ -297,26 +349,19 @@ impl CompositorBackend for NiriDriver {
         let (tx, rx) = async_channel::bounded(crate::EVENT_QUEUE);
         let socket = self.socket.clone();
         let _ = std::thread::Builder::new().name("niri-events".into()).spawn(move || {
-            let state = Arc::new(Mutex::new(NiriState::default()));
+            let mut backoff = Backoff::new(crate::RECONNECT_DELAY);
+            let mut dedup = Dedup::default();
             loop {
-                let result = (|| -> Result<()> {
-                    let mut stream = UnixStream::connect(&socket)?;
-                    writeln!(stream, "\"EventStream\"")?;
-                    for line in BufReader::new(stream).lines() {
-                        let event: Value = serde_json::from_str(&line?)?;
-                        let out = state.lock().map_err(|_| anyhow!("poisoned"))?.apply(event)?;
-                        for e in out {
-                            if tx.send_blocking(e).is_err() {
-                                return Ok(());
-                            }
-                        }
-                    }
-                    bail!("stream closed")
-                })();
-                if result.is_ok() || tx.is_closed() {
+                let began = Instant::now();
+                match stream_events(&socket, &tx, &mut dedup) {
+                    Ok(true) => return,
+                    Ok(false) => {}
+                    Err(err) => tracing::debug!("niri event stream ended: {err:#}"),
+                }
+                if tx.is_closed() {
                     return;
                 }
-                std::thread::sleep(crate::RECONNECT_DELAY);
+                std::thread::sleep(backoff.after(began.elapsed()));
             }
         });
         rx
@@ -376,7 +421,7 @@ impl CompositorBackend for NiriDriver {
     fn dispatch_raw(&self, cmd: &str, args: &[&str]) -> Result<()> {
         // `cmd` is an action name; args may be a single JSON object.
         let payload: Value = match args.first() {
-            Some(a) => serde_json::from_str(a).unwrap_or(Value::Object(Default::default())),
+            Some(a) => serde_json::from_str(a).with_context(|| format!("niri: the arguments of {cmd} must be JSON, got {a:?}"))?,
             None => Value::Object(Default::default()),
         };
         self.action(json!({ cmd: payload }))
@@ -518,5 +563,48 @@ mod tests {
         let c = win.client(&ws);
         assert_eq!(c.monitor, "DP-1");
         assert_eq!(c.tags, vec![1]);
+    }
+
+    #[test]
+    fn a_changed_window_recomputes_only_what_it_touches() {
+        let win = |id: u64, ws: u64, title: &str, focused: bool| json!({"WindowOpenedOrChanged":{"window":{"id":id,"title":title,"app_id":"foot","workspace_id":ws,"is_focused":focused}}});
+        let mut st = NiriState::default();
+        st.apply(json!({"WorkspacesChanged":{"workspaces":[{"id":4,"idx":1,"output":"DP-1","is_active":true},{"id":5,"idx":2,"output":"DP-1"}]}})).unwrap();
+        st.apply(win(11, 4, "one", true)).unwrap();
+        st.apply(win(12, 4, "two", false)).unwrap();
+        let kinds = |out: &[CompositorEvent]| out.iter().map(|e| match e {
+            CompositorEvent::FocusedClient(_) => 'f',
+            CompositorEvent::Clients(_) => 'c',
+            CompositorEvent::Navigation { .. } => 'n',
+            _ => '?',
+        }).collect::<String>();
+        // The same window again: nothing.
+        assert!(st.apply(win(12, 4, "two", false)).unwrap().is_empty());
+        // A background window's title: the window list only.
+        assert_eq!(kinds(&st.apply(win(12, 4, "two!", false)).unwrap()), "c");
+        // The focused one's title: the list and the focused window, no workspaces.
+        assert_eq!(kinds(&st.apply(win(11, 4, "one!", true)).unwrap()), "fc");
+        // A window moved to another workspace: the workspace list changes too.
+        assert_eq!(kinds(&st.apply(win(12, 5, "two!", false)).unwrap()), "cn");
+        // A new window takes focus from the old one.
+        assert_eq!(kinds(&st.apply(win(13, 5, "three", true)).unwrap()), "fcn");
+        assert_eq!(st.windows.iter().filter(|w| w.is_focused).count(), 1);
+        // Workspace-only events leave the window list alone.
+        assert_eq!(kinds(&st.apply(json!({"WorkspaceActivated":{"id":5,"focused":true}})).unwrap()), "n");
+    }
+
+    #[test]
+    fn an_entry_of_an_unknown_shape_is_skipped_not_the_whole_list() {
+        let mut st = NiriState::default();
+        let out = st.apply(json!({"WindowsChanged":{"windows":[{"id":1,"title":"ok"},{"id":"not a number"},{"title":"no id"},{"id":2}]}})).unwrap();
+        assert!(out.iter().any(|e| matches!(e, CompositorEvent::Clients(c) if c.len() == 2)), "{out:?}");
+        assert!(st.apply(json!({"WorkspacesChanged":{"workspaces":"nonsense"}})).is_err(), "a list that isn't one is the caller's to skip");
+    }
+
+    #[test]
+    fn action_arguments_that_are_not_json_are_refused() {
+        let driver = NiriDriver { socket: PathBuf::from("/nonexistent/niri.sock") };
+        let err = driver.dispatch_raw("FocusWorkspace", &["not json"]).unwrap_err();
+        assert!(err.to_string().contains("must be JSON"), "{err:#}");
     }
 }
