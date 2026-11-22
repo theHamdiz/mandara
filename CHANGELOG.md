@@ -7,6 +7,7 @@ About → What's new shows it too.
 ## Unreleased
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 Mandara's default typefaces are Inter, Alexandria (including Arabic) and
 CaskaydiaCove Nerd Font Mono, with Nerd Font substitutes until Maintenance
 downloads the real face. Opt-in system font sync can push those families to
@@ -38,6 +39,17 @@ scales, and a lost display connection now restarts the shell.
   ever lost the shell exits so its supervisor restarts it, instead of
   spinning at full CPU and flooding the journal.
 >>>>>>> pr-214
+=======
+The login screen no longer shows log text on the console while the desktop starts.
+
+### Fixed
+
+- Log lines no longer flash on the login screen's console between signing in
+  and the desktop appearing. When Mandara runs on a text console its logs go
+  to the journal instead (`journalctl -t mandara`), and the console is
+  cleared once the session starts. Terminals and pipes still get logs on
+  stderr.
+>>>>>>> pr-215
 
 ## 0.37.0 — 2026-11-22
 

@@ -204,6 +204,7 @@ impl<T: Transport> Conversation<T> {
         match self.transport.roundtrip(&Request::StartSession { cmd, env }) {
             Ok(Response::Success) => {
                 self.active = false;
+                clear_console();
                 Ok(())
             }
             Ok(Response::Error { description, .. }) => {
@@ -284,6 +285,21 @@ pub fn wipe(s: &mut String) {
     // SAFETY: zero bytes are valid UTF-8.
     wipe_bytes(unsafe { s.as_bytes_mut() });
     s.clear();
+}
+
+/// Blanks the login VT and hides its cursor so nothing shows on it between
+/// the greeter and the desktop. Best effort: only a real VT is touched.
+fn clear_console() {
+    use std::io::Write as _;
+    let Ok(mut tty) = std::fs::OpenOptions::new().write(true).open("/dev/tty") else { return };
+    // Skip ptys: only a Linux VT has the KD ioctls.
+    let mut mode: libc::c_int = 0;
+    // SAFETY: KDGETMODE writes one int through the valid pointer.
+    use std::os::fd::AsRawFd as _;
+    if unsafe { libc::ioctl(tty.as_raw_fd(), 0x4B3B, &mut mode) } != 0 {
+        return;
+    }
+    let _ = tty.write_all(b"\x1b[H\x1b[2J\x1b[3J\x1b[?25l");
 }
 
 #[cfg(test)]

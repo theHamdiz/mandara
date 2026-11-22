@@ -226,11 +226,14 @@ fn run() -> Result<()> {
     }
     use tracing_subscriber::util::SubscriberInitExt as _;
     let long = Box::leak(mandara_version::long_version().into_boxed_str()) as &'static str;
+    let journal = journal::Journal::connect(long);
+    let route = logging::route(logging::stderr_is_vt(), journal.is_some());
     logging::subscriber(
         std::io::stderr,
-        journal::Journal::connect(long),
+        journal,
         tracing_subscriber::EnvFilter::try_from_default_env()
             .unwrap_or_else(|_| "info,naga=warn,wgpu=warn,wgpu_hal=error,blade=warn".into()),
+        route,
     )
         .init();
     mandara_plugins::install_panic_hook();
