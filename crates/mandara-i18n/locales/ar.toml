@@ -3119,7 +3119,7 @@
 "Most apps" = "الحد الأقصى للتطبيقات"
 "Most launched results with their frecency scores" = "النتائج الأكثر تشغيلًا مع درجات التكرار والحداثة"
 "Most pinned entries kept" = "الحد الأقصى للعناصر المثبّتة المحفوظة"
-"Music or video playing over MPRIS holds every idle stage back" = "تشغيل الموسيقى أو الفيديو عبر MPRIS يؤجل كل مراحل الخمول"
+"Music or video playing over MPRIS holds back screen-off and sleep, never the lock" = "تشغيل الموسيقى أو الفيديو عبر MPRIS يؤجل إطفاء الشاشة والسكون، لكنه لا يؤجل القفل"
 "My command" = "أمري"
 "Name (optional)" = "الاسم (اختياري)"
 "Name a VPN: no VPN was used yet" = "حدّد اسم VPN: لم تُستخدم أي VPN بعد"

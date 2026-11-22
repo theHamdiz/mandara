@@ -3185,7 +3185,7 @@
 "Most apps" = "最多应用数"
 "Most launched results with their frecency scores" = "启动次数最多的结果及其频率-时效评分"
 "Most pinned entries kept" = "最多保留的固定条目数"
-"Music or video playing over MPRIS holds every idle stage back" = "通过 MPRIS 播放的音乐或视频会推迟所有空闲阶段"
+"Music or video playing over MPRIS holds back screen-off and sleep, never the lock" = "通过 MPRIS 播放的音乐或视频会推迟关闭屏幕和睡眠，但不会推迟锁屏"
 "My command" = "我的命令"
 "Name (optional)" = "名称（可选）"
 "Name a VPN: no VPN was used yet" = "请指定 VPN 名称：尚未使用过任何 VPN"

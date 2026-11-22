@@ -2988,7 +2988,7 @@
 "Moves with the music" = "Bergerak mengikuti musik"
 "Moving clouds, rain and stars (off with reduced motion)" = "Awan bergerak, hujan, dan bintang (nonaktif dengan gerakan dikurangi)"
 "Muharram" = "Muharam"
-"Music or video playing over MPRIS holds every idle stage back" = "Musik atau video yang diputar lewat MPRIS menahan setiap tahapan diam"
+"Music or video playing over MPRIS holds back screen-off and sleep, never the lock" = "Musik atau video yang diputar lewat MPRIS menahan layar mati dan tidur, tetapi tidak menahan kunci layar"
 "Music, screenshots, color and ambient sound" = "Musik, tangkapan layar, warna, dan suara ambient"
 "Mute" = "Bisukan"
 "Mute all" = "Bisukan semua"

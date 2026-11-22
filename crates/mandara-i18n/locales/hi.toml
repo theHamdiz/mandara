@@ -3189,7 +3189,7 @@
 "Most apps" = "अधिकतम ऐप्स"
 "Most launched results with their frecency scores" = "सबसे ज़्यादा लॉन्च किए गए परिणाम, उनके frecency स्कोर के साथ"
 "Most pinned entries kept" = "अधिकतम रखी जाने वाली पिन की गई एंट्री"
-"Music or video playing over MPRIS holds every idle stage back" = "MPRIS पर चल रहा संगीत या वीडियो हर निष्क्रियता चरण को रोके रखता है"
+"Music or video playing over MPRIS holds back screen-off and sleep, never the lock" = "MPRIS पर चल रहा संगीत या वीडियो स्क्रीन बंद होने और स्लीप को रोके रखता है, लॉक को नहीं"
 "My command" = "मेरी कमांड"
 "Name (optional)" = "नाम (वैकल्पिक)"
 "Name a VPN: no VPN was used yet" = "VPN का नाम दें: अभी तक कोई VPN उपयोग नहीं हुआ"
