@@ -6,6 +6,9 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Mandara speaks Italian: Studio, the shell and Mandara Login all follow
+*Italiano* (`it_IT`).
+
 ### New
 
 - **Mandara speaks Italian.** Choose *Italiano* in Studio → General →
