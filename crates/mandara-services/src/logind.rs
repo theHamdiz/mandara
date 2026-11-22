@@ -13,6 +13,11 @@ use zbus::zvariant::OwnedObjectPath;
 
 use crate::actor::proxy;
 
+/// First retry when the session or bus is not ready yet; grows up to [`LOCK_RETRY_MAX`].
+const LOCK_RETRY_MIN: std::time::Duration = std::time::Duration::from_secs(2);
+/// Cap on logind lock-watch reconnect backoff (session may appear late at login).
+const LOCK_RETRY_MAX: std::time::Duration = std::time::Duration::from_secs(120);
+
 /// The login manager's D-Bus names: logind, or ConsoleKit2 on FreeBSD.
 pub mod bus {
     #[cfg(not(target_os = "freebsd"))]
@@ -113,7 +118,7 @@ async fn lock_session(on_lock: &Arc<dyn Fn() + Send + Sync>, backoff: &mut crate
 pub fn watch_lock_requests(on_lock: impl Fn() + Send + Sync + 'static) {
     let on_lock: Arc<dyn Fn() + Send + Sync> = Arc::new(on_lock);
     crate::runtime::spawn("logind-lock", async move {
-        let mut backoff = crate::runtime::Backoff::new(std::time::Duration::from_secs(2), std::time::Duration::from_secs(120));
+        let mut backoff = crate::runtime::Backoff::new(LOCK_RETRY_MIN, LOCK_RETRY_MAX);
         let mut warned = false;
         loop {
             if let Err(err) = lock_session(&on_lock, &mut backoff).await {

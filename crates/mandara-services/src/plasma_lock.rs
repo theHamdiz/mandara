@@ -10,6 +10,10 @@ const DEST: &str = "org.freedesktop.ScreenSaver";
 const PATH: &str = "/ScreenSaver";
 /// Bound the complete request, including an unresponsive locker or bus.
 const LOCK_TIMEOUT: Duration = Duration::from_secs(2);
+/// First retry when Plasma's screensaver bus is not up yet.
+const WATCH_RETRY_MIN: Duration = Duration::from_secs(2);
+/// Cap on Plasma lock-watch reconnect backoff.
+const WATCH_RETRY_MAX: Duration = Duration::from_secs(120);
 
 async fn request_on(conn: &zbus::Connection) -> zbus::Result<bool> {
     let proxy = crate::actor::proxy(conn, DEST, PATH, DEST).await?;
@@ -65,7 +69,7 @@ async fn notify(on_change: &Arc<dyn Fn(bool) + Send + Sync>, active: bool) {
 pub fn watch(on_change: impl Fn(bool) + Send + Sync + 'static) {
     let on_change: Arc<dyn Fn(bool) + Send + Sync> = Arc::new(on_change);
     crate::runtime::spawn("plasma-lock", async move {
-        let mut backoff = crate::runtime::Backoff::new(Duration::from_secs(2), Duration::from_secs(120));
+        let mut backoff = crate::runtime::Backoff::new(WATCH_RETRY_MIN, WATCH_RETRY_MAX);
         let mut warned = false;
         loop {
             if let Err(e) = watch_once(&on_change, &mut backoff).await {

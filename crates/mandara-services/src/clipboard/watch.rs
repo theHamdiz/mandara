@@ -13,6 +13,8 @@ pub(super) enum Event {
 const RESTART_MIN: Duration = Duration::from_secs(1);
 const RESTART_MAX: Duration = Duration::from_secs(30);
 const RESTART_STABLE: Duration = Duration::from_secs(60);
+/// How often the backoff sleep checks for stop so Drop stays responsive.
+const RESTART_POLL: Duration = Duration::from_millis(250);
 
 #[derive(Default)]
 struct StopState {
@@ -59,7 +61,7 @@ pub(super) fn start(events: async_channel::Sender<Event>, shared: Arc<Mutex<Shar
                 if control.lock().unwrap_or_else(|e| e.into_inner()).stopped || events.is_closed() {
                     return;
                 }
-                std::thread::sleep(Duration::from_millis(250));
+                std::thread::sleep(RESTART_POLL);
             }
         }
     }) {

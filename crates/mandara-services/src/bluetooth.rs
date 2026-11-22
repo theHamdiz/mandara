@@ -38,6 +38,8 @@ const CALL_TIMEOUT: Duration = Duration::from_secs(15);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 /// `Pair` waits for the user to answer the agent's dialog (up to 60 s).
 const PAIR_TIMEOUT: Duration = Duration::from_secs(75);
+/// Fire-and-forget BlueZ calls (auto-connect); must stay well under actor wake budgets.
+const NOREPLY_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize)]
 pub struct BluetoothDevice {
@@ -451,7 +453,7 @@ fn call_timeout(op: &BlueOp) -> Duration {
 async fn send(conn: &Connection, op: &BlueOp, no_reply: bool) -> Result<()> {
     // Fire-and-forget must not inherit Connect's 30s budget — a stuck p2p
     // write would freeze the actor (and starve the signal pump).
-    let limit = if no_reply { Duration::from_secs(2) } else { call_timeout(op) };
+    let limit = if no_reply { NOREPLY_TIMEOUT } else { call_timeout(op) };
     runtime::timeout(limit, send_inner(conn, op, no_reply)).await.unwrap_or_else(|| Err(anyhow!(mandara_i18n::t("Bluetooth did not respond in time"))))
 }
 
