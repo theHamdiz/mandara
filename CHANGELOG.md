@@ -6,6 +6,18 @@ About → What's new shows it too.
 
 ## Unreleased
 
+The shell gives back the memory a large panel needed once it has closed.
+
+### Improved
+
+- **Closed panels no longer keep their memory.** Opening a big panel (the
+  calendar, Language, Resources) grew the bar's layout tree, drawing lists and
+  keyboard-dispatch tree to that panel's size, and they stayed that large for
+  the bar's tiny frames afterwards: about 2 MiB per screen in a measured
+  session. The shell now frees that room shortly after the panel has closed
+  (and the sidebar is shut), the way it already did when the sidebar closes;
+  reopening a panel within that moment keeps it.
+
 ## 0.37.0 — 2026-11-22
 
 Mandara speaks Italian: Studio, the shell and Mandara Login all follow

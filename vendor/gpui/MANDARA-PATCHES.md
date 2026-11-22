@@ -310,6 +310,14 @@ allocated in it). It does nothing during a draw. Frames are unchanged
 otherwise, and a surface that shows again grows the room back on its first
 frame.
 
+The shell calls it at two boundaries: when the sidebar's cards are released,
+and `RELEASE_AFTER` after a bar panel finished closing with the sidebar shut
+(`ShellView::release_panel_frames`). Opening the Clock, Language and
+Resources panels in turn left about 2 MiB of layout nodes, scene lists and
+dispatch-tree nodes behind in the output's window (a live-allocation
+diff by call site, from a malloc-interposing profiler, on a headless Umbriel
+session, 3840 × 2160 at 1.5).
+
 ## 13. Data drops, typed drags and moving layer surfaces (`interactive.rs`, `window.rs`, `platform.rs`, `platform/test/window.rs`)
 
 Upstream takes only local files from other programs (`text/uri-list` as
