@@ -1328,14 +1328,16 @@ impl GreeterConfig {
         self.save_draft_to(user_draft_path())
     }
 
-    /// Writes a draft to `path` (atomically, with the install hint).
+    /// Writes a draft to `path` (with the install hint): a uniquely named
+    /// temporary file, flushed to disk, then renamed over it, under the
+    /// folder's write lock, so a crash or a second writer (Studio and the
+    /// CLI) never leaves half a draft.
     pub fn save_draft_to(&self, path: PathBuf) -> std::io::Result<PathBuf> {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        let tmp = path.with_extension("toml.tmp");
-        std::fs::write(&tmp, format!("# Mandara Login draft (Studio → Login & Lock Screens → Login). Install with `mandara greeter apply-config`.\n{}", self.to_toml()))?;
-        std::fs::rename(tmp, &path)?;
+        let text = format!("# Mandara Login draft (Studio → Login & Lock Screens → Login). Install with `mandara greeter apply-config`.\n{}", self.to_toml());
+        mandara_config::write_atomic(&path, text.as_bytes()).map_err(|e| std::io::Error::other(format!("{e:#}")))?;
         Ok(path)
     }
 
@@ -1404,19 +1406,24 @@ pub fn list_images(dirs: &[PathBuf]) -> Vec<PathBuf> {
 
 /// `mandara greeter apply-config`: validates `from` and installs it as
 /// the system config (root only; the previous file is kept as `.bak`).
+///
+/// Studio runs it through `pkexec` on a file in the user's home, so the
+/// root process must not be steered into reading something the user could
+/// not: see [`read_draft`].
 pub fn apply_config(from: &Path) -> Result<String, String> {
-    let text = std::fs::read_to_string(from).map_err(|e| format!("{}: {e}", from.display()))?;
-    let cfg = GreeterConfig::parse(&text).map_err(|e| format!("{} is not a valid greeter config: {e}", from.display()))?;
     // SAFETY: geteuid has no preconditions.
     if unsafe { libc::geteuid() } != 0 {
         return Err("not running as root: run `sudo mandara greeter apply-config` (or `pkexec`); nothing was changed".into());
     }
+    let text = read_draft(from, invoking_uid())?;
+    let cfg = GreeterConfig::parse(&text).map_err(|e| format!("{} is not a valid greeter config: {e}", from.display()))?;
     let dst = Path::new(SYSTEM_CONFIG);
     std::fs::create_dir_all(dst.parent().unwrap_or(Path::new("/etc"))).map_err(|e| e.to_string())?;
     if dst.exists() {
         let _ = std::fs::copy(dst, dst.with_extension("toml.bak"));
     }
-    let body = format!("# Mandara Login — installed by `mandara greeter apply-config` from {}\n{}", from.display(), cfg.to_toml());
+    // The path is a comment: no line break of its own may end it.
+    let body = format!("# Mandara Login — installed by `mandara greeter apply-config` from {}\n{}", from.display().to_string().escape_debug(), cfg.to_toml());
     let tmp = dst.with_extension("toml.new");
     std::fs::write(&tmp, body).map_err(|e| e.to_string())?;
     use std::os::unix::fs::PermissionsExt as _;
@@ -1456,6 +1463,51 @@ pub fn apply_config(from: &Path) -> Result<String, String> {
         ));
     }
     Ok(msg)
+}
+
+/// The most a draft may be: a real one is a few KiB.
+const MAX_DRAFT_BYTES: u64 = 1024 * 1024;
+
+/// The user who asked for this root process (`pkexec` or `sudo`), if any.
+fn invoking_uid() -> Option<u32> {
+    ["PKEXEC_UID", "SUDO_UID"].iter().find_map(|var| std::env::var(var).ok()?.parse().ok())
+}
+
+/// The text of the draft at `from`, read as root without being steered by
+/// whoever wrote the path. The file is opened first (without waiting: a
+/// FIFO would block forever) and every check is made on that open file, so
+/// nothing can change between the check and the read:
+///
+/// * it is a regular file of at most [`MAX_DRAFT_BYTES`];
+/// * when an unprivileged `invoker` asked (`pkexec`, `sudo`), the file the
+///   path leads to, links followed, belongs to them. A link to a root-only
+///   file (their draft pointing at `/etc/shadow`) is refused before a byte
+///   is read, so a parse error can't quote it back to them, and a dotfile
+///   manager's link to their own file still works. Without an invoker, root
+///   named the file on purpose.
+fn read_draft(from: &Path, invoker: Option<u32>) -> Result<String, String> {
+    use std::io::Read as _;
+    use std::os::unix::fs::{MetadataExt as _, OpenOptionsExt as _};
+    let shown = from.display();
+    let file = std::fs::OpenOptions::new().read(true).custom_flags(libc::O_NONBLOCK).open(from).map_err(|e| format!("{shown}: {e}"))?;
+    let meta = file.metadata().map_err(|e| format!("{shown}: {e}"))?;
+    if !meta.is_file() {
+        return Err(format!("{shown} is not a regular file"));
+    }
+    if let Some(uid) = invoker
+        && meta.uid() != uid
+    {
+        return Err(format!("{shown} is not owned by you (user {uid}); root only installs a draft its requester owns (nothing was changed)"));
+    }
+    if meta.len() > MAX_DRAFT_BYTES {
+        return Err(format!("{shown} is too large to be a greeter config (over {MAX_DRAFT_BYTES} bytes)"));
+    }
+    let mut bytes = Vec::new();
+    file.take(MAX_DRAFT_BYTES + 1).read_to_end(&mut bytes).map_err(|e| format!("{shown}: {e}"))?;
+    if bytes.len() as u64 > MAX_DRAFT_BYTES {
+        return Err(format!("{shown} is too large to be a greeter config (over {MAX_DRAFT_BYTES} bytes)"));
+    }
+    String::from_utf8(bytes).map_err(|_| format!("{shown} is not valid UTF-8 text"))
 }
 
 #[cfg(test)]
@@ -1755,16 +1807,67 @@ mod tests {
         assert_eq!(found, vec!["a.PNG", "b.jpg", "d.webp"]);
     }
 
+    /// Root is checked before the file is even opened: a non-root run
+    /// learns nothing about `from`, valid or not.
     #[test]
-    fn apply_config_validates_before_needing_root() {
+    fn apply_config_needs_root_before_touching_the_file() {
+        if unsafe { libc::geteuid() } == 0 {
+            return;
+        }
         let dir = tempfile::tempdir().unwrap();
         let bad = dir.path().join("bad.toml");
         std::fs::write(&bad, "[background]\nmode = 3\n").unwrap();
-        assert!(apply_config(&bad).unwrap_err().contains("not a valid"));
-        if unsafe { libc::geteuid() } != 0 {
-            let good = dir.path().join("good.toml");
-            std::fs::write(&good, GreeterConfig::default().to_toml()).unwrap();
-            assert!(apply_config(&good).unwrap_err().contains("not running as root"));
-        }
+        assert!(apply_config(&bad).unwrap_err().contains("not running as root"));
+        assert!(apply_config(&dir.path().join("missing.toml")).unwrap_err().contains("not running as root"));
+    }
+
+    #[test]
+    fn root_reads_only_what_its_requester_owns() {
+        use std::os::unix::fs::MetadataExt as _;
+        let dir = tempfile::tempdir().unwrap();
+        let draft = dir.path().join("greeter.toml");
+        std::fs::write(&draft, GreeterConfig::default().to_toml()).unwrap();
+        let me = std::fs::metadata(&draft).unwrap().uid();
+        assert!(read_draft(&draft, Some(me)).is_ok(), "the requester's own file");
+        assert!(read_draft(&draft, None).is_ok(), "no requester: root named it");
+        let other = read_draft(&draft, Some(me.wrapping_add(1))).unwrap_err();
+        assert!(other.contains("not owned by you"), "{other}");
+        // A link to a file they own (a dotfile manager's) is followed.
+        let link = dir.path().join("link.toml");
+        std::os::unix::fs::symlink(&draft, &link).unwrap();
+        assert!(read_draft(&link, Some(me)).is_ok());
+        // A link to a file someone else owns is refused, and nothing of it is quoted.
+        let secret = dir.path().join("secret");
+        std::fs::write(&secret, "root:$6$topsecret:19000:0:99999:7:::\n").unwrap();
+        let steal = dir.path().join("steal.toml");
+        std::os::unix::fs::symlink(&secret, &steal).unwrap();
+        let err = read_draft(&steal, Some(me.wrapping_add(1))).unwrap_err();
+        assert!(err.contains("not owned by you") && !err.contains("topsecret"), "{err}");
+        // Not a regular file: a device never read, a FIFO never waited on.
+        assert!(read_draft(Path::new("/dev/zero"), None).unwrap_err().contains("not a regular file"));
+        let fifo = dir.path().join("fifo");
+        let c = std::ffi::CString::new(fifo.to_str().unwrap()).unwrap();
+        // SAFETY: `c` is a valid NUL-terminated path.
+        assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0);
+        assert!(read_draft(&fifo, None).unwrap_err().contains("not a regular file"));
+        // Oversized.
+        let big = dir.path().join("big.toml");
+        std::fs::File::create(&big).unwrap().set_len(MAX_DRAFT_BYTES + 1).unwrap();
+        assert!(read_draft(&big, None).unwrap_err().contains("too large"));
+    }
+
+    #[test]
+    fn a_draft_is_saved_whole_and_replaced_atomically() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("mandara/greeter.toml");
+        let mut cfg = GreeterConfig::default();
+        cfg.save_draft_to(path.clone()).unwrap();
+        cfg.banner.text = "hello".into();
+        cfg.save_draft_to(path.clone()).unwrap();
+        let back = GreeterConfig::load_from(&path).unwrap();
+        assert_eq!(back.banner.text, "hello");
+        assert!(std::fs::read_to_string(&path).unwrap().starts_with("# Mandara Login draft"));
+        let left: Vec<String> = std::fs::read_dir(path.parent().unwrap()).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+        assert!(left.iter().all(|n| !n.ends_with(".tmp")), "no temporary file is left: {left:?}");
     }
 }

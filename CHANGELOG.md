@@ -6,6 +6,18 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Mandara Login is sturdier: switching to it can be undone cleanly if it fails, the screen stays responsive and rests when idle, and the Studio install path is safer.
+
+### Fixed
+
+- **Switching to Mandara Login is all-or-nothing.** If enabling greetd fails halfway, the display manager you had is enabled again and the files that were written are put back, instead of leaving a machine with no login screen. Going back to your old manager rolls back the same way.
+- **The login screen starts faster and no longer freezes.** Profile pictures are decoded in the background (and oversized or odd files are ignored), and Shut down, Restart, Suspend and Hibernate no longer lock the screen while the command runs; a failure shows a message.
+- **The login screen rests when idle.** After the idle time it redraws about ten times a second instead of every frame, using far less power until you touch the mouse or keyboard.
+- **A stuck login service can't hang the login screen.** A greetd that stops answering ends in an error after two minutes and the next attempt starts on a fresh connection; pressing Escape during sign-in discards the abandoned attempt's late answer; passwords are wiped from more of the buffers they pass through.
+- **Installing a login-screen design from Studio is safer.** The root helper only reads a draft you own, never follows a link to a file you can't read, and refuses oversized or special files; the draft is saved atomically, and typing in a text field saves once you pause instead of on every keystroke.
+- **The restore-previous-manager record is protected.** It is kept in the root-only backup folder and validated before use.
+- **The no-session fallback uses your own login shell** instead of the login screen's.
+
 ## 0.37.0 — 2026-11-22
 
 Mandara speaks Italian: Studio, the shell and Mandara Login all follow

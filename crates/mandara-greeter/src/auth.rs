@@ -1,9 +1,11 @@
 //! The authentication worker: owns the greetd connection (or the demo's
 //! fake daemon) on its own thread so PAM latency never blocks rendering.
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 
-use crate::greetd::{Conversation, DemoGreetd, GreetdSocket, Notes, Step, Transport, wipe};
+use crate::greetd::{Conversation, DemoGreetd, GreetdSocket, Notes, Step, Transport};
 
 /// Fake PAM round-trip of the demo greeter (no real authentication).
 const DEMO_AUTH_DELAY: std::time::Duration = std::time::Duration::from_millis(420);
@@ -30,14 +32,20 @@ impl Transport for Box<dyn Transport> {
     }
 }
 
+/// The worker answers one command at a time, so an answer can arrive after
+/// the person pressed Escape. Each command is stamped with the current
+/// *attempt*, [`AuthWorker::send`] starts a new one on every
+/// [`AuthCommand::Cancel`], and an event whose stamp is no longer current
+/// belongs to the abandoned attempt ([`AuthWorker::is_current`]).
 pub struct AuthWorker {
-    tx: Sender<AuthCommand>,
+    tx: Sender<(u64, AuthCommand)>,
+    attempt: Arc<AtomicU64>,
 }
 
 impl AuthWorker {
     /// Connects (real mode: `$GREETD_SOCK`) and starts the worker; events
     /// arrive on the returned channel.
-    pub fn spawn(demo: bool) -> std::io::Result<(AuthWorker, async_channel::Receiver<AuthEvent>)> {
+    pub fn spawn(demo: bool) -> std::io::Result<(AuthWorker, async_channel::Receiver<(u64, AuthEvent)>)> {
         let transport: Box<dyn Transport> = if demo {
             Box::new(DemoGreetd::with_delay(DEMO_AUTH_DELAY))
         } else {
@@ -46,27 +54,35 @@ impl AuthWorker {
         let (tx, rx) = channel();
         let (etx, erx) = async_channel::unbounded();
         std::thread::Builder::new().name("mandara-greeter-auth".into()).spawn(move || worker(Conversation::new(transport), rx, etx))?;
-        Ok((AuthWorker { tx }, erx))
+        Ok((AuthWorker { tx, attempt: Arc::new(AtomicU64::new(0)) }, erx))
     }
 
+    /// Queues `cmd` for the current attempt; a [`AuthCommand::Cancel`]
+    /// first ends that attempt.
     pub fn send(&self, cmd: AuthCommand) {
-        let _ = self.tx.send(cmd);
+        if matches!(cmd, AuthCommand::Cancel) {
+            self.attempt.fetch_add(1, Ordering::SeqCst);
+        }
+        let _ = self.tx.send((self.attempt.load(Ordering::SeqCst), cmd));
+    }
+
+    /// Whether an event stamped `attempt` is for the attempt in progress,
+    /// not one the person has since cancelled.
+    pub fn is_current(&self, attempt: u64) -> bool {
+        self.attempt.load(Ordering::SeqCst) == attempt
     }
 }
 
-fn worker(mut conv: Conversation<Box<dyn Transport>>, rx: Receiver<AuthCommand>, tx: async_channel::Sender<AuthEvent>) {
-    while let Ok(cmd) = rx.recv() {
+fn worker(mut conv: Conversation<Box<dyn Transport>>, rx: Receiver<(u64, AuthCommand)>, tx: async_channel::Sender<(u64, AuthEvent)>) {
+    while let Ok((attempt, cmd)) = rx.recv() {
         let event = match cmd {
-            AuthCommand::Begin { user, mut secret } => {
-                let (step, notes) = conv.begin(&user, Some(secret.clone()));
-                wipe(&mut secret);
+            // The conversation takes the password and wipes every copy it makes.
+            AuthCommand::Begin { user, secret } => {
+                let (step, notes) = conv.begin(&user, Some(secret));
                 AuthEvent::Step(step, notes)
             }
-            AuthCommand::Respond(mut answer) => {
-                let (step, notes) = conv.respond(answer.clone());
-                if let Some(a) = answer.as_mut() {
-                    wipe(a);
-                }
+            AuthCommand::Respond(answer) => {
+                let (step, notes) = conv.respond(answer);
                 AuthEvent::Step(step, notes)
             }
             AuthCommand::Start { cmd, env } => AuthEvent::Started(conv.start(cmd, env)),
@@ -75,7 +91,7 @@ fn worker(mut conv: Conversation<Box<dyn Transport>>, rx: Receiver<AuthCommand>,
                 continue;
             }
         };
-        if tx.send_blocking(event).is_err() {
+        if tx.send_blocking((attempt, event)).is_err() {
             break;
         }
     }
