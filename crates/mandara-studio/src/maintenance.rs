@@ -454,7 +454,7 @@ fn install_nerd_tar_xz(archive: &[u8], dir: &Path) -> Result<(), String> {
     let unpack = staging.join("out");
     mandara_config::store::write_atomic(&archive_path, archive).map_err(|e| format!("{}: {e:#}", archive_path.display()))?;
     let keep = |rel: &Path| {
-        rel.file_name().and_then(|n| n.to_str()).is_some_and(|name| CASKAYDIA_MONO_MEMBERS.iter().any(|want| *want == name))
+        rel.file_name().and_then(|n| n.to_str()).is_some_and(|name| CASKAYDIA_MONO_MEMBERS.contains(&name))
     };
     let opts = ExtractOptions { max_bytes: FONT_MAX_BYTES, max_entries: 64, keep: Some(&keep) };
     archive::extract_with(&archive_path, Format::TarXz, &unpack, &opts, &AtomicBool::new(false), &|_| {}).map_err(|e| tf("unpack failed: {error}", &[("error", &e)]))?;
