@@ -186,6 +186,8 @@ pub struct InstallPlan {
     pub new_config: String,
     pub current_dm: Option<String>,
     pub commands: Vec<Vec<String>>,
+    /// `undo[i]` reverses `commands[i]` (worked out before they run).
+    pub undo: Vec<Vec<String>>,
     pub warnings: Vec<String>,
 }
 
@@ -198,11 +200,16 @@ impl InstallPlan {
         let root = crate::manager::SysRoot::system();
         let current_dm = if root.freebsd() { crate::manager::display_manager(&root) } else { current_display_manager(Path::new("/etc/systemd/system/display-manager.service")) };
         let mut commands = Vec::new();
+        let mut undo = Vec::new();
+        let mut service = |verb: &str, unit: &str| {
+            commands.push(crate::manager::service_command(&root, verb, unit));
+            undo.push(undo_command(&root, verb, unit));
+        };
         if let Some(dm) = current_dm.as_deref().filter(|d| *d != "greetd") {
-            commands.push(crate::manager::service_command(&root, "disable", &format!("{dm}.service")));
+            service("disable", &format!("{dm}.service"));
         }
         if current_dm.as_deref() != Some("greetd") {
-            commands.push(crate::manager::service_command(&root, "enable", "greetd.service"));
+            service("enable", "greetd.service");
         }
         let mut warnings = Vec::new();
         if !crate::sessions::program_exists("greetd") && !Path::new("/usr/bin/greetd").exists() {
@@ -219,7 +226,7 @@ impl InstallPlan {
         {
             warnings.push(format!("display-manager.service points to `{dm}`, which isn't a display manager this installer knows; check before applying."));
         }
-        InstallPlan { kiosk, exe, greeter_user: user, existing, new_config, current_dm, commands, warnings }
+        InstallPlan { kiosk, exe, greeter_user: user, existing, new_config, current_dm, commands, undo, warnings }
     }
 
     pub fn describe(&self) -> String {
