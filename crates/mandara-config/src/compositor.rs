@@ -3244,25 +3244,45 @@ fn in_nix_store(real: &Path) -> bool {
 pub fn install_include(target: Target) -> Result<bool> {
     let path = target.user_config();
     if target == Target::Mango { return mango_config::install_include(&path); }
-    let before = std::fs::read_to_string(&path).ok();
-    let added = install_include_at(target, &path)?;
-    if added
-        && let crate::conflicts::Validation::Invalid { tool, report } = crate::conflicts::validate(target) {
-            match before {
-                Some(original) => crate::store::write_atomic(&path, original.as_bytes())?,
-                // A Sway config Mandara started from the system one goes again.
-                None => {
-                    let _ = std::fs::remove_file(&path);
+    let before = match std::fs::read_to_string(&path) {
+        Ok(text) => Some(text),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error).with_context(|| format!("reading {}", path.display())),
+    };
+    let Some(written) = install_include_text(target, &path)? else { return Ok(false) };
+    if let crate::conflicts::Validation::Invalid { tool, report } = crate::conflicts::validate(target) {
+        // The check can take seconds, and the file is the user's: put the
+        // original back only while it is still exactly what was written.
+        let lock = mandara_theme::templates::WriteLock::new(&path)?;
+        let kept = match lock.check(written.as_bytes()) {
+            Ok(stamp) => {
+                match before {
+                    Some(original) => {
+                        crate::store::write_atomic_checked(&lock, stamp, original.as_bytes())?;
+                    }
+                    // A Sway config Mandara started from the system one goes again.
+                    None => std::fs::remove_file(&path).with_context(|| format!("removing {}", path.display()))?,
                 }
+                false
             }
-            anyhow::bail!("{tool} rejects {} with Mandara's include line, so it was not added:\n{report}", path.display());
-        }
-    Ok(added)
+            Err(_) => true,
+        };
+        let outcome = if kept { "the file was changed since, so it was left as it is now" } else { "so it was not added" };
+        anyhow::bail!("{tool} rejects {} with Mandara's include line; {outcome}:\n{report}", path.display());
+    }
+    Ok(true)
 }
 
+/// [`install_include_text`]: whether the include line was added.
 fn install_include_at(target: Target, path: &Path) -> Result<bool> {
+    install_include_text(target, path).map(|written| written.is_some())
+}
+
+/// Adds the include line to `path`: the config as written, or `None` when
+/// nothing needed to change.
+fn install_include_text(target: Target, path: &Path) -> Result<Option<String>> {
     if include_installed_at(target, path) {
-        return Ok(false);
+        return Ok(None);
     }
     if target == Target::River {
         anyhow::bail!("Mandara doesn't edit River's init ({}); it sends its settings over river-control instead. To start Mandara with River, add this line to it:\n  {}", path.display(), target.include_line());
@@ -3301,7 +3321,7 @@ fn install_include_at(target: Target, path: &Path) -> Result<bool> {
     let updated = match edited {
         Some(Some(text)) => text,
         // Already listed (a commented-out copy aside): nothing to change.
-        Some(None) => return Ok(false),
+        Some(None) => return Ok(None),
         None => {
             let sep = if original.ends_with('\n') { "" } else { "\n" };
             let line = if target == Target::Mango { mango_config::include_hint(path, &target.generated_file()) } else { target.include_line() };
@@ -3311,7 +3331,7 @@ fn install_include_at(target: Target, path: &Path) -> Result<bool> {
     // MangoWM's caller already recorded its timestamped Config doctor backup.
     if target != Target::Mango { crate::doctor::theme::backup(&lock, stamp)?; }
     crate::store::write_atomic_checked(&lock, stamp, updated.as_bytes())?;
-    Ok(true)
+    Ok(Some(updated))
 }
 
 /// Starts the user's sway config as a copy of [`SWAY_SYSTEM_CONFIG`] when

@@ -863,8 +863,9 @@ fn register_profiles(r: &mut PluginRegistry) {
         CORE,
         CommandSpec::new("config import", tk("Load settings from an exported file (the current ones are backed up first)"), |a, cx| {
             let path = mandara_config::paths::expand_tilde(a.str(0)?);
-            let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-            let next = profiles::import_text(&text).map_err(err)?;
+            let text = mandara_config::store::read_to_string_capped(&path, profiles::IMPORT_MAX_BYTES).map_err(|e| format!("{}: {e}", path.display()))?;
+            let current = config(cx).read(cx).snapshot();
+            let next = profiles::import_text(&text, &current).map_err(err)?;
             let backup = profiles::backup_config_dir(&stamp(), "before-import").map_err(err)?;
             update_config(cx, |c| *c = next);
             Ok(json!({ "imported": path, "backup": backup }))

@@ -39,7 +39,20 @@ load (in memory; the next write saves it), never losing what it had on:
 `[plugins] enabled` lists opt-in plugins you switched on, `disabled` the
 ones you switched off; a plugin in neither follows its default. Exports
 (`config export --changes-only`) keep these version keys, and imports of
-older exports are upgraded the same way.
+older exports are upgraded the same way. An import (and applying a profile)
+never changes `[plugins]` `grants`, `enabled` or `disabled`: those stay as
+they are on this machine, and permissions are given in Studio → Plugins.
+
+**A file Mandara can only partly read.** When `config.toml` has a value this
+version can't read (a typo, or a setting from a newer version after a
+downgrade), Mandara keeps every other value, puts the unreadable ones back
+to their defaults and shows a notification naming them. Your original file
+is kept beside it as `config.toml.invalid-<hash>`; the repaired settings are
+written with the next change you make. A file that isn't TOML at all is not
+loaded: defaults run in memory and nothing is saved over the file until it
+is fixed (Studio → Maintenance → Config can rewrite it). Keys a newer
+version added that this one doesn't know are carried along when it saves.
+Comments in the file are not kept: Mandara rewrites it on every save.
 
 ### App theming (`[integrations]`)
 

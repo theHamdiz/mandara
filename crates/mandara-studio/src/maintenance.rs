@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use mandara_config::compositor::{Target, include_installed, install_include};
 use mandara_config::paths;
 use mandara_i18n::{t, tf, tk};
+use sha2::Digest as _;
 
 mod icons;
 
@@ -102,6 +103,8 @@ pub struct Font {
     pub file: &'static str,
     pub url: &'static str,
     pub size: u64,
+    /// Lowercase hex SHA-256 of the file; a download that differs is refused.
+    pub sha256: &'static str,
 }
 
 /// Largest font file accepted from the download (16 MiB).
@@ -109,21 +112,31 @@ const FONT_MAX_BYTES: u64 = 16 << 20;
 /// Whole-request timeout of a font download.
 const DOWNLOAD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
 
+/// A file of the google/fonts repository at the commit the checksums below
+/// were taken from: a branch name (`main`) would let the download change
+/// under them. To update a font, take its URL and `sha256sum` from a newer
+/// commit together.
+macro_rules! font_url {
+    ($path:literal) => {
+        concat!("https://raw.githubusercontent.com/google/fonts/06bfe0d62a98375cb09c942fa18e68bd32cff057/ofl/", $path)
+    };
+}
+
 pub const FONTS: &[Font] = &[
-    Font { family: "Inter", file: "Inter[opsz,wght].ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz,wght%5D.ttf", size: 876_576 },
-    Font { family: "Cairo", file: "Cairo[slnt,wght].ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/cairo/Cairo%5Bslnt,wght%5D.ttf", size: 599_548 },
-    Font { family: "Alexandria", file: "Alexandria[wght].ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/alexandria/Alexandria%5Bwght%5D.ttf", size: 332_488 },
-    Font { family: "JetBrains Mono", file: "JetBrainsMono[wght].ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf", size: 187_208 },
+    Font { family: "Inter", file: "Inter[opsz,wght].ttf", url: font_url!("inter/Inter%5Bopsz,wght%5D.ttf"), size: 876_576, sha256: "29160a80ff49ddcab2c97711247e08b1fab27a484a329ce8b813d820dc559031" },
+    Font { family: "Cairo", file: "Cairo[slnt,wght].ttf", url: font_url!("cairo/Cairo%5Bslnt,wght%5D.ttf"), size: 599_548, sha256: "667c987182391c91f4e57a2f455b1794fb5e3ee6ca4ef3383e86bb690fa9c964" },
+    Font { family: "Alexandria", file: "Alexandria[wght].ttf", url: font_url!("alexandria/Alexandria%5Bwght%5D.ttf"), size: 332_488, sha256: "db8ae03b62d55a65aa4e04307878df8c00d6e5388e4800635cbe0e22b6411b64" },
+    Font { family: "JetBrains Mono", file: "JetBrainsMono[wght].ttf", url: font_url!("jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf"), size: 187_208, sha256: "48715a42ec242c21e9f02692891e147d022299a52e48d5e413e1a942193ffeda" },
     // The Qur'anic Naskh for Jannah's verses and hadith.
-    Font { family: "Amiri Quran", file: "AmiriQuran-Regular.ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/amiriquran/AmiriQuran-Regular.ttf", size: 136_920 },
-    Font { family: "Amiri", file: "Amiri-Regular.ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/Amiri-Regular.ttf", size: 431_116 },
+    Font { family: "Amiri Quran", file: "AmiriQuran-Regular.ttf", url: font_url!("amiriquran/AmiriQuran-Regular.ttf"), size: 136_920, sha256: "e2a47644762d16bdfb6d33e0d8db8c6ff30beae84150ef5a705316bbd829455c" },
+    Font { family: "Amiri", file: "Amiri-Regular.ttf", url: font_url!("amiri/Amiri-Regular.ttf"), size: 431_116, sha256: "ab391c4147d054c48976e98322ad0eefe1427aa0e0502a12a4c75d80a70cfcd7" },
     // Ink Rush's comic display face (SIL Open Font License 1.1, its text in
     // `assets/fonts/bangers/OFL.txt`).
-    Font { family: "Bangers", file: "Bangers-Regular.ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/bangers/Bangers-Regular.ttf", size: 93_148 },
+    Font { family: "Bangers", file: "Bangers-Regular.ttf", url: font_url!("bangers/Bangers-Regular.ttf"), size: 93_148, sha256: "4160a7311de9342674cce9160cde9fcbb30f48190397d86ff1b70b455af65824" },
 ];
 
 pub fn fonts_dir() -> PathBuf {
-    dirs::data_dir().unwrap_or_else(|| PathBuf::from("~/.local/share")).join("fonts").join("mandara")
+    paths::data_home().join("fonts").join("mandara")
 }
 
 /// Families not installed, given the system's font family names.
@@ -178,9 +191,10 @@ pub fn check_in(roots: &Roots, id: CheckId, installed_fonts: &[String]) -> Healt
             match std::fs::read_to_string(&path) {
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => Health::Warn(t("No config file yet — defaults are in use").into()),
                 Err(e) => Health::Broken(format!("{}: {e}", path.display())),
-                Ok(text) => match toml::from_str::<mandara_config::ShellConfig>(&text) {
+                // As the store reads it, so "OK" means the shell loads it.
+                Ok(text) => match mandara_config::store::parse_text(&text) {
                     Ok(_) => Health::Ok(path.display().to_string()),
-                    Err(e) => Health::Broken(tf("Doesn't parse: {error}", &[("error", &e.message())])),
+                    Err(e) => Health::Broken(tf("Doesn't parse: {error}", &[("error", &format!("{e:#}"))])),
                 },
             }
         }
@@ -304,6 +318,9 @@ pub fn fix_in(roots: &Roots, id: CheckId, installed_fonts: &[String], progress: 
             let mut done = 0;
             for f in &missing {
                 let bytes = download(f.url, FONT_MAX_BYTES)?;
+                if format!("{:x}", sha2::Sha256::digest(&bytes)) != f.sha256 {
+                    return Err(tf("download failed: {error}", &[("error", &t("the file doesn't match its checksum"))]));
+                }
                 let path = dir.join(f.file);
                 mandara_config::store::write_atomic(&path, &bytes).map_err(|e| format!("{}: {e:#}", path.display()))?;
                 done += f.size;
@@ -332,32 +349,13 @@ fn download(url: &str, limit: u64) -> Result<Vec<u8>, String> {
 }
 
 fn write_config_in(roots: &Roots, cfg: &mandara_config::ShellConfig) -> Result<(), String> {
-    let text = toml::to_string_pretty(cfg).map_err(|e| e.to_string())?;
-    let path = roots.config_file();
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    }
-    mandara_config::store::write_atomic(&path, text.as_bytes()).map_err(|e| format!("{e:#}"))
+    mandara_config::store::replace_file(&roots.config_file(), cfg).map_err(|e| format!("{e:#}"))
 }
 
 // ── Backups & factory reset ───────────────────────────────────────────────
 
 pub fn backups_dir() -> PathBuf {
     Roots::user().backups()
-}
-
-fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
-    std::fs::create_dir_all(to)?;
-    for entry in std::fs::read_dir(from)? {
-        let entry = entry?;
-        let dest = to.join(entry.file_name());
-        if entry.file_type()?.is_dir() {
-            copy_dir(&entry.path(), &dest)?;
-        } else {
-            std::fs::copy(entry.path(), dest)?;
-        }
-    }
-    Ok(())
 }
 
 /// Copies `~/.config/mandara` into a timestamped backup folder.
@@ -377,10 +375,11 @@ pub fn backup_in(roots: &Roots, reason: &str) -> Result<PathBuf, String> {
     }
     let src = &roots.config;
     if src.exists() {
-        copy_dir(src, &dest).map_err(|e| tf("backup to {folder}: {error}", &[("folder", &dest.display()), ("error", &e)]))?;
+        mandara_config::profiles::copy_config_tree(src, &dest).map_err(|e| tf("backup to {folder}: {error}", &[("folder", &dest.display()), ("error", &format!("{e:#}"))]))?;
     } else {
         std::fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
     }
+    mandara_config::profiles::prune_backups(&roots.backups(), mandara_config::profiles::MAX_BACKUPS);
     Ok(dest)
 }
 
@@ -419,7 +418,7 @@ pub fn restore(backup: &Path) -> Result<Followups, String> {
 pub fn restore_in(roots: &Roots, backup: &Path) -> Result<Followups, String> {
     let file = backup.join("config.toml");
     let text = std::fs::read_to_string(&file).map_err(|e| format!("{}: {e}", file.display()))?;
-    let cfg: mandara_config::ShellConfig = toml::from_str(&text).map_err(|e| tf("that backup doesn't parse: {error}", &[("error", &e.message())]))?;
+    let cfg = mandara_config::store::parse_text(&text).map_err(|e| tf("that backup doesn't parse: {error}", &[("error", &format!("{e:#}"))]))?;
     backup_in(roots, "before-restore")?;
     write_config_in(roots, &cfg)?;
     Ok(vec![cmd(&["config", "reload"]), cmd(&["compositor", "sync"])])
@@ -478,6 +477,8 @@ mod tests {
     #[test]
     fn fonts_have_https_urls_and_sizes() {
         assert!(FONTS.iter().all(|f| f.url.starts_with("https://") && f.size > 0));
+        assert!(FONTS.iter().all(|f| f.sha256.len() == 64 && f.sha256.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))), "each font is pinned by a SHA-256");
+        assert!(FONTS.iter().all(|f| !f.url.contains("/main/")), "fonts come from a pinned commit, not a branch");
         assert!(missing_fonts(&FONTS.iter().map(|f| f.family.to_string()).collect::<Vec<_>>()).is_empty());
     }
 

@@ -568,6 +568,12 @@ fn file_in(dir: &Path, id: &str) -> Result<PathBuf> {
     Ok(dir.join(format!("{id}.toml")))
 }
 
+/// A Look file's text; one larger than a Look can be (`MAX_FILE_BYTES`) is
+/// never read in full.
+fn read_look(path: &Path) -> Option<String> {
+    crate::store::read_to_string_capped(path, MAX_FILE_BYTES as u64).ok()
+}
+
 /// Every Look in `dir` (unreadable or invalid files are skipped), by name.
 pub fn list_in(dir: &Path) -> Vec<UserLook> {
     let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
@@ -577,7 +583,7 @@ pub fn list_in(dir: &Path) -> Vec<UserLook> {
         .filter(|p| p.extension().is_some_and(|x| x == "toml"))
         .take(MAX_LOOKS)
         .filter_map(|p| {
-            let text = std::fs::read_to_string(&p).ok()?;
+            let text = read_look(&p)?;
             match parse(&text) {
                 Ok(l) if p.file_stem().is_some_and(|s| s == l.id.as_str()) => Some(l),
                 Ok(_) => None,
@@ -593,7 +599,7 @@ pub fn list_in(dir: &Path) -> Vec<UserLook> {
 }
 
 pub fn find_in(dir: &Path, id: &str) -> Option<UserLook> {
-    let text = std::fs::read_to_string(file_in(dir, id).ok()?).ok()?;
+    let text = read_look(&file_in(dir, id).ok()?)?;
     parse(&text).ok().filter(|l| l.id == id)
 }
 

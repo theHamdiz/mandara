@@ -127,35 +127,67 @@ pub fn user_theme_dir() -> PathBuf {
     dirs::config_dir().unwrap_or_else(|| PathBuf::from("/tmp")).join("mandara/themes")
 }
 
-/// Built-in plus user themes (user ids override built-ins).
-pub fn all() -> Vec<ThemeDef> {
+/// The user theme files that were listed, with what changed-detection needs:
+/// a file added, removed, replaced or edited changes this list.
+type UserFiles = Vec<(PathBuf, Option<std::time::SystemTime>, u64)>;
+
+fn user_files() -> UserFiles {
+    let Ok(entries) = std::fs::read_dir(user_theme_dir()) else { return Vec::new() };
+    let mut files: UserFiles = entries
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "toml"))
+        .map(|path| {
+            let meta = std::fs::metadata(&path).ok();
+            (path, meta.as_ref().and_then(|m| m.modified().ok()), meta.map_or(0, |m| m.len()))
+        })
+        .collect();
+    files.sort();
+    files
+}
+
+/// Built-in plus user themes, in order. Parsed again only when the user's
+/// theme folder changed: callers look themes up per list entry, per frame
+/// and per keypress, and each used to read and parse every user file.
+fn catalog() -> std::sync::Arc<Vec<ThemeDef>> {
+    static CACHE: std::sync::Mutex<Option<(UserFiles, std::sync::Arc<Vec<ThemeDef>>)>> = std::sync::Mutex::new(None);
+    let files = user_files();
+    let mut cache = CACHE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some((listed, themes)) = cache.as_ref()
+        && *listed == files
+    {
+        return themes.clone();
+    }
     let mut themes: Vec<ThemeDef> = builtin().to_vec();
-    if let Ok(entries) = std::fs::read_dir(user_theme_dir()) {
-        let mut paths: Vec<PathBuf> = entries.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == "toml")).collect();
-        paths.sort();
-        for path in paths {
-            match std::fs::read_to_string(&path).map_err(|e| e.to_string()).and_then(|t| toml::from_str::<ThemeDef>(&t).map_err(|e| e.to_string())) {
-                Ok(mut def) if def.dark.is_some() || def.light.is_some() => {
-                    def.origin = ThemeOrigin::User { path: path.clone() };
-                    themes.retain(|t| t.id != def.id);
-                    themes.push(def);
-                }
-                Ok(_) => tracing::warn!("{}: theme has neither [dark] nor [light]", path.display()),
-                Err(err) => tracing::warn!("{}: invalid theme: {err}", path.display()),
+    for (path, ..) in &files {
+        match std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|t| toml::from_str::<ThemeDef>(&t).map_err(|e| e.to_string())) {
+            Ok(mut def) if def.dark.is_some() || def.light.is_some() => {
+                def.origin = ThemeOrigin::User { path: path.clone() };
+                themes.retain(|t| t.id != def.id);
+                themes.push(def);
             }
+            Ok(_) => tracing::warn!("{}: theme has neither [dark] nor [light]", path.display()),
+            Err(err) => tracing::warn!("{}: invalid theme: {err}", path.display()),
         }
     }
+    let themes = std::sync::Arc::new(themes);
+    *cache = Some((files, themes.clone()));
     themes
+}
+
+/// Built-in plus user themes (user ids override built-ins).
+pub fn all() -> Vec<ThemeDef> {
+    catalog().to_vec()
 }
 
 /// Looks a theme up by id (case-insensitive; spaces/underscores ≈ dashes).
 pub fn find(id: &str) -> Option<ThemeDef> {
-    all().into_iter().find(|t| t.answers_to(id))
+    catalog().iter().find(|t| t.answers_to(id)).cloned()
 }
 
 /// The id after `id` in catalog order (wrapping).
 pub fn next_id(id: &str) -> String {
-    let themes = all();
+    let themes = catalog();
     let i = themes.iter().position(|t| t.id == id).map(|i| i + 1).unwrap_or(0);
     themes[i % themes.len()].id.clone()
 }

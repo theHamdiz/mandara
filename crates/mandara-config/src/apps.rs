@@ -340,7 +340,13 @@ pub fn set_default_at(path: &Path, category: &AppCategory, desktop_id: &str) -> 
     if !desktop_id.ends_with(".desktop") || desktop_id.contains(['/', ';', '\n']) {
         bail!("not a desktop id: {desktop_id:?}");
     }
-    let before = std::fs::read_to_string(path).unwrap_or_default();
+    // Only a missing file starts empty: an unreadable or non-UTF-8 one must
+    // not be replaced by just the new keys.
+    let before = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(e) => return Err(e).with_context(|| format!("reading {}", path.display())),
+    };
     let backup = path.with_file_name("mimeapps.list.mandara-backup");
     if !before.is_empty() && !backup.exists() {
         std::fs::write(&backup, &before).with_context(|| format!("backing up {}", path.display()))?;
@@ -528,9 +534,7 @@ fn set_key(text: &str, key: &str, value: &str) -> String {
 /// Enables or disables autostart entry `id` by its `Hidden=` key, in the
 /// user folder (a system entry gets a user override copy).
 pub fn set_autostart_enabled_in(user: &Path, system: &[PathBuf], id: &str, enabled: bool) -> Result<()> {
-    if id.contains('/') || !id.ends_with(".desktop") {
-        bail!("not an autostart entry id: {id:?}");
-    }
+    check_autostart_id(id)?;
     let target = user.join(id);
     let source = if target.is_file() { Some(target.clone()) } else { system.iter().map(|d| d.join(id)).find(|p| p.is_file()) };
     let Some(source) = source else { bail!("no autostart entry {id}") };
@@ -548,6 +552,14 @@ pub fn set_autostart_enabled(id: &str, enabled: bool) -> Result<()> {
     set_autostart_enabled_in(&user, &system, id, enabled)
 }
 
+/// An autostart id is a bare `*.desktop` file name: never a path.
+fn check_autostart_id(id: &str) -> Result<()> {
+    if id.contains(['/', '\0']) || id.contains("..") || !id.ends_with(".desktop") {
+        bail!("not an autostart entry id: {id:?}");
+    }
+    Ok(())
+}
+
 /// A file-name-safe id from a name (`My Script` → `my-script`).
 fn slug(name: &str) -> String {
     let s: String = name.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '-' }).collect();
@@ -561,6 +573,7 @@ pub fn add_autostart_in(user: &Path, apps: &[PathBuf], what: &AutostartNew) -> R
     std::fs::create_dir_all(user)?;
     let (id, text) = match what {
         AutostartNew::App(desktop_id) => {
+            check_autostart_id(desktop_id)?;
             let source = apps.iter().map(|d| d.join(desktop_id)).find(|p| p.is_file()).with_context(|| format!("no app {desktop_id}"))?;
             let text = std::fs::read_to_string(&source)?;
             (desktop_id.clone(), set_key(&set_key(&text, "Hidden", "false"), "X-Mandara-Created", "true"))
@@ -655,6 +668,33 @@ mod tests {
         assert_eq!(std::fs::read_to_string(dir.path().join("mimeapps.list.mandara-backup")).unwrap(), MIMEAPPS);
         assert_eq!(default_for(&path, "inode/directory").as_deref(), Some("nautilus.desktop"));
         assert!(set_default_at(&path, files, "../evil").is_err());
+    }
+
+    #[test]
+    fn set_default_never_replaces_a_file_it_cannot_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("mimeapps.list");
+        let bytes = b"[Default Applications]\ninode/directory=\xff\xfe.desktop;\n";
+        std::fs::write(&path, bytes).unwrap();
+        assert!(set_default_at(&path, category("files").unwrap(), "thunar.desktop").is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), bytes, "a non-UTF-8 file is left alone");
+        assert!(!dir.path().join("mimeapps.list.mandara-backup").exists());
+        // A missing file still starts empty.
+        let fresh = dir.path().join("new/mimeapps.list");
+        set_default_at(&fresh, category("files").unwrap(), "thunar.desktop").unwrap();
+        assert_eq!(default_for(&fresh, "inode/directory").as_deref(), Some("thunar.desktop"));
+    }
+
+    #[test]
+    fn autostart_ids_are_bare_desktop_file_names() {
+        let dir = tempfile::tempdir().unwrap();
+        let (user, apps) = (dir.path().join("autostart"), dir.path().join("applications"));
+        std::fs::create_dir_all(&apps).unwrap();
+        std::fs::write(dir.path().join("secret.desktop"), "[Desktop Entry]\nName=Secret\nExec=x\n").unwrap();
+        for id in ["../secret.desktop", "a/../../secret.desktop", "..desktop", "plain"] {
+            assert!(add_autostart_in(&user, std::slice::from_ref(&apps), &AutostartNew::App(id.into())).is_err(), "{id}");
+        }
+        assert!(!user.join("secret.desktop").exists());
     }
 
     #[test]
