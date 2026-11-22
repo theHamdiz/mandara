@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.37.0 — 2026-11-22
+
 Mandara speaks Italian: Studio, the shell and Mandara Login all follow
 *Italiano* (`it_IT`).
 

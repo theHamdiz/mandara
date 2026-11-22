@@ -4,18 +4,18 @@
 
 [mandara-app]
 kind = "binary"
-version = "0.36.0"
-hash = "ba42cdcce5deff5e5911c4fbc19ea713"
+version = "0.37.0"
+hash = "f9f85ac23499073cce3b3fbcc1842c1d"
 
 [mandara-compositor]
 kind = "library"
-version = "0.33.0"
-hash = "137a4ddd80451195f41ca8e6b61fb4aa"
+version = "0.34.0"
+hash = "10c6c63c34fd0e319d86506bcd6645f4"
 
 [mandara-config]
 kind = "library"
-version = "0.34.0"
-hash = "dfc7cd80134c937caa108795063dacfa"
+version = "0.35.0"
+hash = "3c2c683b2fc63c7114f6f51c090d4853"
 
 [mandara-core]
 kind = "library"
@@ -29,18 +29,18 @@ hash = "2d8fd0a37b9190397a09a8bb8f4f7dc8"
 
 [mandara-greeter]
 kind = "library"
-version = "0.34.0"
-hash = "6d3743daf945faff42f3cf16feec506f"
+version = "0.35.0"
+hash = "1f24d6e2cabdf06f8a0db2e3e46815c9"
 
 [mandara-i18n]
 kind = "library"
-version = "0.35.0"
-hash = "c82e4ef0a65571b9e9f91b37d888e85d"
+version = "0.36.0"
+hash = "7b1cd5b2002a3535145520028c38215b"
 
 [mandara-install]
 kind = "library"
-version = "0.29.0"
-hash = "e720736c4af87aca856a56055200ead0"
+version = "0.30.0"
+hash = "d2c42f7586ce0a06351fa38c9840f699"
 
 [mandara-media]
 kind = "library"
@@ -49,18 +49,18 @@ hash = "31f5b73c6d2cf8df1dd2338173294338"
 
 [mandara-plugins]
 kind = "library"
-version = "0.33.0"
-hash = "ef8087397fe7aca5782892bafac63bbc"
+version = "0.34.0"
+hash = "992d5ae303f959ae24e1126020c3fb79"
 
 [mandara-services]
 kind = "library"
-version = "0.36.0"
-hash = "e3798e9d130512baa2e44fb1736fbf58"
+version = "0.37.0"
+hash = "e3879e683b9b7c21414f2836931c20da"
 
 [mandara-studio]
 kind = "library"
-version = "0.36.0"
-hash = "d500d05bb434ee1232502a32d7694351"
+version = "0.37.0"
+hash = "32f684d616eeb83782c594a1c7423381"
 
 [mandara-theme]
 kind = "library"
@@ -69,8 +69,8 @@ hash = "ffd8eefe622491599ffc894ff86e438b"
 
 [mandara-ui]
 kind = "library"
-version = "0.34.0"
-hash = "e6d715955955de401b9043062e7bf228"
+version = "0.35.0"
+hash = "6799f7cffbf8912a4bacf1c48c6127af"
 
 [mandara-version]
 kind = "library"
@@ -79,8 +79,8 @@ hash = "82f495ec579a2af75fdb0abe3a84e59e"
 
 [mandara-wallgen]
 kind = "library"
-version = "0.33.0"
-hash = "62b91350517eba8c64b89e1c3ae46cfb"
+version = "0.34.0"
+hash = "b004b2adcdd86fc58e5187478a5a644c"
 
 [mandara-webp]
 kind = "library"
@@ -94,5 +94,5 @@ hash = "1b61f6b270da0bb7a4477adae0860d19"
 
 [xtask]
 kind = "tool"
-version = "0.31.0"
-hash = "915af09cdc6b662cbaf53bd7c328a742"
+version = "0.32.0"
+hash = "20276eeb5b966a9da63722f87c443e0f"
