@@ -284,8 +284,10 @@ fixed:
 `language` (Jannah, Qur'an, Hadith, Prayer times) is `follow` (Mandara's
 language) or a language code (`en`, `ar`, `fa`, `ur`, `es`, `pt`, `fr`,
 `it`, `de`, `tr`, `ru`, `hi`, `mr`, `bn`, `te`, `id`, `sw`, `vi`, `zh`, `ja`,
-`ko`): that plugin's surfaces and the meanings it shows switch to it, the
-rest of the shell keeps its own.
+`ko`): that plugin's surfaces switch to it, and so do the meanings when an
+edition exists for that language (Qur'an has Italian via Piccardo; Hadith
+has no Italian edition, so it keeps English meanings and labels them as
+English). The rest of the shell keeps its own language.
 
 Older plugin settings (weather, prayer times, pomodoro, screenshot and
 recording, updates, world clock, power history, media lyrics, visualizer,
