@@ -867,7 +867,8 @@ mod tests {
         for file in [&stale, &unrelated] {
             fs::File::options().write(true).open(file).unwrap().set_modified(old).unwrap();
         }
-        store.update(|c| c.bar.height = 30.0);
+        // A real change: setting the default value again would leave the store clean and skip the write.
+        store.update(|c| c.bar.height = 34.0);
         store.flush().unwrap();
         assert!(!root.path().join("config.toml.lock").exists());
         assert!(!stale.exists(), "a temporary left by a crash goes");

@@ -1039,22 +1039,20 @@ pub fn before_snapshot(cfg: &ShellConfig, saved: &str) -> Option<crate::profiles
     crate::profiles::snapshot_paths(cfg, BEFORE_PROFILE, "Your setup before the first look", SNAPSHOT_PATHS, saved).ok()
 }
 
-/// `cfg` restored from `before` (and no look active). The snapshot brings
-/// the plugin lists back exactly; plugins you switched on yourself while a
-/// look was applied stay on, and so do your widgets and bar items. The
+/// `cfg` restored from `before` (and no look active). The plugins a look
+/// switched on go off again (`looks.plugins_enabled`, and the other
+/// switches it recorded); plugins you switched on yourself while a look was
+/// applied stay on, and so do your widgets and bar items. The
 /// settings the look set on top go back to what they were.
 pub fn restore(cfg: &ShellConfig, before: &crate::profiles::Profile) -> anyhow::Result<ShellConfig> {
     let (mut mine, shown_before) = (bar_items::yours(cfg), bar_items::showing(cfg));
     let mut look_off = cfg.clone();
     revert_settings(&mut look_off, &cfg.looks.settings);
+    // Applying a profile never touches which plugins are on (that is the
+    // person's call), so `c` still has the look's switches: take back
+    // exactly the ones the look made and keep every other one.
     let mut c = crate::profiles::apply(&look_off, before)?;
-    for id in &cfg.plugins.enabled {
-        let looks_did = cfg.looks.plugins_enabled.contains(id);
-        if !looks_did && !c.plugins.enabled.contains(id) {
-            c.plugins.disabled.retain(|d| d != id);
-            c.plugins.enabled.push(id.clone());
-        }
-    }
+    undo_plugins(&mut c, &cfg.looks, &[]);
     // Your widgets: those you have now (the look's own you left as it put
     // them go); an older look that replaced the list leaves yours in the
     // snapshot, so those come back too.

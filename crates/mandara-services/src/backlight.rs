@@ -8,6 +8,7 @@
 //! it costs nothing while the brightness is idle. Machines without a
 //! backlight (desktops) simply get no watcher.
 
+#[cfg(not(target_os = "freebsd"))]
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -25,6 +26,7 @@ const POLL_RETRY: Duration = Duration::from_secs(1);
 /// Updates buffered for the UI.
 const UPDATE_QUEUE: usize = 4;
 /// Bytes read from a sysfs number attribute (`"4294967295\n"` fits).
+#[cfg(not(target_os = "freebsd"))]
 const SYSFS_NUMBER_BYTES: usize = 16;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
@@ -57,11 +59,13 @@ impl Backlight {
     }
 }
 
+#[cfg(not(target_os = "freebsd"))]
 fn read_u32(path: &Path) -> Option<u32> {
     std::fs::read_to_string(path).ok()?.trim().parse().ok()
 }
 
 /// Parses a sysfs number re-read from an open file (no allocation).
+#[cfg(not(target_os = "freebsd"))]
 fn pread_u32(file: &std::fs::File) -> Option<u32> {
     let mut buf = [0u8; SYSFS_NUMBER_BYTES];
     let n = rustix::io::pread(file, &mut buf, 0).ok()?;
