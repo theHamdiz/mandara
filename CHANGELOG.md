@@ -6,6 +6,16 @@ About → What's new shows it too.
 
 ## Unreleased
 
+App themes can no longer be tampered with through a wallpaper or theme name, and an interrupted shortcut change is undone on the next edit.
+
+### Fixed
+
+- A wallpaper file name or a community theme name can no longer smuggle extra lines into the app themes Mandara writes (kitty, Neovim, GTK, Qt, Kvantum, Firefox, Vesktop and the rest): line breaks and comment endings in the name are neutralised, so a downloaded wallpaper cannot make another app run code.
+- App themes keep a config file's Windows (CRLF) line endings instead of rewriting the whole file on every theme change, and backups of your configs are never written through a symlink someone placed at the backup path.
+- Light-only themes no longer get dark-mode OLED black applied when the shell asks for a dark palette, and theme lookups (login screen, menus) re-read your theme folder only when its files change, so they cost far less.
+- A wallpaper that crashes the image decoder no longer leaves later theme changes waiting for it, and the message for an interrupted theme write whose backup is gone now names the files involved and how to continue.
+- If Mandara is killed in the middle of a two-file shortcut change, the next shortcut edit puts the half-written files back from their recovery copies instead of leaving a mismatched pair.
+
 ## 0.37.0 — 2026-11-22
 
 Mandara speaks Italian: Studio, the shell and Mandara Login all follow

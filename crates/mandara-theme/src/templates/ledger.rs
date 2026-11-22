@@ -508,9 +508,7 @@ impl Ledger {
         }
         let (kvconfig_backup, kvconfig_created) = if exists(kvconfig) {
             let backup = backup_path(kvconfig);
-            std::fs::copy(kvconfig, &backup)?;
-            std::fs::File::open(&backup)?.sync_all()?;
-            super::file_io::sync_parent(&backup)?;
+            super::file_io::copy_new(kvconfig, &backup)?;
             (Some(backup), false)
         } else {
             (None, true)

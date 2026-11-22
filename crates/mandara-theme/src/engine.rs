@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::color::Color;
 use crate::material::{SchemeVariant, SeedColor, extract_seeds, palette_from_seed};
-use crate::palette::{MandaraPalette, PaletteAdjustments};
+use crate::palette::{MandaraPalette, PaletteAdjustments, comment_safe_name};
 use crate::catalog::{self, DEFAULT_THEME};
 
 /// Duration of a full-shell palette crossfade.
@@ -64,11 +64,13 @@ impl ThemeSource {
                 let seeds = extract_seeds(path, 4)?;
                 let lead = seeds.get(*seed).or(seeds.first()).map(|s| s.color).unwrap_or(Color::hex("#4285f4"));
                 let mut palette = palette_from_seed(lead, *variant, dark);
-                palette.name = format!(
+                // A wallpaper file name is untrusted text that ends up in the
+                // header of every generated app theme.
+                palette.name = comment_safe_name(&format!(
                     "{} · {}",
                     path.file_stem().and_then(|s| s.to_str()).unwrap_or("Wallpaper"),
                     variant.display_name()
-                ).into();
+                )).into();
                 ResolvedTheme { palette, seeds }
             }
         })
@@ -343,6 +345,17 @@ mod tests {
         let (end, _) = engine.sample(t0 + Duration::from_millis(500));
         assert!(!end.is_dark);
         assert!(end.surface_base.lightness() > 0.9);
+    }
+
+    #[test]
+    fn a_wallpaper_file_name_cannot_inject_into_the_palette_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("evil\nINJECTED = 1\u{2028}x.png");
+        image::RgbaImage::from_pixel(8, 8, image::Rgba([200, 40, 40, 255])).save_with_format(&path, image::ImageFormat::Png).unwrap();
+        let source = ThemeSource::Wallpaper { path, variant: SchemeVariant::Vibrant, seed: 0 };
+        let name = source.resolve(true).unwrap().palette.name;
+        assert!(!name.contains(['\n', '\r', '\u{2028}']), "{name:?}");
+        assert!(name.starts_with("evil INJECTED = 1 x"), "{name:?}");
     }
 
     #[test]
