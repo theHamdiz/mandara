@@ -42,9 +42,12 @@ impl Runner for Fake<'_> {
         let sys = self.sys;
         match name.as_str() {
             "grub-mkconfig" | "grub2-mkconfig" => {
-                let out = &argv[2];
+                // Apply passes a host path beside the resolved grub.cfg (so a
+                // cross-FS symlink still renames); don't re-root that path.
+                let out = Path::new(&argv[2]);
+                let dest = if out.starts_with(&sys.root) { out.to_path_buf() } else { sys.path(out) };
                 let theme = detect::detect(sys).grub.and_then(|g| g.current.theme).unwrap_or_default();
-                std::fs::write(sys.path(out), format!("set theme={theme}\nmenuentry 'Linux' {{ linux /vmlinuz }}\n")).unwrap();
+                std::fs::write(&dest, format!("set theme={theme}\nmenuentry 'Linux' {{ linux /vmlinuz }}\n")).unwrap();
                 Ok(String::new())
             }
             "plymouth-set-default-theme" => {
@@ -103,7 +106,7 @@ fn grub_on_arch_applies_backs_up_and_restores_byte_for_byte() {
     assert!(defaults.contains("GRUB_GFXMODE=\"1920x1080,auto\""));
     assert!(defaults.contains("GRUB_CMDLINE_LINUX_DEFAULT=\"loglevel=3 quiet\""));
     assert!(read(&sys, "/boot/grub/grub.cfg").contains("set theme=/boot/grub/themes/mandara-vimix-1080p/theme.txt"), "the menu was rebuilt with the theme");
-    assert!(!sys.path("/boot/grub/grub.cfg.mandara-new").exists(), "no scratch file is left");
+    assert!(!sys.path("/boot/grub/.grub.cfg.mandara-new").exists(), "no scratch file is left");
     // Preflight build + check, then the real build + check.
     assert_eq!(fake.names(), ["grub-mkconfig", "grub-script-check", "grub-mkconfig", "grub-script-check"]);
     let record = latest(&sys).unwrap();
@@ -161,7 +164,7 @@ fn a_failed_check_puts_everything_back() {
     assert_eq!(read(&sys, "/etc/default/grub"), ARCH_GRUB);
     assert_eq!(read(&sys, "/boot/grub/grub.cfg"), cfg);
     assert!(!sys.path("/boot/grub/themes/mandara-x").exists());
-    assert!(!sys.path("/boot/grub/grub.cfg.mandara-new").exists());
+    assert!(!sys.path("/boot/grub/.grub.cfg.mandara-new").exists());
     assert!(records(&sys).iter().all(|r| r.state == State::RolledBack));
     assert!(Installed::load(&sys).dirs.is_empty());
     // A system whose menu can't be rebuilt at all: the preflight stops it

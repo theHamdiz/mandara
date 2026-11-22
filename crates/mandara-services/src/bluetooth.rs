@@ -449,7 +449,10 @@ fn call_timeout(op: &BlueOp) -> Duration {
 
 /// Sends one planned call, giving up when BlueZ or the device hangs.
 async fn send(conn: &Connection, op: &BlueOp, no_reply: bool) -> Result<()> {
-    runtime::timeout(call_timeout(op), send_inner(conn, op, no_reply)).await.unwrap_or_else(|| Err(anyhow!(mandara_i18n::t("Bluetooth did not respond in time"))))
+    // Fire-and-forget must not inherit Connect's 30s budget — a stuck p2p
+    // write would freeze the actor (and starve the signal pump).
+    let limit = if no_reply { Duration::from_secs(2) } else { call_timeout(op) };
+    runtime::timeout(limit, send_inner(conn, op, no_reply)).await.unwrap_or_else(|| Err(anyhow!(mandara_i18n::t("Bluetooth did not respond in time"))))
 }
 
 async fn send_inner(conn: &Connection, op: &BlueOp, no_reply: bool) -> Result<()> {
