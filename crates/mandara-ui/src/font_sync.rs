@@ -54,7 +54,7 @@ pub fn init_font_sync(cx: &mut App) {
             let pending_slot = Rc::clone(&pending);
             *pending.borrow_mut() = Some(cx.spawn(async move |cx| {
                 cx.background_executor().timer(SETTLE).await;
-                let _ = cx.update(|cx| {
+                cx.update(|cx| {
                     let cfg = crate::state::config(cx).read(cx).get().clone();
                     reconcile_now(&cfg);
                 });
