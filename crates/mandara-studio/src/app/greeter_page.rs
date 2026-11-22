@@ -25,6 +25,7 @@ use mandara_ui::style::ClipRounded as _;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::time::Duration;
 
 use gpui::{
     AnyElement, AppContext as _, Bounds, ClickEvent, Context, Entity, FontWeight, Global, InteractiveElement, IntoElement, MouseButton,
@@ -174,7 +175,11 @@ pub struct GreeterPage {
     tracks: Rc<RefCell<HashMap<&'static str, Bounds<Pixels>>>>,
     slider: Option<SliderDrag>,
     width: Rc<std::cell::Cell<f32>>,
+    /// The draft has edits not yet on disk: a slider drag in progress, or
+    /// typing waiting for [`DRAFT_SAVE_DELAY`].
     dirty: bool,
+    /// The pending save after typing; a newer keystroke replaces it.
+    save_soon: Option<gpui::Task<()>>,
     /// Theme gallery (every theme with its dark palette), read from disk on
     /// first show instead of on every frame.
     themes: Option<Rc<[(mandara_theme::catalog::ThemeDef, MandaraPalette)]>>,
@@ -243,6 +248,10 @@ const PAGE_INITIAL_W_PX: f32 = 900.0;
 const PAGE_CHROME_H_PX: f32 = 130.0;
 /// Shortest the editor column gets.
 const PAGE_MIN_H_PX: f32 = 420.0;
+/// How long typing in a text field must pause before the draft is written:
+/// a file write per keystroke would stall the page and wear the disk, and a
+/// short pause is when the person has finished the word.
+const DRAFT_SAVE_DELAY: Duration = Duration::from_millis(500);
 /// Width of a slider track.
 const TRACK_W_PX: f32 = 180.0;
 /// Widest a choice grows beside its label (longer ones go under it).
@@ -262,6 +271,14 @@ const SWATCH_ACCENT_LIGHTNESS: f32 = 0.45;
 pub(super) fn release(cx: &mut gpui::App) {
     if let Some(preview) = cx.try_global::<PageHandle>().map(|h| h.0.read(cx).preview.clone()) {
         preview.update(cx, |view, _| view.suspend_preview());
+    }
+    // Typing that hasn't reached the disk yet is saved now, not lost with the page.
+    if let Some(handle) = cx.try_global::<PageHandle>().map(|h| h.0.clone()) {
+        handle.update(cx, |page, _| {
+            if page.dirty && page.slider.is_none() {
+                page.save();
+            }
+        });
     }
     let busy = cx.try_global::<PageHandle>().is_some_and(|h| {
         let page = h.0.read(cx);
@@ -320,30 +337,54 @@ impl GreeterPage {
             slider: None,
             width: Rc::new(std::cell::Cell::new(PAGE_INITIAL_W_PX)),
             dirty: false,
+            save_soon: None,
             themes: None,
             manager: manager::ManagerState::detecting(),
         }
     }
 
+    /// Writes the draft now (and drops a save still waiting for typing to
+    /// pause: this one has everything).
     fn save(&mut self) {
+        self.save_soon = None;
         if let Err(e) = self.draft.save_draft() {
             self.message = Some((false, tlf("Could not save the draft: {error}", &[("error", &e)])));
         }
         self.dirty = false;
     }
 
-    /// Applies an edit: preview now, draft file now (or at the end of a
-    /// slider drag).
-    fn edit(&mut self, cx: &mut Context<Self>, f: impl FnOnce(&mut GreeterConfig)) {
+    /// Applies `f` to the draft and shows it in the preview at once.
+    fn apply_edit(&mut self, cx: &mut Context<Self>, f: impl FnOnce(&mut GreeterConfig)) {
         f(&mut self.draft);
         self.draft.normalize();
         let cfg = self.draft.clone();
         self.preview.update(cx, |v, cx| v.set_config(cfg, cx));
+    }
+
+    /// Applies an edit: preview now, draft file now (or at the end of a
+    /// slider drag).
+    fn edit(&mut self, cx: &mut Context<Self>, f: impl FnOnce(&mut GreeterConfig)) {
+        self.apply_edit(cx, f);
         if self.slider.is_some() {
             self.dirty = true;
         } else {
             self.save();
         }
+        cx.notify();
+    }
+
+    /// Applies a keystroke in a text field: preview now, draft file once the
+    /// typing pauses for [`DRAFT_SAVE_DELAY`] (not once per key).
+    fn edit_typing(&mut self, cx: &mut Context<Self>, f: impl FnOnce(&mut GreeterConfig)) {
+        self.apply_edit(cx, f);
+        self.dirty = true;
+        self.save_soon = Some(cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(DRAFT_SAVE_DELAY).await;
+            let _ = this.update(cx, |this, cx| {
+                this.save();
+                cx.notify();
+            });
+        }));
         cx.notify();
     }
 
@@ -536,7 +577,7 @@ impl GreeterPage {
                         placeholder,
                         false,
                         Rc::new(move |v, _, cx| {
-                            let _ = this.update(cx, |this, cx| this.edit(cx, |c| set(c, v)));
+                            let _ = this.update(cx, |this, cx| this.edit_typing(cx, |c| set(c, v)));
                         }),
                         cx,
                     )

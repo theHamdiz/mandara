@@ -1,6 +1,6 @@
 //! Power actions over logind's D-Bus API (zbus, no external tools).
 //!
-//! In demo mode these are never called: [`PowerAction::run`] refuses
+//! In demo mode these are never called: [`PowerAction::start`] refuses
 //! outright, so a test run on a live session can't suspend or power off
 //! the machine.
 
@@ -39,21 +39,25 @@ impl PowerAction {
         }
     }
 
-    /// Calls `org.freedesktop.login1.Manager.<method>(interactive = true)`
+    /// Starts `org.freedesktop.login1.Manager.<method>(interactive = true)`
     /// (ConsoleKit2's manager on FreeBSD, which Mandara's polkit rule lets
-    /// the login screen's user use) on a helper thread. FreeBSD without
-    /// ConsoleKit2 runs the base system's `shutdown` / `acpiconf` instead.
-    /// Always an error in demo mode.
-    pub fn run(self, demo: bool) -> Result<(), String> {
+    /// the login screen's user use) on a helper thread and returns where its
+    /// outcome arrives, so the login screen keeps painting and answering
+    /// input while logind or polkit think (zbus waits up to 25 s). FreeBSD
+    /// without ConsoleKit2 runs the base system's `shutdown` / `acpiconf`
+    /// instead. Always an error in demo mode.
+    pub fn start(self, demo: bool) -> Result<async_channel::Receiver<Result<(), String>>, String> {
         if demo {
             return Err(crate::i18n::tl("Power actions are disabled in the demo"));
         }
+        let (tx, rx) = async_channel::bounded(1);
         std::thread::Builder::new()
             .name("mandara-greeter-power".into())
-            .spawn(move || zbus::block_on(self.call()))
-            .map_err(|e| e.to_string())?
-            .join()
-            .map_err(|_| "power thread crashed".to_string())?
+            .spawn(move || {
+                let _ = tx.send_blocking(zbus::block_on(self.call()));
+            })
+            .map_err(|e| e.to_string())?;
+        Ok(rx)
     }
 
     async fn call(self) -> Result<(), String> {
@@ -101,7 +105,7 @@ mod tests {
     #[test]
     fn demo_never_reaches_logind() {
         for a in PowerAction::ALL {
-            assert!(a.run(true).is_err());
+            assert!(a.start(true).is_err());
         }
     }
 }
