@@ -1,6 +1,6 @@
 ---
 id: apple-grade-dock-polish
-name: Apple-Grade Dock Polish, Snappy Motion & Memory Discipline
+name: Dock polish, snappy motion & memory
 paths:
   - "**/dock/**"
   - "**/studio/**"
