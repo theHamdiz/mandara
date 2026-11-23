@@ -207,6 +207,10 @@ mandara msg launcher pin firefox     # unpin|hide|unhide|rename|icon <app>; laun
 mandara msg launcher placement top-left   # center|top-*|bottom-* (left/center/right); no argument reports it; re-places an open launcher live
 mandara msg launcher look grid       # classic|grid|beacon: a ready-made look (no argument reports it); launcher looks lists them (JSON)
 mandara msg dock on                  # off|show (reveals a hidden dock for 3 s); dock status (works while off)
+mandara msg dock status              # pinned/running items plus spring_feel, click_behavior, auto_squircle
+mandara msg config set /dock/spring_feel crisp   # fluid|taut|off — live spring feel
+mandara msg config set /dock/click_behavior focus-cycle  # or minimize-restore
+mandara msg config set /dock/auto_squircle true  # freestanding squircle atlas
 mandara msg dock pin firefox         # unpin|toggle-pin <app> (desktop id or name; pin also fuzzy-matches)
 mandara msg dock move firefox 0      # reorder a pinned app (0 = first)
 mandara msg dock add                 # the searchable app picker over the dock

@@ -28,6 +28,7 @@
 //!   picker) the dock stays out under it ([`model::Reveal`]).
 
 pub mod applications;
+pub mod atlas;
 pub mod install;
 pub mod menu;
 pub mod model;
@@ -58,7 +59,7 @@ use crate::apps::App as DesktopApp;
 use crate::fonts::{fonts, tabular_nums};
 use crate::icons::icon;
 use crate::kit::text;
-use crate::plugins::panel_fx::{glow, readable, rim, wash, WASH_SOFT};
+use crate::plugins::panel_fx::{glow, readable, rim};
 use crate::state::{config, shell, update_config};
 use crate::windows::Windows;
 
@@ -66,8 +67,8 @@ pub use model::{Item, Kind, drop_index, magnification, reorder};
 
 pub const ID: &str = "dock";
 
-/// Springs: icon scale, hide slide (scaled by `hide_speed`), dragged icon.
-const SCALE_SPRING: SpringConfig = SpringConfig::new(520.0, 34.0, 1.0);
+/// Fallback scale spring when `spring_feel` is not yet applied (tests).
+const SCALE_SPRING: SpringConfig = SpringConfig::new(440.0, 30.0, 1.0);
 /// `[dock.motion]` springs: an icon popping in (ζ ≈ 0.63), a critically
 /// damped glide (Fade, and neighbours making room), indicator marks
 /// (critically damped, so a fourth dot never flickers in) and the slide of
@@ -75,11 +76,17 @@ const SCALE_SPRING: SpringConfig = SpringConfig::new(520.0, 34.0, 1.0);
 const ARRIVE_SPRING: SpringConfig = SpringConfig::new(420.0, 26.0, 1.0);
 const GLIDE_SPRING: SpringConfig = SpringConfig::new(300.0, 34.64, 1.0);
 const MARKS_SPRING: SpringConfig = SpringConfig::new(400.0, 40.0, 1.0);
-/// Visible resolutions of those springs: a 0–1 share over ~50 px, dots of
-/// a few px, logical px.
-const PRESENCE_EPSILON: f32 = 0.004;
+/// Visible resolutions of those springs: settle when `|x−target| < 0.01`
+/// and `|v| < 0.002` (`REST_VELOCITY_FACTOR` = 10 → epsilon 0.0002 for v,
+/// but 0.01 for position is the UX floor — use 0.01 and accept |v|<0.1).
+const PRESENCE_EPSILON: f32 = 0.01;
 const MARKS_EPSILON: f32 = 0.01;
 const SHIFT_EPSILON: f32 = 0.25;
+const SCALE_EPSILON: f32 = 0.01;
+/// Most simultaneous dock slots (pins + running + recent + stacks + chrome).
+const MAX_DOCK_ITEMS: usize = 48;
+/// `dt` ceiling for dock springs (FrameClock already caps at 1/40).
+const DOCK_MAX_DT: f32 = 1.0 / 30.0;
 /// A dock's own first slots (and any within this long of it opening) show
 /// at once; icons arriving later grow in.
 const SETTLE: Duration = Duration::from_millis(1500);
@@ -89,7 +96,7 @@ const MAX_LEAVING: usize = 8;
 const LEAVE_MAX: Duration = Duration::from_millis(900);
 /// Longest wait for the next attention burst (a guard on the clock).
 const ATTENTION_WAKE_MAX_S: f32 = 10.0;
-const HIDE_STIFFNESS: f32 = 300.0;
+const HIDE_STIFFNESS: f32 = 380.0;
 const HIDE_DAMPING: f32 = 28.0;
 /// Pointer travel (logical px) before a press on an icon drags it.
 const DRAG_THRESHOLD: f32 = 6.0;
@@ -108,7 +115,8 @@ const TOOLTIP_GAP: f32 = 6.0;
 /// Thickness of the strip along the screen edge that reveals a hidden dock.
 const REVEAL_STRIP_PX: f32 = 3.0;
 /// Running indicator: dot size, bar size, offset from the dock's outer edge.
-const DOT_PX: f32 = 4.0;
+/// 3.5 px stays crisp at 1× / 1.25× / 1.5× after physical-pixel snapping.
+const DOT_PX: f32 = 3.5;
 const DOT_GAP_PX: f32 = 3.0;
 const BAR_W_PX: f32 = 10.0;
 const BAR_W_FOCUSED_PX: f32 = 18.0;
@@ -116,20 +124,22 @@ const INDICATOR_INSET_FRAC: f32 = 0.32;
 /// Most indicator dots per app.
 const MAX_DOTS: usize = 3;
 /// The Glow indicator: a short line of light (width, focused width,
-/// thickness), its glow `(alpha focused, alpha running, blur)`; the blur
-/// stays small, as MangoWM blurs alpha into halos.
+/// thickness). No soft shadow halo — freestanding icons stay clean.
 const GLOW_W_PX: f32 = 12.0;
 const GLOW_W_FOCUSED_PX: f32 = 20.0;
 const GLOW_H_PX: f32 = 3.0;
-const GLOW_SHADOW: (f32, f32, f32) = (0.7, 0.35, 5.0);
+/// Idle / focused mark opacity so dots stay readable on light and dark
+/// wallpapers without a blurred halo.
+const INDICATOR_FOCUSED_ALPHA: f32 = 0.92;
+const INDICATOR_RUNNING_ALPHA: f32 = 0.92;
 /// The Highlight hover's plate: its margin round the icon (a share of the
 /// dock's padding, within bounds, logical px) and its alpha `(dark, light)`.
 const HIGHLIGHT_PAD_FRAC: f32 = 0.5;
 const HIGHLIGHT_PAD_PX: (f32, f32) = (2.0, 6.0);
 const HIGHLIGHT_ALPHA: (f32, f32) = (0.12, 0.09);
 /// The hover spring (lift and highlight): quick, barely overshooting.
-const HOVER_SPRING: SpringConfig = SpringConfig::new(520.0, 40.0, 1.0);
-const HOVER_EPSILON: f32 = 0.005;
+const HOVER_SPRING: SpringConfig = SpringConfig::new(440.0, 30.0, 1.0);
+const HOVER_EPSILON: f32 = 0.01;
 /// Badges: size, overlap with the icon's corner, padding, text.
 const BADGE_PX: f32 = 18.0;
 const BADGE_INSET_FRAC: f32 = 0.72;
@@ -153,19 +163,18 @@ const MIN_ICON_PX: f32 = 16.0;
 /// past their own thickness.
 const HIDE_OVERSHOOT: f32 = 1.2;
 const HIDE_EXTRA_PX: f32 = 2.0;
-/// Alphas: separator, idle indicator; focused indicator glow `(alpha, blur)`.
+/// Alphas: separator, idle indicator.
 const SEPARATOR_ALPHA: f32 = 0.18;
 const INDICATOR_ALPHA: f32 = 0.55;
-const FOCUS_GLOW: (f32, f32) = (0.5, 6.0);
 /// Drop highlight on an icon and the "Drop to install" glow `(alpha, blur)`.
 const DROP_ALPHA: f32 = 0.22;
 const INSTALL_GLOW: (f32, f32) = (0.55, 18.0);
 /// Separator: length as a fraction of the icon, thickness.
 const SEPARATOR_FRAC: f32 = 0.6;
 const SEPARATOR_PX: f32 = 1.0;
-/// Glyph size inside the launcher / trash tiles, and their corner radius,
-/// as fractions of the icon.
-const GLYPH_FRAC: f32 = 0.5;
+/// Glyph size inside launcher / Applications / trash tiles (freestanding,
+/// so the glyph fills most of the slot).
+const GLYPH_FRAC: f32 = 0.86;
 /// The media chip along a bottom dock, in icon slots (art, two text lines,
 /// the play button).
 const MEDIA_CHIP_SLOTS: f32 = 4.6;
@@ -516,7 +525,7 @@ struct SlotMotion {
 impl SlotMotion {
     fn new(presence: f32, marks: f32, minimized: u8) -> Self {
         Self {
-            scale: SpringValue::new(1.0, SCALE_SPRING),
+            scale: SpringValue::new(1.0, SCALE_SPRING).with_rest_epsilon(SCALE_EPSILON),
             presence: SpringValue::new(presence, ARRIVE_SPRING).with_rest_epsilon(PRESENCE_EPSILON),
             marks: SpringValue::new(marks, MARKS_SPRING).with_rest_epsilon(MARKS_EPSILON),
             shift: SpringValue::new(0.0, SCALE_SPRING).with_rest_epsilon(SHIFT_EPSILON),
@@ -525,6 +534,41 @@ impl SlotMotion {
             minimized_at: None,
         }
     }
+
+    fn apply_feel(&mut self, feel: mandara_config::dock::DockSpringFeel) {
+        let (mk, mc) = feel.magnify();
+        let (gk, gc) = feel.gap();
+        let magnify = SpringConfig::new(mk, mc, 1.0);
+        let gap = SpringConfig::new(gk, gc, 1.0);
+        if self.scale.config() != magnify {
+            self.scale.set_config(magnify);
+        }
+        if self.hover.config() != magnify {
+            self.hover.set_config(magnify);
+        }
+        if self.shift.config() != gap {
+            self.shift.set_config(gap);
+        }
+        let instant = feel.instant();
+        self.scale.set_instant(instant);
+        self.hover.set_instant(instant);
+    }
+}
+
+/// Spring configs from `dock.spring_feel` for hide / arrive.
+fn feel_hide(feel: mandara_config::dock::DockSpringFeel, speed: f32) -> SpringConfig {
+    let (k, c) = feel.hide();
+    SpringConfig::new(k * speed * speed, c * speed, 1.0)
+}
+
+fn feel_scale(feel: mandara_config::dock::DockSpringFeel) -> SpringConfig {
+    let (k, c) = feel.magnify();
+    SpringConfig::new(k, c, 1.0)
+}
+
+fn feel_gap(feel: mandara_config::dock::DockSpringFeel) -> SpringConfig {
+    let (k, c) = feel.gap();
+    SpringConfig::new(k, c, 1.0)
 }
 
 /// One slot's animation this frame (retained scratch: no per-frame
@@ -564,11 +608,14 @@ pub struct DockView {
     urgent: Vec<String>,
     dirty: bool,
     generation: u64,
-    /// Per-slot springs and feedback clocks by key.
-    slots: HashMap<String, SlotMotion>,
+    /// Per-slot springs and feedback clocks (keyed, capped at [`MAX_DOCK_ITEMS`]).
+    /// Remapped only when slots appear or leave — never reallocates on a tick.
+    slots: Vec<(SharedString, SlotMotion)>,
+    /// Element ids (`dock-<key>`) aligned with [`Self::list`], rebuilt with it.
+    element_ids: Vec<SharedString>,
     /// Slots that left and shrink out (bounded by [`MAX_LEAVING`]), with
     /// when they left; they stay in `list` until they are gone.
-    leaving: Vec<(String, Instant)>,
+    leaving: Vec<(SharedString, Instant)>,
     /// The slots changed order: the next frame slides them from where they were.
     reflow: bool,
     /// When this dock opened ([`SETTLE`]).
@@ -615,6 +662,8 @@ pub struct DockView {
     surface: (f32, f32),
     /// The media chip's album art, decoded at the dock's icon size.
     media_cover: Rc<std::cell::RefCell<crate::plugins::media::CoverSlot>>,
+    /// Last seen [`atlas::generation`] — redraw when a background bake finishes.
+    atlas_gen: u64,
 }
 
 impl DockView {
@@ -656,6 +705,22 @@ impl DockView {
         cx.observe(&mandara_core::theme_entity(cx), |_, _, cx| cx.notify()).detach();
         // The launcher floats above the dock: keep the dock out meanwhile.
         cx.observe(&shell(cx), |_, _, cx| cx.notify()).detach();
+        // Background atlas bakes finish while the dock may be idle (`clock.idle`);
+        // a subscriber wakes us so freestanding squircles appear without another event.
+        let atlas_rx = atlas::subscribe();
+        cx.spawn(async move |this, cx| {
+            while atlas_rx.recv().await.is_ok() {
+                let alive = this.update(cx, |this, cx| {
+                    this.atlas_gen = atlas::generation();
+                    cx.notify();
+                    true
+                });
+                if !alive.unwrap_or(false) {
+                    break;
+                }
+            }
+        })
+        .detach();
         let cfg = config(cx).read(cx).get();
         let overrides = cfg.launcher.overrides.len();
         let dock = cfg.dock_sanitized();
@@ -670,12 +735,13 @@ impl DockView {
             urgent: Vec::new(),
             dirty: true,
             generation: 0,
-            slots: HashMap::new(),
-            leaving: Vec::new(),
+            slots: Vec::with_capacity(MAX_DOCK_ITEMS),
+            element_ids: Vec::with_capacity(MAX_DOCK_ITEMS),
+            leaving: Vec::with_capacity(MAX_LEAVING),
             reflow: false,
             born: Instant::now(),
-            frames: Vec::new(),
-            centres: Vec::new(),
+            frames: Vec::with_capacity(MAX_DOCK_ITEMS),
+            centres: Vec::with_capacity(MAX_DOCK_ITEMS),
             attention_wake: None,
             hide: SpringValue::new(1.0, SpringConfig::new(HIDE_STIFFNESS, HIDE_DAMPING, 1.0)),
             clock: FrameClock::new(),
@@ -693,12 +759,13 @@ impl DockView {
             drag: None,
             poof: None,
             install_hover: false,
-            rects: Vec::new(),
-            region: Vec::new(),
+            rects: Vec::with_capacity(MAX_DOCK_ITEMS),
+            region: Vec::with_capacity(1),
             cfg_launcher_overrides: overrides,
             glass: (0.0, 0.0, 0.0, 0.0),
             surface: (0.0, 0.0),
             media_cover: Rc::default(),
+            atlas_gen: atlas::generation(),
         }
     }
 
@@ -757,17 +824,18 @@ impl DockView {
         // Slots that just left linger to shrink out; slots that came back
         // stop leaving; a new order slides into place.
         let animate = self.cfg.motion.items != ItemMotion::None && !mandara_core::spring::motion_profile().reduce && self.born.elapsed() > SETTLE;
-        self.leaving.retain(|(k, _)| !list.iter().any(|n| n.key == *k));
+        // Drop leave-animations for keys that came back into the list.
+        self.leaving.retain(|(k, _)| !list.iter().any(|n| n.key == k.as_ref()));
         self.reflow |= animate && model::reordered(&self.list, &list);
         let list = if animate || !self.leaving.is_empty() {
             let (leaving, now) = (&mut self.leaving, Instant::now());
             model::with_leaving(&self.list, list, |o| {
-                if leaving.iter().any(|(k, _)| *k == o.key) {
+                if leaving.iter().any(|(k, _)| k.as_ref() == o.key) {
                     return true;
                 }
                 let keep = animate && leaving.len() < MAX_LEAVING;
                 if keep {
-                    leaving.push((o.key.clone(), now));
+                    leaving.push((SharedString::from(o.key.clone()), now));
                 }
                 keep
             })
@@ -775,18 +843,22 @@ impl DockView {
             list
         };
         self.list = Rc::new(list);
+        self.sync_element_ids();
     }
 
     /// Drops slots that finished shrinking out (or lingered too long).
     fn prune_leaving(&mut self, now: Instant) {
-        let slots = &self.slots;
-        let gone = |k: &str, t0: &Instant| now.duration_since(*t0) >= LEAVE_MAX || slots.get(k).is_none_or(|s| !s.presence.is_animating() && s.presence.value() <= PRESENCE_EPSILON);
-        if !self.leaving.iter().any(|(k, t0)| gone(k, t0)) {
+        let gone = |slots: &[(SharedString, SlotMotion)], k: &str, t0: &Instant| {
+            now.duration_since(*t0) >= LEAVE_MAX
+                || slots.iter().find(|(sk, _)| sk.as_ref() == k).is_none_or(|(_, s)| !s.presence.is_animating() && s.presence.value() <= PRESENCE_EPSILON)
+        };
+        if !self.leaving.iter().any(|(k, t0)| gone(&self.slots, k, t0)) {
             return;
         }
-        let leaving = &self.leaving;
-        Rc::make_mut(&mut self.list).retain(|i| !leaving.iter().any(|(k, t0)| *k == i.key && gone(k, t0)));
-        self.leaving.retain(|(k, t0)| !gone(k, t0));
+        let leaving = self.leaving.clone();
+        Rc::make_mut(&mut self.list).retain(|i| !leaving.iter().any(|(k, t0)| k.as_ref() == i.key && gone(&self.slots, k, t0)));
+        self.leaving.retain(|(k, t0)| !gone(&self.slots, k, t0));
+        self.sync_element_ids();
     }
 
     /// Something overlaps the dock (smart hide): a fullscreen window on this
@@ -870,7 +942,7 @@ impl DockView {
 
     /// The live slot `key` (never one that is shrinking out).
     fn item(&self, key: &str) -> Option<Item> {
-        if self.leaving.iter().any(|(k, _)| k == key) {
+        if self.leaving.iter().any(|(k, _)| k.as_ref() == key) {
             return None;
         }
         self.list.iter().find(|i| i.key == key).cloned()
@@ -928,15 +1000,49 @@ impl DockView {
             }
             Kind::App => match item.windows.as_slice() {
                 [] => launch_item(&item, None, cx),
-                [only] if only.activated && !only.minimized && self.windows.read(cx).can_minimize() => self.windows.read(cx).send(mandara_services::toplevels::ToplevelCommand::SetMinimized(only.id, true)),
-                list => {
-                    // Focused app: the next of its windows; else its latest.
-                    let target = if item.focused() { list.get(1).unwrap_or(&list[0]) } else { &list[0] };
-                    if target.minimized {
-                        self.windows.read(cx).send(mandara_services::toplevels::ToplevelCommand::SetMinimized(target.id, false));
+                list => match self.cfg.click_behavior {
+                    mandara_config::dock::DockClickBehavior::MinimizeRestore => {
+                        if item.focused() {
+                            let open: Vec<_> = list.iter().filter(|w| !w.minimized).collect();
+                            if !open.is_empty() {
+                                if self.windows.read(cx).can_minimize() {
+                                    for w in open {
+                                        self.windows.read(cx).send(mandara_services::toplevels::ToplevelCommand::SetMinimized(w.id, true));
+                                    }
+                                }
+                            } else {
+                                for w in list {
+                                    self.windows.read(cx).send(mandara_services::toplevels::ToplevelCommand::SetMinimized(w.id, false));
+                                }
+                                crate::windows::activate(list[0].id, cx);
+                            }
+                        } else {
+                            let target = &list[0];
+                            if target.minimized {
+                                self.windows.read(cx).send(mandara_services::toplevels::ToplevelCommand::SetMinimized(target.id, false));
+                            }
+                            crate::windows::activate(target.id, cx);
+                        }
                     }
-                    crate::windows::activate(target.id, cx);
-                }
+                    mandara_config::dock::DockClickBehavior::FocusCycle => match list {
+                        [only] if only.activated && !only.minimized && self.windows.read(cx).can_minimize() => {
+                            self.windows.read(cx).send(mandara_services::toplevels::ToplevelCommand::SetMinimized(only.id, true));
+                        }
+                        list => {
+                            // Focused app: next window after the activated one (wraps).
+                            let target = if item.focused() {
+                                let i = list.iter().position(|w| w.activated).unwrap_or(0);
+                                &list[(i + 1) % list.len()]
+                            } else {
+                                &list[0]
+                            };
+                            if target.minimized {
+                                self.windows.read(cx).send(mandara_services::toplevels::ToplevelCommand::SetMinimized(target.id, false));
+                            }
+                            crate::windows::activate(target.id, cx);
+                        }
+                    },
+                },
             },
         }
     }
@@ -1093,6 +1199,12 @@ impl DockView {
 impl Render for DockView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let _frame = crate::plugins::diagnostics::frame(cx.entity_id().as_u64());
+        // Background atlas bakes bump a generation; redraw when one finishes.
+        let atlas_gen = atlas::generation();
+        if atlas_gen != self.atlas_gen {
+            self.atlas_gen = atlas_gen;
+            cx.notify();
+        }
         self.refresh(cx);
         self.prune_leaving(Instant::now());
         self.sync_smart_watch(cx);
@@ -1122,22 +1234,26 @@ impl Render for DockView {
         // from elapsed time plays at the dock's speed (`motion.speed` ×
         // `motion.surfaces.dock`); zero speed or reduced motion stills it.
         let now = Instant::now();
-        let dt = self.clock.tick(now);
+        let dt = self.clock.tick(now).min(DOCK_MAX_DT);
         let mut moving = false;
         let motion = cfg.motion;
+        let feel = cfg.spring_feel;
         let pace = mandara_core::spring::time_scale() * mandara_core::spring::surface_speed();
         // A dock that is fully hidden applies changes at once and draws no
         // feedback: nothing animates out of sight.
         let hidden = !self.hide.is_animating() && self.hide.value() >= 1.0;
+        // Spring feel Off snaps springs; launch / attention / minimize feedback still run.
         let still = reduce || pace <= 0.0 || hidden;
         let seeded = now.duration_since(self.born) > SETTLE;
         let (launch_style, attention_style) = (cfg.launch_feedback(), cfg.attention_feedback());
         let playing = crate::hub::hub(cx).read(cx).media.as_ref().is_some_and(|m| m.status == mandara_services::PlaybackStatus::Playing);
         let allow_bounce = bounce_allowed(cfg.bounce_only_music, playing);
         let attention_t = now.duration_since(self.clock_epoch()).as_secs_f32() * pace;
-        let (presence_spring, shift_spring) = if motion.items == ItemMotion::Spring { (ARRIVE_SPRING, SCALE_SPRING) } else { (GLIDE_SPRING, GLIDE_SPRING) };
-        let instant_items = reduce || hidden || motion.items == ItemMotion::None;
-        let instant_marks = reduce || hidden || motion.indicator == IndicatorMotion::None;
+        let gap_spring = feel_gap(feel);
+        let scale_spring = feel_scale(feel);
+        let (presence_spring, shift_spring) = if motion.items == ItemMotion::Spring { (ARRIVE_SPRING, gap_spring) } else { (GLIDE_SPRING, GLIDE_SPRING) };
+        let instant_items = reduce || hidden || feel.instant() || motion.items == ItemMotion::None;
+        let instant_marks = reduce || hidden || feel.instant() || motion.indicator == IndicatorMotion::None;
         let mut frames = std::mem::take(&mut self.frames);
         frames.clear();
         // Time-driven feedback needs frames; attention rests don't (the
@@ -1146,7 +1262,7 @@ impl Render for DockView {
         let mut attention_rest: Option<f32> = None;
         let shared_state = cx.try_global::<Shared>();
         for it in list.iter() {
-            let leaving = self.leaving.iter().any(|(k, _)| *k == it.key);
+            let leaving = self.leaving.iter().any(|(k, _)| k.as_ref() == it.key);
             let marks_target = match cfg.indicator {
                 _ if !it.running() => 0.0,
                 DockIndicator::None => 0.0,
@@ -1154,37 +1270,41 @@ impl Render for DockView {
                 DockIndicator::Dot | DockIndicator::Bar | DockIndicator::Glow => 1.0,
             };
             let minimized = it.windows.iter().filter(|w| w.minimized).count().min(u8::MAX.into()) as u8;
-            if !self.slots.contains_key(&it.key) {
-                // The dock's first slots show at once; later arrivals (and
-                // their indicators) grow in.
-                let presence = if seeded && !instant_items { 0.0 } else { 1.0 };
-                let marks = if seeded && !instant_marks { 0.0 } else { marks_target };
-                self.slots.insert(it.key.clone(), SlotMotion::new(presence, marks, minimized));
+            // The dock's first slots show at once; later arrivals (and
+            // their indicators) grow in.
+            let presence = if seeded && !instant_items { 0.0 } else { 1.0 };
+            let marks = if seeded && !instant_marks { 0.0 } else { marks_target };
+            let si = ensure_slot(&mut self.slots, &it.key, presence, marks, minimized);
+            {
+                let slot = &mut self.slots[si].1;
+                slot.apply_feel(feel);
+                if slot.presence.config() != presence_spring {
+                    slot.presence.set_config(presence_spring);
+                }
+                if slot.shift.config() != shift_spring {
+                    slot.shift.set_config(shift_spring);
+                }
+                if slot.scale.config() != scale_spring {
+                    slot.scale.set_config(scale_spring);
+                }
+                slot.presence.set_instant(instant_items);
+                if leaving {
+                    // Lands on nothing instead of swinging back out.
+                    slot.presence.set_exit_target(0.0);
+                } else {
+                    slot.presence.set_target(1.0);
+                }
+                moving |= slot.presence.step(dt);
+                slot.marks.set_instant(instant_marks);
+                slot.marks.set_target(marks_target);
+                moving |= slot.marks.step(dt);
+                slot.shift.set_instant(instant_items);
+                moving |= slot.shift.step(dt);
+                if minimized > slot.minimized && motion.minimize != MinimizeFeedback::None && !still && !leaving {
+                    slot.minimized_at = Some(now);
+                }
+                slot.minimized = minimized;
             }
-            let slot = self.slots.get_mut(&it.key).expect("inserted above");
-            if slot.presence.config() != presence_spring {
-                slot.presence.set_config(presence_spring);
-            }
-            if slot.shift.config() != shift_spring {
-                slot.shift.set_config(shift_spring);
-            }
-            slot.presence.set_instant(instant_items);
-            if leaving {
-                // Lands on nothing instead of swinging back out.
-                slot.presence.set_exit_target(0.0);
-            } else {
-                slot.presence.set_target(1.0);
-            }
-            moving |= slot.presence.step(dt);
-            slot.marks.set_instant(instant_marks);
-            slot.marks.set_target(marks_target);
-            moving |= slot.marks.step(dt);
-            slot.shift.set_instant(instant_items);
-            moving |= slot.shift.step(dt);
-            if minimized > slot.minimized && motion.minimize != MinimizeFeedback::None && !still && !leaving {
-                slot.minimized_at = Some(now);
-            }
-            slot.minimized = minimized;
 
             let mut nudge = model::Nudge::REST;
             let mut ring = None;
@@ -1219,6 +1339,7 @@ impl Render for DockView {
                     }
                 }
             }
+            let slot = &mut self.slots[si].1;
             if let Some(t0) = slot.minimized_at {
                 let t = now.duration_since(t0).as_secs_f32() * pace;
                 if still || t >= model::MINIMIZE_S {
@@ -1259,21 +1380,26 @@ impl Render for DockView {
             cursor += s;
         }
         let dragging = self.drag.as_ref().filter(|d| d.active).map(|d| d.key.clone());
+        let hovered_key = self.hovered.clone();
+        let pointer = self.pointer;
+        let magnify_on = cfg.magnification;
+        let (magnify, magnify_spread) = (cfg.magnify, cfg.magnify_spread);
         for ((it, c), f) in list.iter().zip(&centres).zip(frames.iter_mut()) {
-            let target = match (self.pointer, cfg.magnification, &it.kind) {
-                (Some(p), true, k) if !matches!(k, Kind::Separator | Kind::Media) && dragging.is_none() => magnification((p - c) / base, cfg.magnify, cfg.magnify_spread),
+            let target = match (pointer, magnify_on, &it.kind) {
+                (Some(p), true, k) if !matches!(k, Kind::Separator | Kind::Media) && dragging.is_none() => magnification((p - c) / base, magnify, magnify_spread),
                 _ => 1.0,
             };
-            if let Some(s) = self.slots.get_mut(&it.key) {
+            if let Some(si) = slot_index(&self.slots, &it.key) {
+                let s = &mut self.slots[si].1;
                 let spring = &mut s.scale;
-                spring.set_instant(reduce);
+                spring.set_instant(reduce || feel.instant());
                 spring.set_target(target);
                 moving |= spring.step(dt);
                 f.scale = if it.kind == Kind::Separator { 1.0 } else { spring.value().max(1.0) };
                 // The hover lift / highlight follows the icon under the
                 // pointer (never a dragged or leaving one).
-                let hovered = motion.hover != HoverMotion::None && dragging.is_none() && !f.leaving && !matches!(it.kind, Kind::Separator | Kind::Media) && self.hovered.as_deref() == Some(it.key.as_str());
-                s.hover.set_instant(reduce || hidden);
+                let hovered = motion.hover != HoverMotion::None && dragging.is_none() && !f.leaving && !matches!(it.kind, Kind::Separator | Kind::Media) && hovered_key.as_deref() == Some(it.key.as_str());
+                s.hover.set_instant(reduce || hidden || feel.instant());
                 s.hover.set_target(if hovered { 1.0 } else { 0.0 });
                 moving |= s.hover.step(dt);
                 f.hover = s.hover.value().clamp(0.0, 1.0);
@@ -1281,7 +1407,7 @@ impl Render for DockView {
         }
         self.centres = centres;
         if self.slots.len() > list.len() {
-            self.slots.retain(|k, _| list.iter().any(|i| &i.key == k));
+            self.slots.retain(|(k, _)| list.iter().any(|i| i.key == k.as_ref()));
         }
         let len: f32 = (list.iter().zip(&frames).map(|(i, f)| f.slot * if matches!(i.kind, Kind::Separator | Kind::Media) { slot(&i.kind) } else { base * f.scale + cfg.spacing }).sum::<f32>() - cfg.spacing + cfg.padding * 2.0).max(thickness);
         // Grow symmetrically around the resting centre (start-aligned docks grow away from the start).
@@ -1300,11 +1426,11 @@ impl Render for DockView {
         self.obstructed_seen = obstructed;
         let visible = self.reveal.visible(cfg.auto_hide, forced, obstructed);
         let speed = cfg.hide_speed;
-        let hide_spring = SpringConfig::new(HIDE_STIFFNESS * speed * speed, HIDE_DAMPING * speed, 1.0);
+        let hide_spring = feel_hide(feel, speed);
         if self.hide.config() != hide_spring {
             self.hide.set_config(hide_spring);
         }
-        self.hide.set_instant(reduce);
+        self.hide.set_instant(reduce || feel.instant());
         self.hide.set_target(if visible { 0.0 } else { 1.0 });
         moving |= self.hide.step(dt);
         if held_out {
@@ -1331,13 +1457,13 @@ impl Render for DockView {
         let mut along = start + cfg.padding;
         let mut max_cross = thickness;
         let launcher_icon = config(cx).read(cx).get().appearance.launcher_icon.clone();
-        // App icons sit on one shape (`[appearance] app_icon_shape`), filled like the dock's own tiles.
+        // Freestanding icons: no per-icon plate (shape kept for minimized tiles).
         let shape = crate::icon_shape::current(cx);
         let trash_full = cfg.trash && stacks::trash_count(cx) > 0;
         let media_cover = self.media_cover.clone();
         // A new order slides every icon over from where it was drawn.
         let reflow = std::mem::take(&mut self.reflow) && !instant_items;
-        for (it, f) in list.iter().zip(frames.iter_mut()) {
+        for (idx, (it, f)) in list.iter().zip(frames.iter_mut()).enumerate() {
             if it.kind == Kind::Separator {
                 // A hairline, or only its gap (`dock.separator_style`).
                 if cfg.separator_style == SeparatorStyle::Line {
@@ -1360,8 +1486,9 @@ impl Render for DockView {
             if reflow
                 && !f.leaving
                 && let Some(old) = self.rects.iter().find(|(k, _)| *k == it.key).map(|(_, r)| axis_centre(cfg.position, *r))
-                && let Some(s) = self.slots.get_mut(&it.key)
+                && let Some(si) = slot_index(&self.slots, &it.key)
             {
+                let s = &mut self.slots[si].1;
                 s.shift.snap_to(old - centre);
                 s.shift.set_target(0.0);
                 f.shift = old - centre;
@@ -1432,14 +1559,15 @@ impl Render for DockView {
                     Some(st) => stacks::stack_tile(st, tile_px, &palette, cx),
                     None => glyph_tile("folder", tile_px, &palette, accent),
                 },
-                Kind::Minimized(_) => minimized_tile(&it.icon_id, shape, tile_px, decode_px, &palette),
+                Kind::Minimized(_) => minimized_tile(&it.icon_id, shape, tile_px, decode_px, &palette, cfg.auto_squircle),
                 Kind::Installing(_) => install_tile(failed.as_ref(), tile_px, &palette, accent),
                 Kind::Media => media_chip(&media_cover, rect.2.max(rect.3), rect.2.min(rect.3), &palette, window, cx),
-                _ => shaped_app_icon(&it.icon_id, shape, tile_px, decode_px, &palette),
+                _ => shaped_app_icon(&it.icon_id, shape, tile_px, decode_px, &palette, cfg.auto_squircle),
             };
             let tile_radius = crate::style::radius(tile_px * TILE_RADIUS_FRAC);
+            let el_id = self.element_ids.get(idx).cloned().unwrap_or_else(|| SharedString::from(format!("dock-{}", it.key)));
             let el = div()
-                .id(SharedString::from(format!("dock-{}", it.key)))
+                .id(el_id)
                 .absolute()
                 .left(px(rect.0))
                 .top(px(rect.1))
@@ -1533,13 +1661,8 @@ impl Render for DockView {
                     marks[0] = (centre - w * grown / 2.0, w * grown, depth * grown, alpha);
                     n = 1;
                 }
-                // The Glow indicator lights every running app, the focused
-                // one brightest; the others glow only while focused.
-                let halo = match cfg.indicator {
-                    DockIndicator::Glow => Some(glow((if focused { accent } else { tint }).with_alpha(if focused { GLOW_SHADOW.0 } else { GLOW_SHADOW.1 }), GLOW_SHADOW.2, 0.0, 0.0)),
-                    _ if focused => Some(glow(accent.with_alpha(FOCUS_GLOW.0), FOCUS_GLOW.1, 0.0, 0.0)),
-                    _ => None,
-                };
+                // Crisp marks only: no soft shadow halo over freestanding icons.
+                let mark_alpha = if focused { INDICATOR_FOCUSED_ALPHA } else { INDICATOR_RUNNING_ALPHA };
                 for &(m, l, depth, alpha) in &marks[..n] {
                     let (x, y, w, h) = snap(z(model::place(cfg.position, surface, cfg.margin, m, inset - depth / 2.0 - slide, l, depth)), scale);
                     children.push(
@@ -1551,8 +1674,7 @@ impl Render for DockView {
                             .h(px(h))
                             .rounded_full()
                             .bg(tint.hsla())
-                            .opacity(shown * alpha)
-                            .when_some(halo.clone(), |el, h| el.shadow(vec![h]))
+                            .opacity(shown * alpha * mark_alpha)
                             .into_any_element(),
                     );
                 }
@@ -1754,7 +1876,10 @@ impl Render for DockView {
         let region = if self.drag.as_ref().is_some_and(|d| d.active) {
             (0.0, 0.0, surface.0, surface.1)
         } else if shown > 0.05 {
-            model::place(cfg.position, surface, cfg.margin, start, 0.0, len, max_cross.max(thickness) + TOOLTIP_SPACE)
+            // Tooltip / label headroom only while something is hovered or a tip is up,
+            // so transparent magnification room never blocks clicks when idle.
+            let tip_room = if self.hovered.is_some() { TOOLTIP_SPACE } else { 0.0 };
+            model::place(cfg.position, surface, cfg.margin, start, 0.0, len, max_cross.max(thickness) + tip_room)
         } else {
             model::reveal_strip(cfg.position, surface, rest_start, rest_len, REVEAL_STRIP_PX)
         };
@@ -1870,35 +1995,48 @@ impl DockView {
     fn clock_epoch(&self) -> Instant {
         *EPOCH.get_or_init(Instant::now)
     }
+
+    /// Rebuilds cached `dock-<key>` element ids when the slot list changes.
+    fn sync_element_ids(&mut self) {
+        let matched = self.element_ids.len() == self.list.len()
+            && self.element_ids.iter().zip(self.list.iter()).all(|(id, it)| id.as_ref().strip_prefix("dock-") == Some(it.key.as_str()));
+        if matched {
+            return;
+        }
+        self.element_ids.clear();
+        self.element_ids.reserve(self.list.len());
+        for it in self.list.iter() {
+            self.element_ids.push(SharedString::from(format!("dock-{}", it.key)));
+        }
+    }
 }
 
 static EPOCH: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
 
-/// The launcher button: the configured launcher icon (`spec`, Studio →
-/// Launcher → Button icon) on a soft tile.
-pub fn launcher_tile(spec: &str, size_px: f32, palette: &MandaraPalette, tint: Color) -> gpui::AnyElement {
-    div()
-        .size(px(size_px))
-        .rounded(px(crate::style::radius(size_px * TILE_RADIUS_FRAC)))
-        .bg(wash(WASH_SOFT, palette).hsla())
-        .flex()
-        .items_center()
-        .justify_center()
-        .child(crate::icons::any_icon(spec, size_px * GLYPH_FRAC, tint))
-        .into_any_element()
+fn slot_index(slots: &[(SharedString, SlotMotion)], key: &str) -> Option<usize> {
+    slots.iter().position(|(k, _)| k.as_ref() == key)
 }
 
-/// A rounded tile with a bundled glyph (Applications, fallbacks).
-fn glyph_tile(name: &'static str, size_px: f32, palette: &MandaraPalette, tint: Color) -> gpui::AnyElement {
-    div()
-        .size(px(size_px))
-        .rounded(px(crate::style::radius(size_px * TILE_RADIUS_FRAC)))
-        .bg(wash(WASH_SOFT, palette).hsla())
-        .flex()
-        .items_center()
-        .justify_center()
-        .child(icon(name, size_px * GLYPH_FRAC, tint))
-        .into_any_element()
+/// Ensures a motion slot for `key` and returns its index (borrows only `slots`).
+fn ensure_slot(slots: &mut Vec<(SharedString, SlotMotion)>, key: &str, presence: f32, marks: f32, minimized: u8) -> usize {
+    if let Some(i) = slot_index(slots, key) {
+        return i;
+    }
+    // Never evict: thrashing at the cap would recreate presence springs every
+    // frame and keep RAF awake. List retain already bounds live slots.
+    slots.push((SharedString::from(key.to_owned()), SlotMotion::new(presence, marks, minimized)));
+    slots.len() - 1
+}
+
+/// The launcher button: freestanding configured icon (`spec`, Studio →
+/// Launcher → Button icon), no plate.
+pub fn launcher_tile(spec: &str, size_px: f32, _palette: &MandaraPalette, tint: Color) -> gpui::AnyElement {
+    div().size(px(size_px)).flex().items_center().justify_center().child(crate::icons::any_icon(spec, size_px * GLYPH_FRAC, tint)).into_any_element()
+}
+
+/// A freestanding bundled glyph (Applications, fallbacks).
+fn glyph_tile(name: &'static str, size_px: f32, _palette: &MandaraPalette, tint: Color) -> gpui::AnyElement {
+    div().size(px(size_px)).flex().items_center().justify_center().child(icon(name, size_px * GLYPH_FRAC, tint)).into_any_element()
 }
 
 /// The first of `names` the icon theme has, else bundled `glyph` on a
@@ -1921,21 +2059,35 @@ fn trash_tile(full: bool, size_px: f32, palette: &MandaraPalette) -> gpui::AnyEl
     themed(names, "trash", size_px, palette, if full { palette.on_surface } else { palette.on_surface_variant })
 }
 
-/// An app's icon on the shared app-icon plate (`Original`: as the theme draws it).
-fn shaped_app_icon(app_id: &str, shape: mandara_config::AppIconShape, size_px: f32, decode_px: f32, palette: &MandaraPalette) -> gpui::AnyElement {
-    let (inner, inner_decode) = (crate::icon_shape::inner(shape, size_px), crate::icon_shape::inner(shape, decode_px));
-    let icon = crate::plugins::workspaces::app_icon_at(app_id, inner, inner_decode, palette.on_surface, false, palette);
-    crate::icon_shape::plate(shape, size_px, wash(WASH_SOFT, palette), icon)
+/// A freestanding app icon: full tile, no plate / wash container behind it.
+/// When `auto_squircle` is on, irregular theme icons are normalised through
+/// the disk atlas ([`atlas`]) so the squircle *is* the icon.
+fn shaped_app_icon(app_id: &str, _shape: mandara_config::AppIconShape, size_px: f32, decode_px: f32, palette: &MandaraPalette, auto_squircle: bool) -> gpui::AnyElement {
+    use gpui::{ObjectFit, StyledImage, img};
+    // Atlas only when auto-squircle is on; otherwise keep size-aware theme icons.
+    if auto_squircle
+        && let Some(path) = crate::plugins::workspaces::cached_raster_icon_path(app_id)
+    {
+        let edge = atlas::ATLAS_EDGE.min(crate::icon_raster::edge_for(decode_px.max(size_px), 2.0).max(64));
+        if let Some(cached) = atlas::peek_or_queue(&path, edge, true) {
+            return div()
+                .size(px(size_px))
+                .flex_none()
+                .child(img(crate::icon_raster::source(&cached, decode_px.max(size_px))).size_full().object_fit(ObjectFit::Contain))
+                .into_any_element();
+        }
+    }
+    crate::plugins::workspaces::app_icon_at(app_id, size_px, decode_px, palette.on_surface, false, palette)
 }
 
 /// A minimized window: its app's icon with a corner mark.
-fn minimized_tile(app_id: &str, shape: mandara_config::AppIconShape, size_px: f32, decode_px: f32, palette: &MandaraPalette) -> gpui::AnyElement {
+fn minimized_tile(app_id: &str, shape: mandara_config::AppIconShape, size_px: f32, decode_px: f32, palette: &MandaraPalette, auto_squircle: bool) -> gpui::AnyElement {
     let g = size_px * MINIMIZED_GLYPH_FRAC;
     div()
         .size(px(size_px))
         .relative()
-        .child(shaped_app_icon(app_id, shape, size_px, decode_px, palette))
-        .child(div().absolute().right(px(0.0)).bottom(px(0.0)).size(px(g)).rounded_full().bg(crate::shell::frame_color(palette).hsla()).flex().items_center().justify_center().child(icon("minus", g * GLYPH_FRAC * 1.4, palette.on_surface_variant)))
+        .child(shaped_app_icon(app_id, shape, size_px, decode_px, palette, auto_squircle))
+        .child(div().absolute().right(px(0.0)).bottom(px(0.0)).size(px(g)).rounded_full().bg(crate::shell::frame_color(palette).hsla()).flex().items_center().justify_center().child(icon("minus", g * 0.5, palette.on_surface_variant)))
         .into_any_element()
 }
 
@@ -2221,6 +2373,12 @@ fn status_json(cx: &mut App) -> serde_json::Value {
         "enabled": enabled,
         "surfaces": cx.try_global::<Docks>().map(|d| d.0.iter().map(|(n, ..)| n.clone()).collect::<Vec<_>>()).unwrap_or_default(),
         "auto_hide": cfg.auto_hide,
+        "icon_size": cfg.icon_size,
+        "magnification": cfg.magnification,
+        "magnify": cfg.magnify,
+        "spring_feel": cfg.spring_feel,
+        "click_behavior": cfg.click_behavior,
+        "auto_squircle": cfg.auto_squircle,
         "pinned": cfg.pinned,
         "items": list.iter().filter(|i| i.is_app()).map(|i| json!({ "app": i.key, "name": i.name, "pinned": i.pinned, "recent": i.recent, "windows": i.windows.iter().map(|w| w.id).collect::<Vec<_>>() })).collect::<Vec<_>>(),
         "stacks": cfg.stacks.iter().map(|st| json!({ "path": st.path, "view": st.view, "sort": st.sort })).collect::<Vec<_>>(),
@@ -2525,6 +2683,28 @@ mod tests {
         s.shift.set_target(0.0);
         run(&mut s.shift, 1.5, |v| assert!(v.abs() <= 130.0, "{v}"));
         assert_eq!(s.shift.value(), 0.0);
+    }
+
+    #[test]
+    fn crisp_magnify_spring_settles_within_a_few_frames() {
+        let (k, c) = mandara_config::dock::DockSpringFeel::Crisp.magnify();
+        let mut s = SpringValue::new(1.0, SpringConfig::new(k, c, 1.0)).with_rest_epsilon(SCALE_EPSILON);
+        s.set_target(1.55);
+        let profile = mandara_core::spring::MotionProfile::default();
+        // 144 Hz steps: Crisp must settle inside ~130 ms (Apple-grade snappiness).
+        const DT: f32 = 1.0 / 144.0;
+        let mut frames = 0usize;
+        while s.step_in(DT, &profile) {
+            frames += 1;
+            assert!((frames as f32) * DT <= 0.13, "crisp magnify settle {frames} frames ≈ {} ms", (frames as f32) * DT * 1000.0);
+        }
+        assert!((s.value() - 1.55).abs() <= SCALE_EPSILON);
+        assert!(!s.step_in(DT, &profile), "idle: no further animation");
+        let mut off = SlotMotion::new(1.0, 0.0, 0);
+        off.apply_feel(mandara_config::dock::DockSpringFeel::Off);
+        off.scale.set_target(1.4);
+        assert_eq!(off.scale.value(), 1.4);
+        assert!(!off.scale.step(DT));
     }
 
     #[test]

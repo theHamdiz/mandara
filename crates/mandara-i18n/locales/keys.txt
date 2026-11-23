@@ -860,6 +860,7 @@ Auto-continue
 Auto-copy
 Auto-hide
 Auto-join
+Auto-squircle uniformity
 Autoconnect priority (higher wins when several are in range)
 Autologin is on: that login has no password, so keyrings stay locked.
 Automatic
@@ -919,6 +920,7 @@ Backups copy ~/.config/mandara. Factory reset backs up first, then restores ever
 Bad system call
 Badge
 Badges 1–9; pressing a number runs that entry
+Bake irregular theme icons into freestanding squircles (disk-cached)
 Balanced
 Band
 Bands
@@ -1461,6 +1463,7 @@ Click
 Click a code to copy it
 Click a code to copy it · the clipboard clears after {n} s
 Click a plugin to place it, or drag it onto the bar. Drop one here to take it off the bar.
+Click a running app
 Click a window to match its app; “App + title” matches that exact title too.
 Click a window to pick it, again to capture · {enter}
 Click again to delete
@@ -1848,6 +1851,7 @@ Created {name}
 Created {path}
 Creating a read-only snapshot…
 Crest sharpness
+Crisp
 Crisp material cursors with a slim outline
 Critical
 Critical alerts break through
@@ -2484,7 +2488,7 @@ Events come from Studio → Calendar.
 Events from your calendars in the clock panel. Add one with mandara msg calendar add <url or .ics> [name]
 Every
 Every app as a large icon in a card in the middle of the screen, with category chips
-Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn
+Every app icon in the launcher sits on one shape, so they read as a set; Theme's own keeps each icon as drawn. The dock draws freestanding icons.
 Every app with a launcher entry, and where it came from. Uninstalling uses that app's own package manager and always shows what will happen first. Drop an AppImage, Flatpak, archive or package here to install it.
 Every bar item sits on a capsule of its own, in any bar style
 Every check with its state, latency, uptime and last result (JSON)
@@ -2790,13 +2794,16 @@ Floating styles and the floating frame
 Floats beside a floating bar; flush joins the edge frame
 Floats in the middle of the screen and scales in.
 Flower
+Fluid
 Flush side panels join the edge frame with flares
 Flush with the edge
 Flush with the screen edge, or floating clear of the edges and the bar (sidebar and power dock)
 Focus
+Focus / cycle windows
 Focus a window (by id from `window list`)
 Focus and break lengths are the Pomodoro plugin's settings.
 Focus and close windows
+Focus and cycle its windows, or minimize and restore
 Focus follows the pointer
 Focus next window
 Focus session {count} done
@@ -3385,6 +3392,7 @@ How often transfer rates are measured
 How panels appear
 How see-through the main menu's glass is
 How slideshow changes look: the desktop's transition or their own, with a length in ms
+How snappy magnification, press and bounce feel (Crisp is the default)
 How strong the shadow under Home cards and action tiles is (0 for none)
 How strongly the capsules stand out from the bar
 How strongly the pills and islands behind items stand out
@@ -4517,6 +4525,7 @@ Minimal
 Minimal flat icons with soft pastel colors
 Minimal icons built from simple geometric shapes
 Minimize
+Minimize / restore
 Minimize or restore a window
 Minimize shelves (id, last or all)
 Minimize windows into application icon
@@ -6473,7 +6482,7 @@ Restarting
 Restarting…
 Restart…
 Restic returned invalid backup progress.
-Resting icon size
+Resting icon size (56 px by default)
 Restore
 Restore a backup into a fresh copy folder
 Restore a copy…
@@ -7384,6 +7393,7 @@ Split-flap clock
 Spoiler
 Spoilers
 Spread salam
+Spring feel
 Springs
 Springs, speed and reduced motion
 Square
@@ -7739,6 +7749,7 @@ Tasks in the sidebar card
 Tasks listed at most
 Tasks on lined paper with square boxes
 Tasks, notes, focus timers and sign-in codes
+Taut
 Teal Dark
 Tear: the old image rips along a jagged seam and peels away
 Technical details

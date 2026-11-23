@@ -6,6 +6,28 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Apple-grade dock polish: freestanding icons, snappier springs, and live Studio / `mandara msg` knobs.
+
+### Improved
+
+- **Dock icons stand on their own.** Freestanding app icons (no per-icon
+  plate or soft halo), a larger default size (56 px), snappier spring feel
+  presets (Crisp / Fluid / Taut / Off), optional auto-squircle baking into a
+  disk-cached 128×128 atlas, and click behaviour (focus/cycle or
+  minimize/restore). Studio → Dock and `mandara msg dock status` expose the
+  new settings live.
+
+### Fixed
+
+- **Dock clicks and icon baking.** Focus/cycle advances past the focused
+  window (and wraps), minimize/restore acts on every open window of the app,
+  icon atlas work stays off the UI thread with a shared in-process cache, and
+  the dock's input mask only keeps tooltip headroom while something is
+  hovered.
+- **Dock auto-squircle cache writes.** Atlas tiles encode as PNG correctly
+  (temp files no longer lose their format), idle docks wake when a bake
+  finishes, and paints no longer stat the cache on the UI thread.
+
 ## 0.37.1 — 2026-11-22
 
 Default fonts and opt-in system font sync, plus robustness and performance fixes across the shell, greeter, Studio, compositor drivers and vendored GPUI (Wayland buffer scale, lock screen, config safety, services, idle wake-ups, memory).

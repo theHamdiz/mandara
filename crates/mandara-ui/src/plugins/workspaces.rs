@@ -609,6 +609,7 @@ thread_local! {
 /// Drops every cached app icon (the icon theme changed).
 pub fn clear_icon_cache() {
     ICONS.with(|c| c.borrow_mut().1.iter_mut().for_each(HashMap::clear));
+    crate::plugins::dock::atlas::clear();
 }
 
 /// Drops cached icons when the shell config changed since they were

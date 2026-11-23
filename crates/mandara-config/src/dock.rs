@@ -24,7 +24,9 @@ pub const LAUNCHER_PIN: &str = "@launcher";
 
 /// Default values of the dock settings.
 pub mod defaults {
-    pub const DOCK_ICON_PX: f32 = 48.0;
+    /// Resting icon size: large enough that freestanding icons read clearly
+    /// on the glass without a per-icon plate.
+    pub const DOCK_ICON_PX: f32 = 56.0;
     pub const DOCK_SPACING_PX: f32 = 6.0;
     pub const DOCK_PADDING_PX: f32 = 8.0;
     pub const DOCK_RADIUS_PX: f32 = 22.0;
@@ -315,6 +317,98 @@ impl ItemMotion {
     pub const ALL: [Self; 3] = [Self::Spring, Self::Fade, Self::None];
 }
 
+/// Spring constants for magnification, press, bounce and gap parting
+/// (`dock.spring_feel`). Off snaps instantly (also when Reduce Motion is on).
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DockSpringFeel {
+    /// High stiffness, short settle (~90–120 ms): Mandara's snappy default.
+    #[default]
+    Crisp,
+    /// Softer travel with a little more overshoot.
+    Fluid,
+    /// Very stiff, almost no overshoot.
+    Taut,
+    /// No spring: values jump to their targets.
+    Off,
+}
+
+impl DockSpringFeel {
+    pub const ALL: [Self; 4] = [Self::Crisp, Self::Fluid, Self::Taut, Self::Off];
+
+    /// Magnify / hover scale spring `(stiffness, damping)`.
+    /// Crisp targets ~90–120 ms settle at ζ ≈ 0.85 (no sluggish trailing).
+    pub const fn magnify(self) -> (f32, f32) {
+        match self {
+            Self::Crisp => (1900.0, 74.0),
+            Self::Fluid => (520.0, 34.0),
+            Self::Taut => (2800.0, 90.0),
+            Self::Off => (1900.0, 74.0),
+        }
+    }
+
+    /// Click press-down compression `(stiffness, damping)`.
+    pub const fn press(self) -> (f32, f32) {
+        match self {
+            Self::Crisp => (2400.0, 82.0),
+            Self::Fluid => (650.0, 38.0),
+            Self::Taut => (3200.0, 96.0),
+            Self::Off => (2400.0, 82.0),
+        }
+    }
+
+    /// Launch / attention bounce impulse `(stiffness, damping)`.
+    pub const fn bounce(self) -> (f32, f32) {
+        match self {
+            Self::Crisp => (1400.0, 48.0),
+            Self::Fluid => (360.0, 16.0),
+            Self::Taut => (2000.0, 60.0),
+            Self::Off => (1400.0, 48.0),
+        }
+    }
+
+    /// Horizontal gap parting while reordering `(stiffness, damping)`.
+    pub const fn gap(self) -> (f32, f32) {
+        match self {
+            Self::Crisp => (1600.0, 68.0),
+            Self::Fluid => (460.0, 30.0),
+            Self::Taut => (2200.0, 80.0),
+            Self::Off => (1600.0, 68.0),
+        }
+    }
+
+    /// Auto-hide slide `(stiffness, damping)` before `hide_speed` scaling.
+    pub const fn hide(self) -> (f32, f32) {
+        match self {
+            Self::Crisp => (380.0, 28.0),
+            Self::Fluid => (240.0, 24.0),
+            Self::Taut => (520.0, 36.0),
+            Self::Off => (380.0, 28.0),
+        }
+    }
+
+    /// Whether springs snap instead of integrating.
+    pub const fn instant(self) -> bool {
+        matches!(self, Self::Off)
+    }
+}
+
+/// What a left-click on a running app does (`dock.click_behavior`).
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DockClickBehavior {
+    /// Focus the app; cycle its windows when already focused; minimize when
+    /// it has one focused window (macOS-style).
+    #[default]
+    FocusCycle,
+    /// Focus when unfocused; minimize / restore the focused app's windows.
+    MinimizeRestore,
+}
+
+impl DockClickBehavior {
+    pub const ALL: [Self; 2] = [Self::FocusCycle, Self::MinimizeRestore];
+}
+
 /// How the dock shows and hides, auto-hide included (`[dock.motion] reveal`).
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -566,6 +660,12 @@ pub struct DockConfig {
     pub magnification: bool,
     pub magnify: f32,
     pub magnify_spread: f32,
+    /// Magnify / press / bounce / gap spring feel (`Crisp` by default).
+    pub spring_feel: DockSpringFeel,
+    /// Left-click on a running app: focus/cycle or minimize/restore.
+    pub click_behavior: DockClickBehavior,
+    /// Bake irregular theme icons into freestanding squircles (disk-cached).
+    pub auto_squircle: bool,
 
     // ── Stacks ──
     pub stacks: Vec<DockStack>,
@@ -646,6 +746,9 @@ impl Default for DockConfig {
             magnification: true,
             magnify: defaults::DOCK_MAGNIFY,
             magnify_spread: defaults::DOCK_MAGNIFY_SPREAD,
+            spring_feel: DockSpringFeel::default(),
+            click_behavior: DockClickBehavior::default(),
+            auto_squircle: true,
             stacks: vec![DockStack::default()],
             stack_items: defaults::DOCK_STACK_ITEMS,
             fan_items: defaults::DOCK_FAN_ITEMS,
@@ -1081,6 +1184,19 @@ mod tests {
         assert_eq!(ids(&MinimizeFeedback::ALL), ["dip", "pulse", "none"]);
         assert_eq!(ids(&ItemMotion::ALL), ["spring", "fade", "none"]);
         assert_eq!(ids(&DockReveal::ALL), ["slide", "fade", "scale"]);
+        assert_eq!(ids(&DockSpringFeel::ALL), ["crisp", "fluid", "taut", "off"]);
+        assert_eq!(ids(&DockClickBehavior::ALL), ["focus-cycle", "minimize-restore"]);
+    }
+
+    #[test]
+    fn old_docks_load_crisp_springs_and_auto_squircle() {
+        let old: DockConfig = toml::from_str("icon_size = 48\nmagnification = true\n").unwrap();
+        assert_eq!(old.spring_feel, DockSpringFeel::Crisp);
+        assert_eq!(old.click_behavior, DockClickBehavior::FocusCycle);
+        assert!(old.auto_squircle);
+        assert_eq!(DockConfig::default().icon_size, defaults::DOCK_ICON_PX);
+        assert_eq!(DockSpringFeel::Crisp.magnify(), (1900.0, 74.0));
+        assert!(DockSpringFeel::Off.instant());
     }
 
     /// A dock table from before materials, grain, hover and name labels

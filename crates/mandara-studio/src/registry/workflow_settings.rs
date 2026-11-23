@@ -66,6 +66,8 @@ const INDICATORS: &[(&str, &str)] = &[("dot", tk("One dot")), ("dots", tk("A dot
 const DOCK_MATERIALS: &[(&str, &str)] = &[("classic", tk("Classic glass")), ("liquid", tk("Liquid glass"))];
 const SEPARATOR_STYLES: &[(&str, &str)] = &[("line", tk("Hairline")), ("space", tk("Space only"))];
 const TOOLTIP_STYLES: &[(&str, &str)] = &[("pill", tk("Pill")), ("material", tk("Dock material"))];
+const SPRING_FEELS: &[(&str, &str)] = &[("crisp", tk("Crisp")), ("fluid", tk("Fluid")), ("taut", tk("Taut")), ("off", tk("Off"))];
+const CLICK_BEHAVIORS: &[(&str, &str)] = &[("focus-cycle", tk("Focus / cycle windows")), ("minimize-restore", tk("Minimize / restore"))];
 /// The taskbar's choices (`[plugins.settings.taskbar]`), in their enums' order.
 pub const TASKBAR: &str = tk("Taskbar");
 const TASKBAR_MATERIALS: &[(&str, &str)] = &[("none", tk("None")), ("classic", tk("Classic glass")), ("liquid", tk("Liquid glass"))];
@@ -159,7 +161,7 @@ pub fn entries() -> Vec<Setting> {
         s(Launcher, RESULTS, "/launcher/look/layout", tk("Layout"), tk("Grid shows app icons while browsing and while you type plain words; prefixed searches stay a list"), Choice(LAYOUTS)),
         s(Launcher, RESULTS, "/launcher/max_results", tk("Visible results"), tk("Rows shown before the list scrolls"), slider(3.0, 12.0, 1.0, "")),
         s(Launcher, RESULTS, "/appearance/launcher_icons", tk("App icons"), tk("How app icons are drawn"), Choice(super::ICON_STYLES)),
-        s(Launcher, RESULTS, "/appearance/app_icon_shape", tk("App icon shape"), tk("Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn"), Choice(super::APP_ICON_SHAPES)),
+        s(Launcher, RESULTS, "/appearance/app_icon_shape", tk("App icon shape"), tk("Every app icon in the launcher sits on one shape, so they read as a set; Theme's own keeps each icon as drawn. The dock draws freestanding icons."), Choice(super::APP_ICON_SHAPES)),
         s(Launcher, GRID, "/launcher/look/grid_columns", tk("Most grid columns"), tk("App tiles per row; fewer fit a narrower launcher"), slider(3.0, 10.0, 1.0, "")),
         s(Launcher, GRID, "/launcher/look/grid_icon_size", tk("Grid icon size"), tk("Size of the app icons in the grid"), slider(f64::from(launcher::LAUNCHER_GRID_ICON_RANGE_PX.0), f64::from(launcher::LAUNCHER_GRID_ICON_RANGE_PX.1), GRID_ICON_STEP_PX, " px")),
         s(Launcher, GRID, "/launcher/look/grid_categories", tk("Category chips"), tk("All, Pinned and app categories above the grid (Tab switches)"), Toggle),
@@ -185,13 +187,15 @@ pub fn entries() -> Vec<Setting> {
         s(Dock, DOCK_LAYOUT, "/dock/position", tk("Position on screen"), tk("Screen edge the dock sits on (a side bar's edge is taken: the dock moves to the bottom there)"), Choice(DOCK_POSITIONS)),
         s(Dock, DOCK_LAYOUT, "/dock/media_chip", tk("Now-playing chip"), tk("Album art, title and play / pause at the dock's end while music plays"), Toggle),
         s(Dock, DOCK_LAYOUT, "/dock/alignment", tk("Alignment"), tk("Where along the edge"), Choice(ALIGNMENTS)),
-        s(Dock, DOCK_LAYOUT, "/dock/icon_size", tk("Size"), tk("Resting icon size"), span(dock_ranges::ICON_SIZE, " px")),
+        s(Dock, DOCK_LAYOUT, "/dock/icon_size", tk("Size"), tk("Resting icon size (56 px by default)"), span(dock_ranges::ICON_SIZE, " px")),
         s(Dock, DOCK_LAYOUT, "/dock/magnification", tk("Magnification"), tk("Icons swell as the pointer passes (spring-animated)"), Toggle),
         s(Dock, DOCK_LAYOUT, "/dock/magnify", tk("Magnified size"), tk("Peak size of the icon under the pointer"), span(dock_ranges::MAGNIFY, "×")),
         s(Dock, DOCK_LAYOUT, "/dock/magnify_spread", tk("Magnification spread"), tk("How many neighbours grow along"), span(dock_ranges::MAGNIFY_SPREAD, "")),
+        s(Dock, DOCK_LAYOUT, "/dock/spring_feel", tk("Spring feel"), tk("How snappy magnification, press and bounce feel (Crisp is the default)"), Choice(SPRING_FEELS)),
         s(Dock, DOCK_LAYOUT, "/dock/hover_lift", tk("Hover lift"), tk("How far the icon under the pointer rises with the Lift hover"), span(dock_ranges::HOVER_LIFT, " px")),
         s(Dock, DOCK_LAYOUT, "/dock/isolate_displays", tk("Only this display's windows"), tk("Running apps count only windows on the dock's own display"), Toggle),
         s(Dock, DOCK_BEHAVIOUR, "/dock/auto_hide", tk("Automatically hide and show the Dock"), tk("Hidden docks come back when the pointer touches their screen edge"), Choice(HIDING)),
+        s(Dock, DOCK_BEHAVIOUR, "/dock/click_behavior", tk("Click a running app"), tk("Focus and cycle its windows, or minimize and restore"), Choice(CLICK_BEHAVIORS)),
         s(Dock, DOCK_BEHAVIOUR, "/dock/show_delay_ms", tk("Reveal delay"), tk("Pointer rest on the edge before a hidden dock shows"), span(dock_ranges::SHOW_DELAY_MS, " ms")),
         s(Dock, DOCK_BEHAVIOUR, "/dock/hide_delay_ms", tk("Hide delay"), tk("Grace period after the pointer leaves"), span(dock_ranges::HIDE_DELAY_MS, " ms")),
         s(Dock, DOCK_BEHAVIOUR, "/dock/hide_speed", tk("Hide and show speed"), tk("How fast the dock slides in and out"), span(dock_ranges::HIDE_SPEED, "×")),
@@ -239,6 +243,8 @@ pub fn entries() -> Vec<Setting> {
         s(Dock, DOCK_LOOK, "/dock/separator", tk("Separators"), tk("Hairlines between apps, recent apps and the right side"), Toggle),
         s(Dock, DOCK_LOOK, "/dock/separator_style", tk("Separator style"), tk("A hairline, or only the gap"), Choice(SEPARATOR_STYLES)),
         s(Dock, DOCK_LOOK, "/dock/inactive_opacity", tk("Not-running opacity"), tk("Apps that aren't running fade to this"), span(dock_ranges::INACTIVE_OPACITY, "")),
+        s(Dock, DOCK_LOOK, "/dock/auto_squircle", tk("Auto-squircle uniformity"), tk("Bake irregular theme icons into freestanding squircles (disk-cached)"), Toggle),
+        // `/appearance/app_icon_shape` still shapes the launcher; the dock draws freestanding icons.
         // Window switcher.
         s(WindowSwitcher, SWITCHER, "/switcher/enabled", tk("Enable the window switcher"), tk("Alt+Tab runs `mandara msg switcher next`, Alt+Shift+Tab `switcher prev`"), Toggle),
         s(WindowSwitcher, SWITCHER, "/switcher/bind", tk("Keyboard shortcut"), tk("Add Alt+Tab and Alt+Shift+Tab to Mandara's compositor drop-in (skipped when your config already uses them)"), Command { button: tk("Bind Alt+Tab"), args: &["switcher", "bind"] }),
