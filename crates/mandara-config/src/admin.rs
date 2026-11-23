@@ -268,11 +268,21 @@ mod tests {
         let stub = dir.path().join("bin");
         std::fs::create_dir(&stub).unwrap();
         let fake_install = stub.join("install");
+        // Resolve coreutils from the real PATH before clearing it. NixOS has
+        // no guarantee of `/bin/mkdir` etc.; only `install` must come from
+        // the stub so a system `install -o root` cannot leave a partial helper.
+        let resolve = |name: &str| {
+            let path = std::env::var_os("PATH").unwrap_or_default();
+            std::env::split_paths(&path).map(|dir| dir.join(name)).find(|p| p.is_file()).unwrap_or_else(|| panic!("{name} not found on PATH"))
+        };
+        let (mkdir, cp, chmod) = (resolve("mkdir"), resolve("cp"), resolve("chmod"));
         // The last two arguments are the source and the destination.
-        // PATH is only this stub folder (coreutils via absolute paths) so a
-        // real `install -o root` cannot leave a partial `$0` after chown
-        // fails — that flake failed CI on main.
-        let script = "#!/bin/sh\n[ -n \"$FAIL\" ] && exit 1\nfor a; do src=$dst; dst=$a; done\nif [ \"$1\" = -d ]; then /bin/mkdir -p \"$dst\"; exit; fi\n/bin/mkdir -p \"${dst%/*}\" && /bin/cp \"$src\" \"$dst\" && /bin/chmod 755 \"$dst\"\n";
+        let script = format!(
+            "#!/bin/sh\n[ -n \"$FAIL\" ] && exit 1\nfor a; do src=$dst; dst=$a; done\nif [ \"$1\" = -d ]; then {mkdir} -p \"$dst\"; exit; fi\n{mkdir} -p \"${{dst%/*}}\" && {cp} \"$src\" \"$dst\" && {chmod} 755 \"$dst\"\n",
+            mkdir = mkdir.display(),
+            cp = cp.display(),
+            chmod = chmod.display(),
+        );
         std::fs::write(&fake_install, script).unwrap();
         let from = dir.path().join("mandara");
         std::fs::write(&from, "#!/bin/sh\nprintf '%s|' \"$@\"\n").unwrap();
