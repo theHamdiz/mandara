@@ -24,6 +24,9 @@ Apple-grade dock polish: freestanding icons, snappier springs, and live Studio /
   icon atlas work stays off the UI thread with a shared in-process cache, and
   the dock's input mask only keeps tooltip headroom while something is
   hovered.
+- **Dock auto-squircle cache writes.** Atlas tiles encode as PNG correctly
+  (temp files no longer lose their format), idle docks wake when a bake
+  finishes, and paints no longer stat the cache on the UI thread.
 
 ## 0.37.1 — 2026-11-22
 

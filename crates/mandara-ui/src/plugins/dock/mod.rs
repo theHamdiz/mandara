@@ -705,6 +705,22 @@ impl DockView {
         cx.observe(&mandara_core::theme_entity(cx), |_, _, cx| cx.notify()).detach();
         // The launcher floats above the dock: keep the dock out meanwhile.
         cx.observe(&shell(cx), |_, _, cx| cx.notify()).detach();
+        // Background atlas bakes finish while the dock may be idle (`clock.idle`);
+        // a subscriber wakes us so freestanding squircles appear without another event.
+        let atlas_rx = atlas::subscribe();
+        cx.spawn(async move |this, cx| {
+            while atlas_rx.recv().await.is_ok() {
+                let alive = this.update(cx, |this, cx| {
+                    this.atlas_gen = atlas::generation();
+                    cx.notify();
+                    true
+                });
+                if !alive.unwrap_or(false) {
+                    break;
+                }
+            }
+        })
+        .detach();
         let cfg = config(cx).read(cx).get();
         let overrides = cfg.launcher.overrides.len();
         let dock = cfg.dock_sanitized();

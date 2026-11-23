@@ -29,12 +29,17 @@ const CORNER_PROBE: u32 = 3;
 /// Fill ratio above which an opaque rounded square is left alone.
 const FULL_BLEED_FILL: f32 = 0.82;
 
-type CacheKey = (PathBuf, u32, bool);
+/// Cache key: `Arc<Path>` so UI lookups clone the pointer, not a `PathBuf`.
+type CacheKey = (Arc<Path>, u32, bool);
 
 /// Ready atlas paths (or remembered misses). Shared with bake threads.
 static RESOLVED: LazyLock<Mutex<HashMap<CacheKey, Option<Arc<Path>>>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 /// Bakes already scheduled for this process.
 static PENDING: LazyLock<Mutex<HashSet<CacheKey>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
+/// Idle docks subscribe so a finished bake can wake them without a poll.
+static WAKERS: LazyLock<Mutex<Vec<async_channel::Sender<()>>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+/// Optional cache root (tests); production uses the XDG cache.
+static CACHE_ROOT: LazyLock<Mutex<Option<PathBuf>>> = LazyLock::new(|| Mutex::new(None));
 
 /// Bumped when a background bake finishes so the dock can redraw.
 static GENERATION: AtomicU64 = AtomicU64::new(0);
@@ -42,6 +47,21 @@ static GENERATION: AtomicU64 = AtomicU64::new(0);
 /// Current bake generation (dock compares against its last seen value).
 pub fn generation() -> u64 {
     GENERATION.load(Ordering::Relaxed)
+}
+
+/// Stream of bake completions — idle docks await this then `cx.notify()`.
+pub fn subscribe() -> async_channel::Receiver<()> {
+    let (tx, rx) = async_channel::unbounded();
+    if let Ok(mut w) = WAKERS.lock() {
+        w.push(tx);
+    }
+    rx
+}
+
+fn announce() {
+    if let Ok(mut w) = WAKERS.lock() {
+        w.retain(|tx| tx.try_send(()).is_ok());
+    }
 }
 
 /// Drops in-process atlas lookups (icon theme / config changed).
@@ -54,13 +74,18 @@ pub fn clear() {
     }
 }
 
-/// XDG cache directory for normalised dock tiles.
+/// Directory for normalised dock tiles (`~/.cache/mandara/dock-icons/`).
 pub fn cache_dir() -> PathBuf {
+    if let Ok(g) = CACHE_ROOT.lock()
+        && let Some(root) = g.as_ref()
+    {
+        return root.clone();
+    }
     mandara_config::paths::cache_dir().join("dock-icons")
 }
 
-fn key(source: &Path, edge: u32, squircle: bool) -> CacheKey {
-    (source.to_path_buf(), edge, squircle)
+fn key(source: &Arc<Path>, edge: u32, squircle: bool) -> CacheKey {
+    (source.clone(), edge, squircle)
 }
 
 /// Content-addressed cache path for a source file + bake options.
@@ -96,14 +121,18 @@ pub fn store_cached(path: &Path, rgba: &image::RgbaImage) -> std::io::Result<()>
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let tmp = path.with_extension(format!("{}.tmp", std::process::id()));
-    rgba.save(&tmp).map_err(std::io::Error::other)?;
-    fs::rename(tmp, path)?;
+    // Explicit PNG: a `.tmp` extension alone makes `Image::save` fail.
+    let tmp = path.with_extension(format!("png.{}.tmp", std::process::id()));
+    rgba.save_with_format(&tmp, image::ImageFormat::Png).map_err(std::io::Error::other)?;
+    if let Err(e) = fs::rename(&tmp, path) {
+        let _ = fs::remove_file(&tmp);
+        return Err(e);
+    }
     Ok(())
 }
 
 /// Ready atlas path for a paint, or `None` while a bake is pending / failed.
-/// Never decodes or bakes on the calling (UI) thread.
+/// Never decodes, stats, or bakes on the calling (UI) thread.
 pub fn peek_or_queue(path: &Arc<Path>, edge: u32, auto_squircle: bool) -> Option<Arc<Path>> {
     let edge = edge.clamp(8, ATLAS_EDGE);
     if !auto_squircle {
@@ -115,14 +144,7 @@ pub fn peek_or_queue(path: &Arc<Path>, edge: u32, auto_squircle: bool) -> Option
     {
         return hit.clone();
     }
-    let cache = cache_path(path, edge, auto_squircle);
-    if cache.is_file() {
-        let cached: Arc<Path> = Arc::from(cache.into_boxed_path());
-        if let Ok(mut map) = RESOLVED.lock() {
-            map.insert(k.clone(), Some(cached.clone()));
-        }
-        return Some(cached);
-    }
+    // Pending before any disk work — paints during a bake must not stat.
     let already = match PENDING.lock() {
         Ok(mut pending) => !pending.insert(k.clone()),
         Err(_) => return None,
@@ -143,6 +165,7 @@ pub fn peek_or_queue(path: &Arc<Path>, edge: u32, auto_squircle: bool) -> Option
                 pending.remove(&bake_key);
             }
             GENERATION.fetch_add(1, Ordering::Relaxed);
+            announce();
         });
     if spawned.is_err()
         && let Ok(mut pending) = PENDING.lock()
@@ -157,13 +180,12 @@ fn bake_to_disk(path: &Path, edge: u32, auto_squircle: bool) -> Option<Arc<Path>
     if cache.is_file() {
         return Some(Arc::from(cache.into_boxed_path()));
     }
-    let tile = normalize_file(path, edge, auto_squircle)?;
-    match store_cached(&cache, &tile) {
-        Ok(()) => Some(Arc::from(cache.into_boxed_path())),
-        Err(_) => {
-            // Disk write failed: still remember the miss so we don't spin.
-            None
-        }
+    // `normalize_file` already writes the tile; do not encode twice.
+    let _tile = normalize_file(path, edge, auto_squircle)?;
+    if cache.is_file() {
+        Some(Arc::from(cache.into_boxed_path()))
+    } else {
+        None
     }
 }
 
@@ -367,6 +389,22 @@ fn decode_raster(bytes: &[u8], edge: u32) -> Option<image::RgbaImage> {
 mod tests {
     use super::*;
 
+    /// Serialize tests that override [`cache_dir`] (process-wide).
+    static TEST_SERIAL: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    fn with_cache_dir<R>(dir: PathBuf, f: impl FnOnce() -> R) -> R {
+        let _serial = TEST_SERIAL.lock().expect("atlas test serial");
+        {
+            let mut g = CACHE_ROOT.lock().expect("cache root");
+            *g = Some(dir);
+        }
+        let out = f();
+        if let Ok(mut g) = CACHE_ROOT.lock() {
+            *g = None;
+        }
+        out
+    }
+
     #[test]
     fn atlas_edge_is_128() {
         assert_eq!(ATLAS_EDGE, 128);
@@ -375,28 +413,28 @@ mod tests {
     #[test]
     fn irregular_icons_bake_and_cache() {
         let dir = tempfile::tempdir().unwrap();
-        // Keep tests out of the developer's real cache.
-        // SAFETY: single-threaded test; restored when `dir` drops with the process.
-        unsafe {
-            std::env::set_var("XDG_CACHE_HOME", dir.path());
-        }
-        let src = dir.path().join("blob.png");
-        let mut img = image::RgbaImage::new(64, 64);
-        for y in 20..44 {
-            for x in 20..44 {
-                img.put_pixel(x, y, image::Rgba([200, 40, 40, 255]));
+        with_cache_dir(dir.path().join("dock-icons"), || {
+            let src = dir.path().join("blob.png");
+            let mut img = image::RgbaImage::new(64, 64);
+            for y in 20..44 {
+                for x in 20..44 {
+                    img.put_pixel(x, y, image::Rgba([200, 40, 40, 255]));
+                }
             }
-        }
-        img.save(&src).unwrap();
-        assert!(!looks_like_squircle(&img));
-        let tile = normalize_file(&src, 64, true).expect("bake");
-        assert_eq!(tile.dimensions(), (64, 64));
-        assert!(tile.pixels().any(|p| p.0[3] > 0));
-        // No mid-icon white stripe from a misplaced specular row.
-        let mid = tile.get_pixel(32, 20).0;
-        assert!(mid[3] == 0 || mid[0] < 250, "specular must not paint a full white row through content");
-        let again = normalize_file(&src, 64, true).expect("cache hit");
-        assert_eq!(tile.as_raw(), again.as_raw());
+            img.save(&src).unwrap();
+            assert!(!looks_like_squircle(&img));
+            let tile = normalize_file(&src, 64, true).expect("bake");
+            assert_eq!(tile.dimensions(), (64, 64));
+            assert!(tile.pixels().any(|p| p.0[3] > 0));
+            // Disk atlas must land a PNG after normalize (store_cached succeeded).
+            let on_disk = cache_path(&src, 64, true);
+            assert!(on_disk.is_file(), "expected cache file at {}", on_disk.display());
+            // No mid-icon white stripe from a misplaced specular row.
+            let mid = tile.get_pixel(32, 20).0;
+            assert!(mid[3] == 0 || mid[0] < 250, "specular must not paint a full white row through content");
+            let again = normalize_file(&src, 64, true).expect("cache hit");
+            assert_eq!(tile.as_raw(), again.as_raw());
+        });
     }
 
     #[test]
@@ -426,11 +464,10 @@ mod tests {
     #[test]
     fn oversized_sources_are_refused() {
         let dir = tempfile::tempdir().unwrap();
-        unsafe {
-            std::env::set_var("XDG_CACHE_HOME", dir.path());
-        }
-        let src = dir.path().join("huge.bin");
-        fs::write(&src, vec![0u8; (ICON_MAX_BYTES as usize) + 8]).unwrap();
-        assert!(normalize_file(&src, 64, true).is_none());
+        with_cache_dir(dir.path().join("dock-icons"), || {
+            let src = dir.path().join("huge.bin");
+            fs::write(&src, vec![0u8; (ICON_MAX_BYTES as usize) + 8]).unwrap();
+            assert!(normalize_file(&src, 64, true).is_none());
+        });
     }
 }
