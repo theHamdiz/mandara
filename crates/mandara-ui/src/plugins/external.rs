@@ -117,7 +117,45 @@ pub(crate) fn config_changed(before: &mandara_config::ShellConfig, after: &manda
     if before.plugins.grants != after.plugins.grants || before.plugins.enabled != after.plugins.enabled || before.plugins.disabled != after.plugins.disabled {
         apply_grants(cx);
     }
+    // Desktop widgets only re-render when something notifies them; bar/panel
+    // surfaces often hide this by redrawing for other reasons. Push settings
+    // and wake every registered view as soon as `[plugins.settings]` changes.
+    if before.plugins.settings != after.plugins.settings {
+        apply_settings(cx);
+    }
     live::config_changed(before, after, cx);
+}
+
+/// Re-read each loaded plugin's settings from the config and redraw its views
+/// (bar, panel, sidebar, desktop widgets, Studio tabs).
+fn apply_settings(cx: &mut App) {
+    let loaded: Vec<(String, Shared)> = LOADED.with(|l| l.borrow().iter().map(|(id, shared)| (id.clone(), shared.clone())).collect());
+    if loaded.is_empty() {
+        return;
+    }
+    let snapshot = config(cx).read(cx).snapshot();
+    let mut changed_plugins = Vec::new();
+    for (id, shared) in loaded {
+        let Some(d) = discovered(&id) else { continue };
+        let current = settings_for(&d, cx);
+        let instance = Rc::as_ptr(&shared) as usize;
+        FOLLOWED.with(|f| f.borrow_mut().insert(id.clone(), (snapshot.clone(), instance)));
+        let mut pushed = false;
+        if let Some(p) = shared.borrow_mut().as_mut()
+            && p.settings() != &current
+        {
+            p.set_settings(current);
+            pushed = true;
+        }
+        if pushed {
+            after_call(&id, &shared, cx);
+        }
+        // Always notify: a desktop widget may need `desktop-widget()` again
+        // even when the resolved map matched (plugin re-reads `host::setting`).
+        views_of(&id).notify(cx);
+        changed_plugins.push(id);
+    }
+    launcher_updates::notify(&changed_plugins, cx);
 }
 
 /// The loaded instance of plugin `id`, if it is loaded.
@@ -1077,6 +1115,22 @@ pub fn watch(cx: &mut App) {
 #[cfg(test)]
 mod tests {
     use mandara_plugins::wasm::{PLUGIN_COMMANDS, plugin_may_run};
+
+    /// `[plugins.settings]` edits are what wake desktop widgets: grants and
+    /// enablement alone already had a path; settings must too (#234).
+    #[test]
+    fn plugin_settings_edits_differ_from_grant_edits() {
+        let mut before = mandara_config::ShellConfig::default();
+        let mut after = before.clone();
+        assert_eq!(before.plugins.settings, after.plugins.settings);
+        after.plugins.settings.entry("demo".into()).or_default().insert("key".into(), toml::Value::Integer(1));
+        assert_ne!(before.plugins.settings, after.plugins.settings);
+        // Grant-only change must not look like a settings change.
+        before.plugins.settings = after.plugins.settings.clone();
+        after.plugins.grants.insert("demo".into(), Default::default());
+        assert_eq!(before.plugins.settings, after.plugins.settings);
+        assert_ne!(before.plugins.grants, after.plugins.grants);
+    }
 
     /// A snapshot whose every write failed is kept and offered again, until
     /// a newer snapshot of the same file supersedes it.

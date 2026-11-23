@@ -12,9 +12,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use gpui::{
-    App, AppContext as _, Task, BoxShadow, Context, Entity, FocusHandle, FontWeight, Global, InteractiveElement, IntoElement, KeyDownEvent, MouseButton,
-    ObjectFit, ParentElement, Render, ScrollEvent, StatefulInteractiveElement, Styled, StyledImage as _, Window, div, img, point,
-    prelude::FluentBuilder as _, px,
+    AnyElement, App, AppContext as _, Task, BoxShadow, Context, Entity, FocusHandle, FontWeight, Global, InteractiveElement, IntoElement, KeyDownEvent,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ObjectFit, ParentElement, Render, ScrollEvent, StatefulInteractiveElement, Styled,
+    StyledImage as _, Window, div, img, point, prelude::FluentBuilder as _, px,
 };
 use mandara_config::ConfigStore;
 use mandara_core::{FrameClock, SpringConfig, SpringValue, ToGpui};
@@ -809,7 +809,11 @@ pub struct WallpaperView {
     /// Bumped on every [`Self::load`]; completions must match so a stale
     /// same-path job (e.g. fill change) cannot overwrite a newer look.
     load_gen: u64,
-    input_cleared: bool,
+    /// When true, this GPUI wallpaper is only a fill under a live scene and
+    /// must not steal desktop clicks (the live surface or software canvas owns them).
+    /// Otherwise we take right-clicks for the desktop menu — the software
+    /// wallpaper canvas is not running when this view exists.
+    pass_clicks: bool,
     /// Small copy of the shown wallpaper: picks the clock's ink.
     tone: Option<Arc<image::RgbImage>>,
     /// A change's images for the transition shader, until the next frame
@@ -883,7 +887,7 @@ impl WallpaperView {
             last_transition: None,
             active_crossfade_ms: mandara_config::defaults::WALLPAPER_CROSSFADE_MS,
             load_gen: 0,
-            input_cleared: false,
+            pass_clicks: false,
             tone: None,
             frames: None,
             player: None,
@@ -1083,16 +1087,19 @@ impl Render for WallpaperView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // Frame timing (`diagnostics frames`), like the shell's own views.
         let _frame = crate::plugins::diagnostics::frame(cx.entity_id().as_u64());
-        if !self.input_cleared {
-            // The desktop background never takes pointer input.
-            window.set_input_region(Some(&[]));
-            self.input_cleared = true;
-        }
         for image in self.stale_images.drain(..) {
             let _ = window.drop_image(image);
         }
         let cfg = self.config.read(cx).snapshot();
         let live = self.monitor.as_deref().is_some_and(live_on);
+        // Live scenes own the desktop; otherwise this GPUI layer *is* the
+        // desktop (software canvas unavailable) and must take right-clicks.
+        self.pass_clicks = live;
+        if self.pass_clicks {
+            window.set_input_region(Some(&[]));
+        } else {
+            window.set_input_region(None);
+        }
         if !cfg.wallpaper.enabled || live {
             self.target = None;
             for shown in [self.current.take(), self.previous.take()].into_iter().flatten() {
@@ -1108,7 +1115,7 @@ impl Render for WallpaperView {
                 let (clock, pill) = self.clock_layer(&cfg, window, cx);
                 root = root.child(clock).children(pill);
             }
-            return root;
+            return self.with_desktop_menu(root, cx);
         }
         // Per-output and light / dark variants, then the main wallpaper.
         let wanted = mandara_config::desktop::effective_wallpaper(cfg.wallpaper.path.as_ref(), &cfg.wallpaper.variants, self.monitor.as_deref(), cfg.theme.mode.is_dark());
@@ -1254,19 +1261,22 @@ impl Render for WallpaperView {
             (None, None, Some(p)) => vec![layer(p, previous_size)],
             (None, None, None) => Vec::new(),
         };
-        div()
-            .size_full()
-            .relative()
-            // 1 · wallpaper (crossfading)
-            .when_some(fill_bg, |el, bg| el.bg(bg))
-            .children(wallpaper)
-            // 2 · clock, date, weather, audio ring
-            .when_some(clock_el, |el, c| el.child(c))
-            .when_some(pill_below, |el, p| el.child(p))
-            // 3 · the subject in front of the clock
-            .when_some(self.retired.as_ref(), |el, c| el.child(cut(c, (1.0 - c.progress()) * limit(c))))
-            .when_some(self.cutout.as_ref(), |el, c| el.child(cut(c, c.progress() * limit(c) * subject_in)))
-            .when_some(pill_above, |el, p| el.child(p))
+        self.with_desktop_menu(
+            div()
+                .size_full()
+                .relative()
+                // 1 · wallpaper (crossfading)
+                .when_some(fill_bg, |el, bg| el.bg(bg))
+                .children(wallpaper)
+                // 2 · clock, date, weather, audio ring
+                .when_some(clock_el, |el, c| el.child(c))
+                .when_some(pill_below, |el, p| el.child(p))
+                // 3 · the subject in front of the clock
+                .when_some(self.retired.as_ref(), |el, c| el.child(cut(c, (1.0 - c.progress()) * limit(c))))
+                .when_some(self.cutout.as_ref(), |el, c| el.child(cut(c, c.progress() * limit(c) * subject_in)))
+                .when_some(pill_above, |el, p| el.child(p)),
+            cx,
+        )
     }
 }
 
@@ -1276,6 +1286,43 @@ impl WallpaperView {
         if let Some(p) = self.player.take() {
             p.borrow_mut().release(window);
         }
+    }
+
+    /// Right-click / drag handlers for the desktop menu when this layer owns input.
+    fn with_desktop_menu(&self, root: gpui::Div, cx: &mut Context<Self>) -> AnyElement {
+        if self.pass_clicks {
+            return root.into_any_element();
+        }
+        root.on_mouse_down(MouseButton::Right, cx.listener(|this, e: &MouseDownEvent, window, cx| {
+            this.open_desktop_menu((f32::from(e.position.x), f32::from(e.position.y)), window, true, cx);
+        }))
+        .on_mouse_move(cx.listener(|this, e: &MouseMoveEvent, _, cx| {
+            if e.pressed_button != Some(MouseButton::Right) {
+                return;
+            }
+            let Some(output) = this.monitor.as_deref() else { return };
+            crate::desktop_menu::drag_moved(output, (f32::from(e.position.x), f32::from(e.position.y)), cx);
+        }))
+        .on_mouse_up(MouseButton::Right, cx.listener(|this, e: &MouseUpEvent, _, cx| {
+            let Some(output) = this.monitor.as_deref() else { return };
+            crate::desktop_menu::drag_released(output, (f32::from(e.position.x), f32::from(e.position.y)), cx);
+        }))
+        .into_any_element()
+    }
+
+    fn open_desktop_menu(&self, at: (f32, f32), window: &Window, held: bool, cx: &mut App) {
+        let Some(output) = self.monitor.clone() else { return };
+        let vp = window.viewport_size();
+        let size = Some((f32::from(vp.width), f32::from(vp.height)));
+        crate::desktop_text::after_save(cx, move |cx| {
+            if let Err(output) = crate::bar::gaps::route(output, at, size, cx) {
+                if held {
+                    crate::desktop_menu::open_pressed(&output, at, size, cx);
+                } else {
+                    crate::desktop_menu::open_sized(&output, at, size, cx);
+                }
+            }
+        });
     }
 }
 
