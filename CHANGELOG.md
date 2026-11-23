@@ -6,6 +6,22 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Plugin desktop widgets refresh when their settings change, and the desktop
+right-click menu works when Mandara draws the wallpaper with GPUI.
+
+### Fixed
+
+- **Third-party desktop widgets follow plugin settings.** Changing a value
+  under Studio → Plugins or with `mandara msg config set /plugins/settings/…`
+  updates that plugin's desktop widget at once (no `plugins reload` and no
+  short `refresh-ms` poll). (#234)
+- **Desktop right-click on the GPUI wallpaper.** When the software wallpaper
+  canvas is off or unavailable (`MANDARA_WALLPAPER_RENDERER=gpui`, or a
+  fallback after the canvas fails), the GPUI wallpaper layer takes
+  right-clicks again and opens the desktop context menu (ring or list),
+  including hold-to-drag on the ring. That restores the menu on setups such
+  as some NixOS / Niri sessions where only the GPUI wallpaper was running.
+
 ## 0.38.0 — 2026-11-23
 
 Apple-grade dock polish: freestanding icons, snappier springs, and live Studio / `mandara msg` knobs.
