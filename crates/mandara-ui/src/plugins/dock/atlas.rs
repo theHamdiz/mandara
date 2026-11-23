@@ -4,10 +4,19 @@
 //!
 //! Cap is 128×128 RGBA8 (64 KiB). Content is hashed with `sha2` (workspace).
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use sha2::{Digest, Sha256};
+
+thread_local! {
+    /// Resolved atlas paths for this process (avoids disk `is_file` / bake on every paint).
+    /// Keyed by source path pointer + edge + squircle so paints only bump a refcount.
+    static RESOLVED: RefCell<HashMap<(usize, u32, bool), Arc<Path>>> = RefCell::new(HashMap::new());
+}
 
 /// Largest dock atlas edge, device pixels.
 pub const ATLAS_EDGE: u32 = 128;
@@ -69,16 +78,25 @@ pub fn store_cached(path: &Path, rgba: &image::RgbaImage) -> std::io::Result<()>
 
 /// Resolve a dock icon file to a cached atlas path (baking when needed).
 /// Returns the cache path after ensuring the tile exists; CPU buffers are dropped.
-pub fn ensure_atlas(path: &Path, edge: u32, auto_squircle: bool) -> Option<PathBuf> {
+/// Remembers successful resolutions in-process so paints never re-stat the disk.
+pub fn ensure_atlas(path: &Arc<Path>, edge: u32, auto_squircle: bool) -> Option<Arc<Path>> {
     let edge = edge.clamp(8, ATLAS_EDGE);
-    let cache = cache_path(path, edge, auto_squircle);
-    if cache.is_file() {
-        return Some(cache);
+    let key = (Arc::as_ptr(path) as *const () as usize, edge, auto_squircle);
+    if let Some(hit) = RESOLVED.with(|c| c.borrow().get(&key).cloned()) {
+        return Some(hit);
     }
-    // `normalize_file` writes the cache and drops the full-res decode buffers.
-    let tile = normalize_file(path, edge, auto_squircle)?;
-    drop(tile);
-    cache.is_file().then_some(cache)
+    let cache = cache_path(path, edge, auto_squircle);
+    if !cache.is_file() {
+        // `normalize_file` writes the cache and drops the full-res decode buffers.
+        let tile = normalize_file(path.as_ref(), edge, auto_squircle)?;
+        drop(tile);
+        if !cache.is_file() {
+            return None;
+        }
+    }
+    let cached: Arc<Path> = Arc::from(cache.into_boxed_path());
+    RESOLVED.with(|c| c.borrow_mut().insert(key, cached.clone()));
+    Some(cached)
 }
 
 /// Whether `img` already looks like a full-bleed rounded square / squircle
