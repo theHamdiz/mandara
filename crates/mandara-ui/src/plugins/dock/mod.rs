@@ -81,7 +81,7 @@ const MARKS_SPRING: SpringConfig = SpringConfig::new(400.0, 40.0, 1.0);
 /// but 0.01 for position is the UX floor — use 0.01 and accept |v|<0.1).
 const PRESENCE_EPSILON: f32 = 0.01;
 const MARKS_EPSILON: f32 = 0.01;
-const SHIFT_EPSILON: f32 = 0.01;
+const SHIFT_EPSILON: f32 = 0.25;
 const SCALE_EPSILON: f32 = 0.01;
 /// Most simultaneous dock slots (pins + running + recent + stacks + chrome).
 const MAX_DOCK_ITEMS: usize = 48;
@@ -131,7 +131,7 @@ const GLOW_H_PX: f32 = 3.0;
 /// Idle / focused mark opacity so dots stay readable on light and dark
 /// wallpapers without a blurred halo.
 const INDICATOR_FOCUSED_ALPHA: f32 = 0.92;
-const INDICATOR_RUNNING_ALPHA: f32 = 0.72;
+const INDICATOR_RUNNING_ALPHA: f32 = 0.92;
 /// The Highlight hover's plate: its margin round the icon (a share of the
 /// dock's padding, within bounds, logical px) and its alpha `(dark, light)`.
 const HIGHLIGHT_PAD_FRAC: f32 = 0.5;
@@ -662,6 +662,8 @@ pub struct DockView {
     surface: (f32, f32),
     /// The media chip's album art, decoded at the dock's icon size.
     media_cover: Rc<std::cell::RefCell<crate::plugins::media::CoverSlot>>,
+    /// Last seen [`atlas::generation`] — redraw when a background bake finishes.
+    atlas_gen: u64,
 }
 
 impl DockView {
@@ -747,6 +749,7 @@ impl DockView {
             glass: (0.0, 0.0, 0.0, 0.0),
             surface: (0.0, 0.0),
             media_cover: Rc::default(),
+            atlas_gen: atlas::generation(),
         }
     }
 
@@ -839,6 +842,7 @@ impl DockView {
         let leaving = self.leaving.clone();
         Rc::make_mut(&mut self.list).retain(|i| !leaving.iter().any(|(k, t0)| k.as_ref() == i.key && gone(&self.slots, k, t0)));
         self.leaving.retain(|(k, t0)| !gone(&self.slots, k, t0));
+        self.sync_element_ids();
     }
 
     /// Something overlaps the dock (smart hide): a fullscreen window on this
@@ -983,13 +987,18 @@ impl DockView {
                 list => match self.cfg.click_behavior {
                     mandara_config::dock::DockClickBehavior::MinimizeRestore => {
                         if item.focused() {
-                            for w in list {
-                                if !w.minimized && self.windows.read(cx).can_minimize() {
-                                    self.windows.read(cx).send(mandara_services::toplevels::ToplevelCommand::SetMinimized(w.id, true));
-                                } else if w.minimized {
-                                    self.windows.read(cx).send(mandara_services::toplevels::ToplevelCommand::SetMinimized(w.id, false));
-                                    crate::windows::activate(w.id, cx);
+                            let open: Vec<_> = list.iter().filter(|w| !w.minimized).collect();
+                            if !open.is_empty() {
+                                if self.windows.read(cx).can_minimize() {
+                                    for w in open {
+                                        self.windows.read(cx).send(mandara_services::toplevels::ToplevelCommand::SetMinimized(w.id, true));
+                                    }
                                 }
+                            } else {
+                                for w in list {
+                                    self.windows.read(cx).send(mandara_services::toplevels::ToplevelCommand::SetMinimized(w.id, false));
+                                }
+                                crate::windows::activate(list[0].id, cx);
                             }
                         } else {
                             let target = &list[0];
@@ -1004,8 +1013,13 @@ impl DockView {
                             self.windows.read(cx).send(mandara_services::toplevels::ToplevelCommand::SetMinimized(only.id, true));
                         }
                         list => {
-                            // Focused app: the next of its windows; else its latest.
-                            let target = if item.focused() { list.get(1).unwrap_or(&list[0]) } else { &list[0] };
+                            // Focused app: next window after the activated one (wraps).
+                            let target = if item.focused() {
+                                let i = list.iter().position(|w| w.activated).unwrap_or(0);
+                                &list[(i + 1) % list.len()]
+                            } else {
+                                &list[0]
+                            };
                             if target.minimized {
                                 self.windows.read(cx).send(mandara_services::toplevels::ToplevelCommand::SetMinimized(target.id, false));
                             }
@@ -1169,6 +1183,12 @@ impl DockView {
 impl Render for DockView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let _frame = crate::plugins::diagnostics::frame(cx.entity_id().as_u64());
+        // Background atlas bakes bump a generation; redraw when one finishes.
+        let atlas_gen = atlas::generation();
+        if atlas_gen != self.atlas_gen {
+            self.atlas_gen = atlas_gen;
+            cx.notify();
+        }
         self.refresh(cx);
         self.prune_leaving(Instant::now());
         self.sync_smart_watch(cx);
@@ -1206,7 +1226,8 @@ impl Render for DockView {
         // A dock that is fully hidden applies changes at once and draws no
         // feedback: nothing animates out of sight.
         let hidden = !self.hide.is_animating() && self.hide.value() >= 1.0;
-        let still = reduce || pace <= 0.0 || hidden || feel.instant();
+        // Spring feel Off snaps springs; launch / attention / minimize feedback still run.
+        let still = reduce || pace <= 0.0 || hidden;
         let seeded = now.duration_since(self.born) > SETTLE;
         let (launch_style, attention_style) = (cfg.launch_feedback(), cfg.attention_feedback());
         let playing = crate::hub::hub(cx).read(cx).media.as_ref().is_some_and(|m| m.status == mandara_services::PlaybackStatus::Playing);
@@ -1839,7 +1860,10 @@ impl Render for DockView {
         let region = if self.drag.as_ref().is_some_and(|d| d.active) {
             (0.0, 0.0, surface.0, surface.1)
         } else if shown > 0.05 {
-            model::place(cfg.position, surface, cfg.margin, start, 0.0, len, max_cross.max(thickness) + TOOLTIP_SPACE)
+            // Tooltip / label headroom only while something is hovered or a tip is up,
+            // so transparent magnification room never blocks clicks when idle.
+            let tip_room = if self.hovered.is_some() { TOOLTIP_SPACE } else { 0.0 };
+            model::place(cfg.position, surface, cfg.margin, start, 0.0, len, max_cross.max(thickness) + tip_room)
         } else {
             model::reveal_strip(cfg.position, surface, rest_start, rest_len, REVEAL_STRIP_PX)
         };
@@ -1982,13 +2006,8 @@ fn ensure_slot(slots: &mut Vec<(SharedString, SlotMotion)>, key: &str, presence:
     if let Some(i) = slot_index(slots, key) {
         return i;
     }
-    if slots.len() >= MAX_DOCK_ITEMS {
-        if let Some(i) = slots.iter().position(|(_, s)| !s.scale.is_animating() && !s.presence.is_animating()) {
-            slots.remove(i);
-        } else if !slots.is_empty() {
-            slots.remove(0);
-        }
-    }
+    // Never evict: thrashing at the cap would recreate presence springs every
+    // frame and keep RAF awake. List retain already bounds live slots.
     slots.push((SharedString::from(key.to_owned()), SlotMotion::new(presence, marks, minimized)));
     slots.len() - 1
 }
@@ -2029,9 +2048,12 @@ fn trash_tile(full: bool, size_px: f32, palette: &MandaraPalette) -> gpui::AnyEl
 /// the disk atlas ([`atlas`]) so the squircle *is* the icon.
 fn shaped_app_icon(app_id: &str, _shape: mandara_config::AppIconShape, size_px: f32, decode_px: f32, palette: &MandaraPalette, auto_squircle: bool) -> gpui::AnyElement {
     use gpui::{ObjectFit, StyledImage, img};
-    if let Some(path) = crate::plugins::workspaces::cached_raster_icon_path(app_id) {
+    // Atlas only when auto-squircle is on; otherwise keep size-aware theme icons.
+    if auto_squircle
+        && let Some(path) = crate::plugins::workspaces::cached_raster_icon_path(app_id)
+    {
         let edge = atlas::ATLAS_EDGE.min(crate::icon_raster::edge_for(decode_px.max(size_px), 2.0).max(64));
-        if let Some(cached) = atlas::ensure_atlas(&path, edge, auto_squircle) {
+        if let Some(cached) = atlas::peek_or_queue(&path, edge, true) {
             return div()
                 .size(px(size_px))
                 .flex_none()
@@ -2653,18 +2675,20 @@ mod tests {
         let mut s = SpringValue::new(1.0, SpringConfig::new(k, c, 1.0)).with_rest_epsilon(SCALE_EPSILON);
         s.set_target(1.55);
         let profile = mandara_core::spring::MotionProfile::default();
+        // 144 Hz steps: Crisp must settle inside ~130 ms (Apple-grade snappiness).
+        const DT: f32 = 1.0 / 144.0;
         let mut frames = 0usize;
-        while s.step_in(DOCK_MAX_DT, &profile) {
+        while s.step_in(DT, &profile) {
             frames += 1;
-            assert!(frames < 40, "crisp magnify should settle under ~130ms at 30 Hz steps");
+            assert!((frames as f32) * DT <= 0.13, "crisp magnify settle {frames} frames ≈ {} ms", (frames as f32) * DT * 1000.0);
         }
         assert!((s.value() - 1.55).abs() <= SCALE_EPSILON);
-        assert!(!s.step_in(DOCK_MAX_DT, &profile), "idle: no further animation");
+        assert!(!s.step_in(DT, &profile), "idle: no further animation");
         let mut off = SlotMotion::new(1.0, 0.0, 0);
         off.apply_feel(mandara_config::dock::DockSpringFeel::Off);
         off.scale.set_target(1.4);
         assert_eq!(off.scale.value(), 1.4);
-        assert!(!off.scale.step(DOCK_MAX_DT));
+        assert!(!off.scale.step(DT));
     }
 
     #[test]

@@ -11367,3 +11367,4 @@
 "Spring feel" = "スプリング感"
 "Taut" = "タイト"
 "Focus and cycle its windows, or minimize and restore" = "フォーカスしてウィンドウを切り替えるか、最小化／復元します"
+"Every app icon in the launcher sits on one shape, so they read as a set; Theme's own keeps each icon as drawn. The dock draws freestanding icons." = "ランチャーのアプリアイコンはすべて同じ形に揃えてセットとして見せます。「テーマのまま」は描かれた形を保ちます。ドックは自立したアイコンを描きます。"

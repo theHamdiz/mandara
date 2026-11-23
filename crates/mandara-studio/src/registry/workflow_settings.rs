@@ -161,7 +161,7 @@ pub fn entries() -> Vec<Setting> {
         s(Launcher, RESULTS, "/launcher/look/layout", tk("Layout"), tk("Grid shows app icons while browsing and while you type plain words; prefixed searches stay a list"), Choice(LAYOUTS)),
         s(Launcher, RESULTS, "/launcher/max_results", tk("Visible results"), tk("Rows shown before the list scrolls"), slider(3.0, 12.0, 1.0, "")),
         s(Launcher, RESULTS, "/appearance/launcher_icons", tk("App icons"), tk("How app icons are drawn"), Choice(super::ICON_STYLES)),
-        s(Launcher, RESULTS, "/appearance/app_icon_shape", tk("App icon shape"), tk("Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn"), Choice(super::APP_ICON_SHAPES)),
+        s(Launcher, RESULTS, "/appearance/app_icon_shape", tk("App icon shape"), tk("Every app icon in the launcher sits on one shape, so they read as a set; Theme's own keeps each icon as drawn. The dock draws freestanding icons."), Choice(super::APP_ICON_SHAPES)),
         s(Launcher, GRID, "/launcher/look/grid_columns", tk("Most grid columns"), tk("App tiles per row; fewer fit a narrower launcher"), slider(3.0, 10.0, 1.0, "")),
         s(Launcher, GRID, "/launcher/look/grid_icon_size", tk("Grid icon size"), tk("Size of the app icons in the grid"), slider(f64::from(launcher::LAUNCHER_GRID_ICON_RANGE_PX.0), f64::from(launcher::LAUNCHER_GRID_ICON_RANGE_PX.1), GRID_ICON_STEP_PX, " px")),
         s(Launcher, GRID, "/launcher/look/grid_categories", tk("Category chips"), tk("All, Pinned and app categories above the grid (Tab switches)"), Toggle),
@@ -244,6 +244,7 @@ pub fn entries() -> Vec<Setting> {
         s(Dock, DOCK_LOOK, "/dock/separator_style", tk("Separator style"), tk("A hairline, or only the gap"), Choice(SEPARATOR_STYLES)),
         s(Dock, DOCK_LOOK, "/dock/inactive_opacity", tk("Not-running opacity"), tk("Apps that aren't running fade to this"), span(dock_ranges::INACTIVE_OPACITY, "")),
         s(Dock, DOCK_LOOK, "/dock/auto_squircle", tk("Auto-squircle uniformity"), tk("Bake irregular theme icons into freestanding squircles (disk-cached)"), Toggle),
+        // `/appearance/app_icon_shape` still shapes the launcher; the dock draws freestanding icons.
         // Window switcher.
         s(WindowSwitcher, SWITCHER, "/switcher/enabled", tk("Enable the window switcher"), tk("Alt+Tab runs `mandara msg switcher next`, Alt+Shift+Tab `switcher prev`"), Toggle),
         s(WindowSwitcher, SWITCHER, "/switcher/bind", tk("Keyboard shortcut"), tk("Add Alt+Tab and Alt+Shift+Tab to Mandara's compositor drop-in (skipped when your config already uses them)"), Command { button: tk("Bind Alt+Tab"), args: &["switcher", "bind"] }),

@@ -11369,3 +11369,4 @@
 "Spring feel" = "إحساس النابض"
 "Taut" = "مشدود"
 "Focus and cycle its windows, or minimize and restore" = "التركيز وتدوير نوافذها، أو التصغير والاستعادة"
+"Every app icon in the launcher sits on one shape, so they read as a set; Theme's own keeps each icon as drawn. The dock draws freestanding icons." = "كل أيقونة تطبيق في المشغّل تجلس على شكل واحد لتُقرأ كمجموعة؛ «شكل السمة» يبقي كل أيقونة كما رُسمت. الشريط يرسم أيقونات مستقلة."

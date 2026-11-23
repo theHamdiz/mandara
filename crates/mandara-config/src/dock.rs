@@ -337,42 +337,43 @@ impl DockSpringFeel {
     pub const ALL: [Self; 4] = [Self::Crisp, Self::Fluid, Self::Taut, Self::Off];
 
     /// Magnify / hover scale spring `(stiffness, damping)`.
+    /// Crisp targets ~90–120 ms settle at ζ ≈ 0.85 (no sluggish trailing).
     pub const fn magnify(self) -> (f32, f32) {
         match self {
-            Self::Crisp => (440.0, 30.0),
-            Self::Fluid => (280.0, 22.0),
-            Self::Taut => (650.0, 42.0),
-            Self::Off => (440.0, 30.0),
+            Self::Crisp => (1900.0, 74.0),
+            Self::Fluid => (520.0, 34.0),
+            Self::Taut => (2800.0, 90.0),
+            Self::Off => (1900.0, 74.0),
         }
     }
 
     /// Click press-down compression `(stiffness, damping)`.
     pub const fn press(self) -> (f32, f32) {
         match self {
-            Self::Crisp => (650.0, 38.0),
-            Self::Fluid => (420.0, 28.0),
-            Self::Taut => (820.0, 48.0),
-            Self::Off => (650.0, 38.0),
+            Self::Crisp => (2400.0, 82.0),
+            Self::Fluid => (650.0, 38.0),
+            Self::Taut => (3200.0, 96.0),
+            Self::Off => (2400.0, 82.0),
         }
     }
 
     /// Launch / attention bounce impulse `(stiffness, damping)`.
     pub const fn bounce(self) -> (f32, f32) {
         match self {
-            Self::Crisp => (360.0, 16.0),
-            Self::Fluid => (240.0, 14.0),
-            Self::Taut => (480.0, 22.0),
-            Self::Off => (360.0, 16.0),
+            Self::Crisp => (1400.0, 48.0),
+            Self::Fluid => (360.0, 16.0),
+            Self::Taut => (2000.0, 60.0),
+            Self::Off => (1400.0, 48.0),
         }
     }
 
     /// Horizontal gap parting while reordering `(stiffness, damping)`.
     pub const fn gap(self) -> (f32, f32) {
         match self {
-            Self::Crisp => (460.0, 30.0),
-            Self::Fluid => (300.0, 24.0),
-            Self::Taut => (600.0, 40.0),
-            Self::Off => (460.0, 30.0),
+            Self::Crisp => (1600.0, 68.0),
+            Self::Fluid => (460.0, 30.0),
+            Self::Taut => (2200.0, 80.0),
+            Self::Off => (1600.0, 68.0),
         }
     }
 

@@ -17,6 +17,14 @@ Apple-grade dock polish: freestanding icons, snappier springs, and live Studio /
   minimize/restore). Studio → Dock and `mandara msg dock status` expose the
   new settings live.
 
+### Fixed
+
+- **Dock clicks and icon baking.** Focus/cycle advances past the focused
+  window (and wraps), minimize/restore acts on every open window of the app,
+  icon atlas work stays off the UI thread with a shared in-process cache, and
+  the dock's input mask only keeps tooltip headroom while something is
+  hovered.
+
 ## 0.37.1 — 2026-11-22
 
 Default fonts and opt-in system font sync, plus robustness and performance fixes across the shell, greeter, Studio, compositor drivers and vendored GPUI (Wayland buffer scale, lock screen, config safety, services, idle wake-ups, memory).

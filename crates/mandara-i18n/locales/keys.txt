@@ -2488,7 +2488,7 @@ Events come from Studio → Calendar.
 Events from your calendars in the clock panel. Add one with mandara msg calendar add <url or .ics> [name]
 Every
 Every app as a large icon in a card in the middle of the screen, with category chips
-Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn
+Every app icon in the launcher sits on one shape, so they read as a set; Theme's own keeps each icon as drawn. The dock draws freestanding icons.
 Every app with a launcher entry, and where it came from. Uninstalling uses that app's own package manager and always shows what will happen first. Drop an AppImage, Flatpak, archive or package here to install it.
 Every bar item sits on a capsule of its own, in any bar style
 Every check with its state, latency, uptime and last result (JSON)

@@ -11360,3 +11360,4 @@
 "Spring feel" = "Sensación del resorte"
 "Taut" = "Tenso"
 "Focus and cycle its windows, or minimize and restore" = "Enfocar y ciclar sus ventanas, o minimizar y restaurar"
+"Every app icon in the launcher sits on one shape, so they read as a set; Theme's own keeps each icon as drawn. The dock draws freestanding icons." = "Cada icono de app en el lanzador usa una misma forma para leerse como conjunto; «La del tema» deja cada icono como se dibujó. El dock dibuja iconos independientes."
