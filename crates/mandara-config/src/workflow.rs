@@ -603,7 +603,9 @@ pub struct AppOverride {
 // ── Dock ─────────────────────────────────────────────────────────────────
 
 /// The dock moved to [`crate::dock`]; re-exported here for older paths.
-pub use crate::dock::{DOCK_PLUGIN_ID, DockAlignment, DockAutoHide, DockConfig, DockDisplays, DockIndicator, DockPosition, DockStack, StackDisplay, StackSort, StackView};
+pub use crate::dock::{
+    DOCK_PLUGIN_ID, DockAlignment, DockAutoHide, DockClickBehavior, DockConfig, DockDisplays, DockIndicator, DockPosition, DockSpringFeel, DockStack, StackDisplay, StackSort, StackView,
+};
 
 // ── Window switcher ──────────────────────────────────────────────────────
 

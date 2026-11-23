@@ -16,8 +16,12 @@
 
 - **Dock** (opt-in), modelled on the macOS Dock: pinned, running and recent
   apps on a chromatic-glass strip at the bottom, left or right of each
-  display, with spring magnification, open-app dots, notification and
-  progress badges, and launch and attention feedback.
+  display, with freestanding icons (no per-icon plate), spring magnification,
+  open-app dots, notification and progress badges, and launch and attention
+  feedback. Pick a **Spring feel** (Crisp, Fluid, Taut or Off), turn
+  **Auto-squircle** on to bake irregular theme icons into a disk-cached
+  128×128 tile, and choose what a click does (focus/cycle or minimize/restore)
+  in Studio → Dock.
   - **Animations:** launching apps bounce, pulse or send out ripples until
     their first window appears; apps asking for attention bounce, pulse or
     wiggle; open-app dots grow in and shrink away; an icon dips when one of

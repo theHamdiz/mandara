@@ -6,6 +6,15 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Changed
+
+- **Dock icons stand on their own.** Freestanding app icons (no per-icon
+  plate or soft halo), a larger default size (56 px), snappier spring feel
+  presets (Crisp / Fluid / Taut / Off), optional auto-squircle baking into a
+  disk-cached 128×128 atlas, and click behaviour (focus/cycle or
+  minimize/restore). Studio → Dock and `mandara msg dock status` expose the
+  new settings live.
+
 ## 0.37.1 — 2026-11-22
 
 Default fonts and opt-in system font sync, plus robustness and performance fixes across the shell, greeter, Studio, compositor drivers and vendored GPUI (Wayland buffer scale, lock screen, config safety, services, idle wake-ups, memory).
