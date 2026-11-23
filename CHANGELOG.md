@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.38.0 — 2026-11-23
+
 Apple-grade dock polish: freestanding icons, snappier springs, and live Studio / `mandara msg` knobs.
 
 ### Improved
