@@ -269,7 +269,10 @@ mod tests {
         std::fs::create_dir(&stub).unwrap();
         let fake_install = stub.join("install");
         // The last two arguments are the source and the destination.
-        let script = "#!/bin/sh\n[ -n \"$FAIL\" ] && exit 1\nfor a; do src=$dst; dst=$a; done\nif [ \"$1\" = -d ]; then mkdir -p \"$dst\"; exit; fi\nmkdir -p \"${dst%/*}\" && cp \"$src\" \"$dst\" && chmod 755 \"$dst\"\n";
+        // PATH is only this stub folder (coreutils via absolute paths) so a
+        // real `install -o root` cannot leave a partial `$0` after chown
+        // fails — that flake failed CI on main.
+        let script = "#!/bin/sh\n[ -n \"$FAIL\" ] && exit 1\nfor a; do src=$dst; dst=$a; done\nif [ \"$1\" = -d ]; then /bin/mkdir -p \"$dst\"; exit; fi\n/bin/mkdir -p \"${dst%/*}\" && /bin/cp \"$src\" \"$dst\" && /bin/chmod 755 \"$dst\"\n";
         std::fs::write(&fake_install, script).unwrap();
         let from = dir.path().join("mandara");
         std::fs::write(&from, "#!/bin/sh\nprintf '%s|' \"$@\"\n").unwrap();
@@ -277,17 +280,19 @@ mod tests {
             std::fs::set_permissions(p, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
         }
         let helper = dir.path().join("lib/mandara-admin");
-        let path = format!("{}:{}", stub.display(), std::env::var("PATH").unwrap_or_default());
+        let path = stub.display().to_string();
         let run = |fail: bool| {
             let mut cmd = std::process::Command::new("/bin/sh");
-            cmd.args(["-c", SETUP_AND_RUN_SCRIPT]).arg(&helper).arg(&from).args(["greeter", "a b", "$(id)"]).env("PATH", &path);
+            cmd.args(["-c", SETUP_AND_RUN_SCRIPT]).arg(&helper).arg(&from).args(["greeter", "a b", "$(id)"]).env_clear().env("PATH", &path);
             if fail {
                 cmd.env("FAIL", "1");
             }
             cmd.output().unwrap()
         };
         let failed = run(true);
-        assert!(!failed.status.success() && !helper.exists(), "nothing runs when the copy fails");
+        assert!(!failed.status.success(), "install failure must fail the script: {}", String::from_utf8_lossy(&failed.stderr));
+        assert!(!helper.exists(), "a failed install must not leave a helper");
+        assert!(failed.stdout.is_empty(), "the helper must not run when install fails");
         let out = run(false);
         assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
         assert_eq!(String::from_utf8_lossy(&out.stdout), "greeter|a b|$(id)|");
