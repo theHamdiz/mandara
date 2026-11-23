@@ -6,6 +6,14 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.38.2 — 2026-11-23
+
+The changes in this release, taken from its commit history.
+
+### Changes
+
+- Isolate admin setup-and-run test from real install (#237).
+
 ## 0.38.1 — 2026-11-23
 
 Plugin desktop widgets refresh when their settings change, and the desktop
