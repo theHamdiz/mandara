@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.38.1 — 2026-11-23
+
 Plugin desktop widgets refresh when their settings change, and the desktop
 right-click menu works when Mandara draws the wallpaper with GPUI.
 
