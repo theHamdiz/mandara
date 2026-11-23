@@ -6,7 +6,9 @@ About → What's new shows it too.
 
 ## Unreleased
 
-### Changed
+Apple-grade dock polish: freestanding icons, snappier springs, and live Studio / `mandara msg` knobs.
+
+### Improved
 
 - **Dock icons stand on their own.** Freestanding app icons (no per-icon
   plate or soft halo), a larger default size (56 px), snappier spring feel
