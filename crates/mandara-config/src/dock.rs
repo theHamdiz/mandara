@@ -1195,7 +1195,7 @@ mod tests {
         assert_eq!(old.click_behavior, DockClickBehavior::FocusCycle);
         assert!(old.auto_squircle);
         assert_eq!(DockConfig::default().icon_size, defaults::DOCK_ICON_PX);
-        assert_eq!(DockSpringFeel::Crisp.magnify(), (440.0, 30.0));
+        assert_eq!(DockSpringFeel::Crisp.magnify(), (1900.0, 74.0));
         assert!(DockSpringFeel::Off.instant());
     }
 
