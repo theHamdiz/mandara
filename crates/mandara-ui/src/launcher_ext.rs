@@ -1133,7 +1133,7 @@ mod tests {
     #[test]
     fn customization_hides_and_renames() {
         let mut cfg = LauncherConfig { hidden: vec!["B".into()], ..Default::default() };
-        cfg.overrides.insert("a".into(), mandara_config::workflow::AppOverride { name: "Alpha".into(), icon: String::new() });
+        cfg.overrides.insert("a".into(), mandara_config::workflow::AppOverride { name: "Alpha".into(), icon: String::new(), running: None });
         let apps = vec![App { id: "a".into(), name: "a".into(), ..Default::default() }, App { id: "b".into(), ..Default::default() }];
         let out = customize(apps, &cfg);
         assert_eq!(out.len(), 1);

@@ -11126,3 +11126,9 @@
 "Taut" = "টানটান"
 "Focus and cycle its windows, or minimize and restore" = "ফোকাস করে উইন্ডো চক্র করুন, অথবা মিনিমাইজ/পুনরুদ্ধার করুন"
 "Every app icon in the launcher sits on one shape, so they read as a set; Theme's own keeps each icon as drawn. The dock draws freestanding icons." = "লঞ্চারের প্রতিটি অ্যাপ আইকন এক আকারে বসে যাতে সেট হিসেবে পড়া যায়; থিমের নিজস্ব প্রতিটি আইকন যেমন আঁকা তেমন রাখে। ডক স্বাধীন আইকন আঁকে।"
+
+"Already-open apps" = "ইতিমধ্যে খোলা অ্যাপ"
+"Always launch" = "সবসময় চালু করুন"
+"Focus running window" = "চলমান উইন্ডোতে ফোকাস"
+"Focus the running window, or always start another instance. Shift+Enter or Ctrl+Enter always launches; desktop actions always launch" = "চলমান উইন্ডোতে ফোকাস করুন, অথবা সবসময় নতুন ইনস্ট্যান্স চালু করুন। Shift+Enter বা Ctrl+Enter সবসময় চালায়; ডেস্কটপ অ্যাকশন সবসময় চালায়"
+"Switch to" = "এতে যান"

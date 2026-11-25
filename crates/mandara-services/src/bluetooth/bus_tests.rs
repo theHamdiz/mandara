@@ -136,7 +136,9 @@ fn signal_bursts_and_silent_resume_refresh_publish_authoritative_state() {
             drop(commands);
         };
         let actor = run_with_signals(&client, signals, &state_tx, &incoming);
-        let (result, ()) = within(TEST_LIMIT, futures::future::join(actor, exercise)).await.expect("actor must exit when command handles are dropped");
+        // The exercise alone has several TEST_LIMIT waits; the join needs
+        // headroom for them plus actor teardown (aarch64 CI was flaking at 1×).
+        let (result, ()) = within(TEST_LIMIT * 4, futures::future::join(actor, exercise)).await.expect("actor must exit when command handles are dropped");
         result.unwrap();
     });
 }

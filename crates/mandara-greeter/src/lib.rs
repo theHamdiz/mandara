@@ -18,6 +18,7 @@ pub mod background;
 pub mod cli;
 pub mod config;
 pub mod greetd;
+pub mod handoff;
 pub mod i18n;
 pub mod install;
 pub mod install_probe;

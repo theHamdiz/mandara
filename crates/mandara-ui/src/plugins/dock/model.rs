@@ -121,9 +121,17 @@ pub struct Inputs<'a> {
 }
 
 /// Whether window app id `app_id` belongs to desktop entry `entry` (or the
-/// pinned id when the entry isn't installed).
+/// pinned id when the entry isn't installed). Honours `[apps] id_map`
+/// (`steam_app_*` → `steam`) so the dock and launcher agree.
 pub fn belongs(app_id: &str, pinned: &str, entry: Option<&DesktopApp>) -> bool {
-    same_app(pinned, app_id) || entry.is_some_and(|e| e.wm_class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case(app_id)) || same_app(&e.id, app_id))
+    let alias = crate::apps::aliased(app_id);
+    same_app(pinned, app_id)
+        || same_app(pinned, &alias)
+        || entry.is_some_and(|e| {
+            e.wm_class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case(app_id))
+                || same_app(&e.id, app_id)
+                || same_app(&e.id, &alias)
+        })
 }
 
 fn app_name(id: &str) -> String {
@@ -885,6 +893,19 @@ mod tests {
 
     fn bare() -> DockConfig {
         DockConfig { pinned: Vec::new(), stacks: Vec::new(), trash: false, show_recent: false, applications: mandara_config::dock::DockApplications { enabled: false, ..Default::default() }, ..DockConfig::default() }
+    }
+
+    #[test]
+    fn belongs_honours_app_id_aliases() {
+        crate::apps::set_app_id_aliases(vec![mandara_config::apps::AppIdAlias {
+            pattern: "steam_app_*".into(),
+            desktop: "steam.desktop".into(),
+        }]);
+        let steam = app("steam", None);
+        assert!(belongs("steam_app_12", "steam", Some(&steam)));
+        assert!(belongs("steam_app_12", "steam", None));
+        assert!(!belongs("steam_app_12", "firefox", Some(&app("firefox", None))));
+        crate::apps::set_app_id_aliases(Vec::new());
     }
 
     #[test]

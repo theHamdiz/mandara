@@ -572,6 +572,18 @@ impl LauncherLookPreset {
     }
 }
 
+/// What the launcher does when you pick an app that is already open.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RunningApps {
+    /// Always run the desktop entry's `Exec` (the previous behaviour).
+    #[default]
+    Launch,
+    /// Focus its most recently used window (Shift+Enter / Ctrl+Enter still
+    /// starts another instance; desktop actions always launch).
+    Focus,
+}
+
 /// How apps are started.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -588,6 +600,9 @@ pub struct LaunchOptions {
     /// Paste right away after copying from the launcher (calculator,
     /// emoji, clipboard history).
     pub auto_paste: bool,
+    /// When an app result matches an open window: launch another instance,
+    /// or focus the running one (see [`RunningApps`]).
+    pub running_apps: RunningApps,
 }
 
 /// Your own name / icon for an app, keyed by desktop id.
@@ -598,6 +613,10 @@ pub struct AppOverride {
     pub name: String,
     /// Icon spec: theme icon name or image path (empty keeps it).
     pub icon: String,
+    /// Per-app override of [`LaunchOptions::running_apps`] (`"launch"` /
+    /// `"focus"`); empty keeps the global setting.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub running: Option<RunningApps>,
 }
 
 // ── Dock ─────────────────────────────────────────────────────────────────
@@ -1084,6 +1103,19 @@ mod tests {
         seen.sort();
         seen.dedup();
         assert_eq!(seen.len(), n, "prefixes collide");
+    }
+
+    #[test]
+    fn running_apps_defaults_to_launch_and_parses_focus() {
+        assert_eq!(LaunchOptions::default().running_apps, RunningApps::Launch);
+        let opts: LaunchOptions = toml::from_str("running_apps = \"focus\"").unwrap();
+        assert_eq!(opts.running_apps, RunningApps::Focus);
+        let round = toml::to_string(&LaunchOptions { running_apps: RunningApps::Focus, ..Default::default() }).unwrap();
+        assert!(round.contains("running_apps = \"focus\""), "{round}");
+        let over: AppOverride = toml::from_str("running = \"launch\"").unwrap();
+        assert_eq!(over.running, Some(RunningApps::Launch));
+        let empty: AppOverride = toml::from_str("").unwrap();
+        assert_eq!(empty.running, None);
     }
 
     #[test]

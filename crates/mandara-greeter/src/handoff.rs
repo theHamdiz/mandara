@@ -1,0 +1,194 @@
+//! Keep the login VT in graphics mode between Mandara Login and the desktop.
+//!
+//! greetd's session worker puts the VT back into text mode and connects the
+//! session's stdout/stderr to it before the compositor takes DRM master. That
+//! is the flash of a TTY (cursor, cleared console, compositor banners) users
+//! see after signing in. [`run`] is the first argv of every Wayland session
+//! Mandara starts: it switches the VT to graphics mode, blanks it, sends
+//! stdio away from the console, then `exec`s the real session command.
+
+use std::io::Write as _;
+use std::os::fd::AsRawFd as _;
+use std::os::unix::process::CommandExt as _;
+use std::process::Command;
+
+/// `KDGETMODE` / `KDSETMODE` request numbers. Stored as `u64` and cast at the
+/// call site: glibc's `ioctl` takes `c_ulong`, musl's takes `i32`.
+#[cfg(target_os = "linux")]
+const KDGETMODE: u64 = 0x4B3B;
+#[cfg(target_os = "linux")]
+const KDSETMODE: u64 = 0x4B3A;
+
+/// FreeBSD `sys/consio.h`: `KDGETMODE = _IOR('K', 9, int)`,
+/// `KDSETMODE = _IOWINT('K', 10)`.
+#[cfg(target_os = "freebsd")]
+const KDGETMODE: u64 = 0x4004_4B09;
+#[cfg(target_os = "freebsd")]
+const KDSETMODE: u64 = 0x2004_4B0A;
+
+/// Graphics mode: the VT does not draw a text console (same value on Linux
+/// and FreeBSD).
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+const KD_GRAPHICS: libc::c_int = 0x01;
+
+/// Runs as `mandara greeter handoff -- <session…>`: prepares the VT, then
+/// replaces this process with the session.
+pub fn run(argv: &[String]) -> anyhow::Result<()> {
+    let Some((program, args)) = argv.split_first().filter(|(p, _)| !p.is_empty()) else {
+        anyhow::bail!("handoff needs a session command after --");
+    };
+    prepare_vt();
+    silence_stdio();
+    let err = Command::new(program).args(args).exec();
+    Err(anyhow::anyhow!("exec {program}: {err}"))
+}
+
+/// Puts `/dev/tty` into graphics mode and blanks it when it is a console VT.
+/// Best effort: a pty or a missing / unsupported device is left alone.
+pub fn prepare_vt() {
+    let Ok(mut tty) = std::fs::OpenOptions::new().read(true).write(true).open("/dev/tty") else {
+        return;
+    };
+    if !enter_graphics(tty.as_raw_fd()) {
+        return;
+    }
+    let _ = tty.write_all(b"\x1b[H\x1b[2J\x1b[3J\x1b[?25l");
+    let _ = tty.flush();
+}
+
+/// Clears and hides the cursor on a real console VT only. Returns whether a
+/// VT was touched — so mock login tests on a pty/developer terminal do nothing.
+pub fn blank_console_if_vt() -> bool {
+    let Ok(mut tty) = std::fs::OpenOptions::new().read(true).write(true).open("/dev/tty") else {
+        return false;
+    };
+    if !is_console_vt(tty.as_raw_fd()) {
+        return false;
+    }
+    let _ = tty.write_all(b"\x1b[H\x1b[2J\x1b[3J\x1b[?25l");
+    let _ = tty.flush();
+    true
+}
+
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+fn is_console_vt(fd: std::os::fd::RawFd) -> bool {
+    let mut mode: libc::c_int = 0;
+    // SAFETY: KDGETMODE writes one int; failure means not a console VT.
+    unsafe { libc::ioctl(fd, KDGETMODE as _, &mut mode) == 0 }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+fn is_console_vt(_fd: std::os::fd::RawFd) -> bool {
+    false
+}
+
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+fn enter_graphics(fd: std::os::fd::RawFd) -> bool {
+    if !is_console_vt(fd) {
+        return false;
+    }
+    // SAFETY: KDSETMODE takes the mode by value.
+    let _ = unsafe { libc::ioctl(fd, KDSETMODE as _, KD_GRAPHICS) };
+    true
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+fn enter_graphics(_fd: std::os::fd::RawFd) -> bool {
+    false
+}
+
+/// Point stdout/stderr at `/dev/null` so session banners never hit the VT.
+fn silence_stdio() {
+    let Ok(null) = std::fs::OpenOptions::new().read(true).write(true).open("/dev/null") else {
+        return;
+    };
+    // SAFETY: dup2 onto 1 and 2; null stays open for the lifetime of exec.
+    use std::os::fd::IntoRawFd as _;
+    let fd = null.into_raw_fd();
+    unsafe {
+        let _ = libc::dup2(fd, 1);
+        let _ = libc::dup2(fd, 2);
+        if fd > 2 {
+            let _ = libc::close(fd);
+        }
+    }
+}
+
+/// Pathname used as argv0 for the handoff wrapper. Prefers this process's
+/// executable; when the installer replaced it under us (`… (deleted)`),
+/// falls back to the stable installed greeter path, then `mandara` on PATH.
+fn handoff_exe() -> String {
+    let reported = std::env::current_exe().ok().and_then(|p| p.into_os_string().into_string().ok());
+    let file_ok = reported.as_ref().is_some_and(|p| !p.ends_with(" (deleted)") && std::path::Path::new(p).is_file());
+    resolve_handoff_exe(reported.as_deref(), file_ok, std::path::Path::new(crate::install::INSTALLED_EXE).is_file())
+}
+
+/// Picks a launchable pathname for the handoff wrapper.
+fn resolve_handoff_exe(reported: Option<&str>, file_ok: bool, installed_exists: bool) -> String {
+    if file_ok
+        && let Some(path) = reported.filter(|p| !p.is_empty())
+    {
+        return path.into();
+    }
+    if installed_exists {
+        return crate::install::INSTALLED_EXE.into();
+    }
+    "mandara".into()
+}
+
+/// Prefixes a Wayland session argv with this binary's handoff entry so the
+/// VT stays dark until the compositor owns the display.
+pub fn wrap_wayland_command(session: &[String]) -> Vec<String> {
+    let mut out = Vec::with_capacity(session.len() + 4);
+    out.push(handoff_exe());
+    out.push("greeter".into());
+    out.push("handoff".into());
+    out.push("--".into());
+    out.extend(session.iter().cloned());
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wrap_puts_handoff_before_the_session() {
+        let wrapped = wrap_wayland_command(&["niri-session".into()]);
+        assert!(wrapped.len() >= 5, "{wrapped:?}");
+        assert_eq!(wrapped[wrapped.len() - 4], "greeter");
+        assert_eq!(wrapped[wrapped.len() - 3], "handoff");
+        assert_eq!(wrapped[wrapped.len() - 2], "--");
+        assert_eq!(wrapped[wrapped.len() - 1], "niri-session");
+    }
+
+    #[test]
+    fn wrap_keeps_session_arguments() {
+        let wrapped = wrap_wayland_command(&["Hyprland".into(), "--config".into(), "/tmp/x.conf".into()]);
+        assert_eq!(&wrapped[wrapped.len() - 3..], ["Hyprland", "--config", "/tmp/x.conf"]);
+    }
+
+    #[test]
+    fn deleted_current_exe_uses_the_installed_path() {
+        let deleted = format!("{} (deleted)", crate::install::INSTALLED_EXE);
+        assert_eq!(resolve_handoff_exe(Some(&deleted), false, true), crate::install::INSTALLED_EXE);
+        assert_eq!(resolve_handoff_exe(Some(&deleted), false, false), "mandara");
+        assert_eq!(resolve_handoff_exe(Some("/opt/mandara/mandara"), true, true), "/opt/mandara/mandara");
+        assert_eq!(resolve_handoff_exe(None, false, true), crate::install::INSTALLED_EXE);
+    }
+
+    #[test]
+    fn blank_console_is_safe_without_a_console_vt() {
+        // cargo test runs on a pty in CI: KDGETMODE fails and this is a no-op
+        // (must not panic, clear the screen, or hide the cursor).
+        let _ = blank_console_if_vt();
+    }
+
+    #[cfg(target_os = "freebsd")]
+    #[test]
+    fn freebsd_kd_request_encodings_match_consio() {
+        // _IOR('K', 9, int) and _IOWINT('K', 10) from sys/consio.h / ioccom.h.
+        assert_eq!(KDGETMODE, 0x4004_4B09);
+        assert_eq!(KDSETMODE, 0x2004_4B0A);
+    }
+}

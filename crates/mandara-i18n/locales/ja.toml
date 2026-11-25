@@ -11368,3 +11368,9 @@
 "Taut" = "タイト"
 "Focus and cycle its windows, or minimize and restore" = "フォーカスしてウィンドウを切り替えるか、最小化／復元します"
 "Every app icon in the launcher sits on one shape, so they read as a set; Theme's own keeps each icon as drawn. The dock draws freestanding icons." = "ランチャーのアプリアイコンはすべて同じ形に揃えてセットとして見せます。「テーマのまま」は描かれた形を保ちます。ドックは自立したアイコンを描きます。"
+
+"Already-open apps" = "起動中のアプリ"
+"Always launch" = "常に起動"
+"Focus running window" = "起動中のウィンドウにフォーカス"
+"Focus the running window, or always start another instance. Shift+Enter or Ctrl+Enter always launches; desktop actions always launch" = "起動中のウィンドウにフォーカスするか、常に別のインスタンスを起動します。Shift+Enter または Ctrl+Enter は常に起動し、デスクトップアクションも常に起動します"
+"Switch to" = "切り替え"

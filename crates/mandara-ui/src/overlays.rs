@@ -934,6 +934,44 @@ fn describe(effect: &Effect) -> String {
     }
 }
 
+/// Whether focusing a running window wins over launching `app` under the
+/// current launch options (and any per-app override).
+fn prefers_focus(app: &DesktopApp, cx: &App) -> bool {
+    use mandara_config::workflow::RunningApps;
+    let cfg = config(cx).read(cx).get();
+    let mode = cfg.launcher.overrides.get(&app.id).and_then(|o| o.running).unwrap_or(cfg.launcher.launch.running_apps);
+    mode == RunningApps::Focus
+}
+
+/// The most recently used open window for `app`, if any (same matching as
+/// the dock: desktop id, `StartupWMClass`, reverse-DNS tails, `[apps] id_map`).
+fn running_window_for(app: &DesktopApp, cx: &App) -> Option<u64> {
+    let list = crate::windows::windows(cx)?.read(cx).list();
+    list.iter()
+        .filter(|w| !crate::windows::is_shell(&w.app_id) && w.parent.is_none())
+        .find(|w| crate::plugins::dock::model::belongs(&w.app_id, &app.id, Some(app)))
+        .map(|w| w.id)
+}
+
+/// What Enter would do for `item`, honouring `running_apps = "focus"`.
+fn describe_planned(item: &Item, query: &str, cx: &App) -> String {
+    match plan(item, query) {
+        Effect::App(app) if prefers_focus(&app, cx) => {
+            if let Some(id) = running_window_for(&app, cx) {
+                let title = crate::windows::windows(cx).and_then(|w| w.read(cx).list().iter().find(|t| t.id == id).map(|t| t.title.clone())).unwrap_or_default();
+                if title.is_empty() {
+                    format!("focus: {} ({id})", app.name)
+                } else {
+                    format!("focus: {title} ({id})")
+                }
+            } else {
+                describe(&Effect::App(app))
+            }
+        }
+        effect => describe(&effect),
+    }
+}
+
 /// Runs `f` once the launcher's surface has closed (immediately when it
 /// isn't open), plus a frame for the compositor to drop it.
 fn after_launcher_closed(cx: &mut App, f: impl FnOnce(&mut App) + 'static) {
@@ -952,10 +990,19 @@ fn after_launcher_closed(cx: &mut App, f: impl FnOnce(&mut App) + 'static) {
 }
 
 /// Carries out an effect (after the launcher started closing).
-fn execute(effect: Effect, cx: &mut App) {
+/// `force_launch`: Shift/Ctrl+Enter — always start another instance even when
+/// `running_apps = "focus"`. Desktop actions always launch.
+fn execute(effect: Effect, force_launch: bool, cx: &mut App) {
     match effect {
         Effect::Prompt(_) => {}
         Effect::App(app) => {
+            if !force_launch && prefers_focus(&app, cx)
+                && let Some(id) = running_window_for(&app, cx)
+            {
+                // Activate restores minimized windows (foreign-toplevel).
+                crate::windows::activate(id, cx);
+                return;
+            }
             let options = config(cx).read(cx).get().launch_options();
             if let Err(err) = apps::launch_with(&app, None, &options) {
                 notify_failure(&app.name, err, cx);
@@ -1245,8 +1292,8 @@ fn command_matches(typed: &str, index: &[Item], slash: bool) -> Vec<Item> {
 
 /// JSON view of launcher results (for `launcher search`).
 pub fn search_json(query: String, cx: &mut App) -> Result<mandara_plugins::Output, String> {
-    with_results(query, cx, |query, results, _| {
-        Ok(serde_json::Value::Array(results.iter().take(12).map(|item| result_json(item, query)).collect()))
+    with_results(query, cx, |query, results, cx| {
+        Ok(serde_json::Value::Array(results.iter().take(12).map(|item| result_json(item, query, cx)).collect()))
     })
 }
 
@@ -1330,8 +1377,8 @@ fn with_results(
 }
 
 /// One result as JSON, with what Enter would do (`effect`).
-fn result_json(item: &Item, query: &str) -> serde_json::Value {
-    let effect = describe(&plan(item, query));
+fn result_json(item: &Item, query: &str, cx: &App) -> serde_json::Value {
+    let effect = describe_planned(item, query, cx);
     match item {
         Item::App(a) => serde_json::json!({ "kind": "app", "label": a.name, "detail": a.comment, "effect": effect }),
         Item::Calc { expr, value } => serde_json::json!({ "kind": "calc", "label": format_number(*value), "detail": expr, "effect": effect }),
@@ -1355,7 +1402,7 @@ pub fn run_json(args: &[String], cx: &mut App) -> Result<mandara_plugins::Output
     }
     with_results(query.join(" "), cx, move |query, results, cx| {
         let item = results.get(index).ok_or_else(|| tf("No result #{index} for {query} ({count} results)", &[("index", &index), ("query", &format!("{query:?}")), ("count", &results.len())]))?;
-        let mut out = result_json(item, query);
+        let mut out = result_json(item, query, cx);
         out["dry_run"] = serde_json::Value::Bool(dry_run);
         if !dry_run {
             match plan(item, query) {
@@ -1367,7 +1414,7 @@ pub fn run_json(args: &[String], cx: &mut App) -> Result<mandara_plugins::Output
                     if s.read(cx).launcher_open {
                         s.update(cx, |s, cx| s.set_launcher(false, cx));
                     }
-                    execute(effect, cx);
+                    execute(effect, false, cx);
                 }
             }
         }
@@ -1880,7 +1927,9 @@ impl LauncherView {
 
     /// Enter / click: prompts for missing arguments (the launcher stays
     /// open), otherwise closes the launcher and runs the result.
-    fn activate(&mut self, index: usize, cx: &mut Context<Self>) {
+    /// `force_launch` (Shift/Ctrl+Enter): start another instance even when
+    /// `running_apps = "focus"`.
+    fn activate(&mut self, index: usize, force_launch: bool, cx: &mut Context<Self>) {
         if self.agent.is_some() { self.activate_agent(index, cx); return; }
         // The Beacon bar alone (nothing typed) has no results to open.
         if self.look.style == mandara_config::workflow::LauncherStyle::Beacon && !self.beacon_open_results() {
@@ -1895,7 +1944,7 @@ impl LauncherView {
             effect => {
                 launcher_ext::record_use(&usage_key(item), &config(cx).read(cx).snapshot());
                 self.close(cx);
-                execute(effect, cx);
+                execute(effect, force_launch, cx);
             }
         }
     }
@@ -2015,7 +2064,7 @@ impl LauncherView {
         }
         match k.key.as_str() {
             "escape" => self.close(cx),
-            "enter" => self.activate(self.selected, cx),
+            "enter" => self.activate(self.selected, k.modifiers.shift || k.modifiers.control, cx),
             "down" | "tab" if count > 0 => self.selected = (self.selected + 1) % count,
             "up" if count > 0 => self.selected = (self.selected + count - 1) % count,
             "left" => self.caret = self.caret.saturating_sub(1),
@@ -2148,17 +2197,24 @@ impl LauncherView {
     /// row sits on the accent-filled highlight (Beacon), its text follows.
     fn list_row(&mut self, i: usize, item: &Item, row_h: f32, lead_px: f32, look: &mandara_config::workflow::LauncherLook, on_accent: bool, palette: &MandaraPalette, cx: &mut Context<Self>) -> gpui::AnyElement {
         let ignore_mouse = look.ignore_mouse;
-        let badge = self.badge(i, item, look);
+        let badge = self.badge(i, item, look, cx);
         let hover = cx.listener(move |this, hovered: &bool, _, cx| {
             if *hovered && !ignore_mouse && !this.wheel_hold {
                 this.selected = i;
                 cx.notify();
             }
         });
-        let click = cx.listener(move |this, _: &ClickEvent, _, cx| this.activate(i, cx));
+        let click = cx.listener(move |this, _: &ClickEvent, _, cx| this.activate(i, false, cx));
         let lead = self.lead(item, lead_px, palette, cx);
         let (title, sub) = match item {
-            Item::App(app) => (app.name.clone(), app.comment.clone()),
+            Item::App(app) => {
+                let sub = if prefers_focus(app, cx) && running_window_for(app, cx).is_some() {
+                    t("Switch to").to_string()
+                } else {
+                    app.comment.clone()
+                };
+                (app.name.clone(), sub)
+            }
             Item::Entry(e) => (e.label.clone(), e.detail.clone()),
             Item::Hit(h) => (h.label.clone(), h.detail.clone()),
             Item::Calc { expr, value } => (format_number(*value), tf("{expression} · Enter copies", &[("expression", expr)])),
@@ -2245,10 +2301,11 @@ impl LauncherView {
     }
 
     /// The small badge of a result row (`App`, `Pinned`, `Flatpak`…).
-    fn badge(&self, i: usize, item: &Item, look: &mandara_config::workflow::LauncherLook) -> Option<String> {
+    fn badge(&self, i: usize, item: &Item, look: &mandara_config::workflow::LauncherLook, cx: &App) -> Option<String> {
         match item {
             Item::Entry(e) => Some(tr(e.badge)),
             Item::Hit(h) => Some(tr(h.badge)),
+            Item::App(a) if prefers_focus(a, cx) && running_window_for(a, cx).is_some() => Some(t("Running").to_string()),
             Item::App(a) if self.query.trim().is_empty() && self.ctx.pinned.iter().any(|p| p.eq_ignore_ascii_case(&a.id)) => Some(t("Pinned").to_string()),
             Item::App(a) if self.query.trim().is_empty() && i < self.ctx.pinned.len() + self.ctx.recent_count && self.ctx.usage.frecency(&format!("app:{}", a.id)) > 0 => Some(t("Recent").to_string()),
             Item::App(a) if look.origin_badges => a.origin.badge().map(tr),

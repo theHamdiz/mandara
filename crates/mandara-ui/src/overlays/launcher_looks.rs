@@ -531,7 +531,7 @@ impl LauncherView {
                                 .child(title_of(&item)),
                         )
                         .on_hover(hover)
-                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.activate(i, cx))),
+                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.activate(i, false, cx))),
                 );
             }
             out.push(row.into_any_element());

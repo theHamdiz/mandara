@@ -137,6 +137,14 @@ pub enum GreeterAction {
         #[arg(long)]
         apply: bool,
     },
+    /// Internal: keep the login VT dark, then `exec` the desktop session
+    /// (greetd starts Mandara Login with this as the session command's
+    /// prefix so the TTY never flashes between greeter and compositor).
+    Handoff {
+        /// The real session argv (`niri-session`, `Hyprland`, …).
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true, required = true)]
+        argv: Vec<String>,
+    },
 }
 
 pub fn main(args: GreeterArgs) -> Result<()> {
@@ -244,6 +252,12 @@ pub fn main(args: GreeterArgs) -> Result<()> {
             }
             println!("{}", plan.execute(&root, apply, &mut SystemRunner).map_err(anyhow::Error::msg)?);
             Ok(())
+        }
+        Some(GreeterAction::Handoff { argv }) => {
+            // Clap keeps a literal `--` out of trailing_var_arg when users
+            // write `handoff -- niri-session`; strip one if present.
+            let argv = if argv.first().is_some_and(|s| s == "--") { argv[1..].to_vec() } else { argv };
+            crate::handoff::run(&argv)
         }
         None => crate::run(crate::GreeterOptions {
             demo: args.demo,

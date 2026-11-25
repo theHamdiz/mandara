@@ -1306,13 +1306,16 @@ pub fn emit_niri(cfg: &ManagedConfig) -> Emitted {
     for ns in SHELL_SURFACES.iter().chain(MANGO_NIRI_SURFACES) {
         let _ = writeln!(s, "layer-rule {{\n    match namespace={}\n    shadow {{ off; }}\n}}", kdl_str(&format!("^{ns}$")));
     }
-    let _ = writeln!(s, "layer-rule {{\n    match namespace=\"^mandara-wallpaper$\"\n    place-within-backdrop true\n}}");
+    // Do NOT set `place-within-backdrop` on mandara-wallpaper: Niri then
+    // ignores all pointer input on that surface, so the desktop right-click
+    // menu never opens. Workspaces stay see-through below so the Background
+    // layer wallpaper still shows outside the Overview (it zooms with them).
     if cfg.autostart() {
         let _ = writeln!(s, "spawn-at-startup {}", kdl_str(&cfg.mandara_bin));
     }
     let l = &c.look;
-    // The wallpaper sits in the backdrop (above): workspaces must be
-    // see-through or their solid background hides it outside the Overview.
+    // See-through workspaces: otherwise a solid colour hides the wallpaper
+    // outside the Overview (found in a nested niri 26.04 session).
     let mut layout = String::from("    background-color \"transparent\"\n");
     let width = c.border_width.map(|w| format!("        width {w}\n")).unwrap_or_default();
     if let Some(bc) = &cfg.borders {
@@ -1487,6 +1490,9 @@ pub fn emit_hyprland_conf(cfg: &ManagedConfig) -> Emitted {
     for ns in SHELL_SURFACES {
         let _ = writeln!(s, "layerrule = match:namespace ^({ns})$, no_anim on");
     }
+    // Wallpaper is opaque planes over a transparent root: Hyprland's layer
+    // blur samples empty space behind it and paints black. Turn blur off.
+    let _ = writeln!(s, "layerrule = match:namespace ^(mandara-wallpaper)$, blur off");
     let _ = writeln!(s, "layerrule = match:namespace ^(mandara-lock)$, blur on");
     let mut general = String::new();
     if let Some(g) = l.gaps_inner {
@@ -1729,6 +1735,8 @@ pub fn emit_hyprland_lua(cfg: &ManagedConfig) -> Emitted {
     for ns in SHELL_SURFACES {
         let _ = writeln!(s, "pcall(hl.layer_rule, {{ match = {{ namespace = {} }}, no_anim = true }})", lua_str(&format!("^({ns})$")));
     }
+    // Same as hyprlang: layer blur over a transparent root paints black.
+    let _ = writeln!(s, "pcall(hl.layer_rule, {{ match = {{ namespace = {} }}, blur = false }})", lua_str("^mandara-wallpaper$"));
     for r in &c.window_rules {
         let mut matcher = Vec::new();
         if let Some(a) = &r.app_id {
@@ -4276,6 +4284,7 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
         let cfg = CompositorConfig::default();
         let out = emit_hyprland_conf(&managed(&cfg, &[]));
         assert!(out.text.contains("layerrule = match:namespace ^(mandara-bar)$, no_anim on"));
+        assert!(out.text.contains("layerrule = match:namespace ^(mandara-wallpaper)$, blur off"), "{}", out.text);
         assert!(out.text.contains("col.active_border = rgba(5eead4ff) rgba(93c5fdff) 45deg"));
         assert!(out.text.contains("bind = SUPER, space, exec, mandara msg launcher toggle"));
         assert!(out.text.contains("windowrule = match:class ^org\\.mandara\\.studio$, float on"));

@@ -57,6 +57,7 @@ pub const POSITIONS: &[(&str, &str)] = &[
 const SEARCH_POSITIONS: &[(&str, &str)] = &[("auto", tk("Next to the edge")), ("top", tk("Top")), ("bottom", tk("Bottom"))];
 pub const LAYOUTS: &[(&str, &str)] = &[("list", tk("List")), ("grid", tk("Grid"))];
 const STYLES_LAUNCHER: &[(&str, &str)] = &[("classic", tk("Classic")), ("beacon", tk("Beacon (centred search bar)"))];
+const RUNNING_APPS: &[(&str, &str)] = &[("focus", tk("Focus running window")), ("launch", tk("Always launch"))];
 /// The Beacon style's own rows.
 pub const BEACON: &str = tk("Beacon search bar");
 const DOCK_POSITIONS: &[(&str, &str)] = &[("bottom", tk("Bottom")), ("left", tk("Left")), ("right", tk("Right"))];
@@ -180,6 +181,7 @@ pub fn entries() -> Vec<Setting> {
         s(Launcher, LAUNCHING, "/launcher/launch/systemd_scope", tk("Own systemd scope per app"), tk("Each app runs in app-mandara-<app>.scope: tracked resources, survives shell restarts"), Toggle),
         s(Launcher, LAUNCHING, "/launcher/launch/terminal", tk("Terminal"), tk("For terminal apps; empty uses your preferred terminal (Applications), then $TERMINAL, then the first installed one"), Text { placeholder: "ghostty -e" }),
         s(Launcher, LAUNCHING, "/launcher/launch/auto_paste", tk("Paste after copying"), tk("Emoji, calculator results and clipboard entries are pasted at once"), Toggle),
+        s(Launcher, LAUNCHING, "/launcher/launch/running_apps", tk("Already-open apps"), tk("Focus the running window, or always start another instance. Shift+Enter or Ctrl+Enter always launches; desktop actions always launch"), Choice(RUNNING_APPS)),
         s(Launcher, APPS, "/launcher/pinned", tk("Pinned apps"), tk("Desktop ids listed first, in this order (Ctrl+P in the launcher pins too)"), List { placeholder: "org.gnome.Nautilus, firefox" }),
         s(Launcher, APPS, "/launcher/hidden", tk("Hidden apps"), tk("Desktop ids never listed"), List { placeholder: "org.gnome.Tour" }),
         // Dock (Studio → Dock lays these out by group, with the pinned

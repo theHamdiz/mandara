@@ -6,6 +6,37 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Desktop right-click works again on Niri, Hyprland shows wallpapers instead of
+a black hole, Mandara Login no longer flashes a TTY into the session, and the
+launcher can focus a running app instead of starting another one.
+
+### Fixed
+
+- **Desktop right-click menu on Niri.** Mandara no longer puts the wallpaper
+  in Niri's Overview backdrop (`place-within-backdrop`). That rule made Niri
+  ignore all pointer input on the wallpaper, so the desktop context menu never
+  opened on software-canvas and GPUI wallpaper setups alike.
+- **Black wallpaper on Hyprland.** The wallpaper layer turns blur off, and on
+  Hyprland the canvas root stays an opaque black under the wallpaper planes so
+  Hyprland still composites those subsurfaces (a fully transparent root left a
+  black hole). Live wallpapers keep a transparent root so the scene shows
+  through.
+- **TTY flash after Mandara Login.** Wayland sessions start through
+  `mandara greeter handoff`, which keeps the login VT in graphics mode, blanks
+  it and redirects session stdio away from the console before `exec`ing the
+  compositor — so greetd's text-mode reset between greeter and desktop no
+  longer flashes a terminal.
+
+### New
+
+- **Launcher: focus a running app.** Studio → Launcher → Starting apps →
+  **Already-open apps** (`[launcher.launch] running_apps = "focus"`) focuses
+  the app's most recently used window instead of starting another instance.
+  Shift+Enter or Ctrl+Enter still launches; desktop actions always launch.
+  Per-app override: `[launcher.overrides.<id>] running = "launch"|"focus"`.
+  Matching honours `[apps] id_map`. `mandara msg launcher run --dry-run`
+  reports `focus: …` when it would switch. (#238)
+
 ## 0.38.2 — 2026-11-23
 
 The changes in this release, taken from its commit history.

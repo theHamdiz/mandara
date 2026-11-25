@@ -11025,3 +11025,9 @@
 "Taut" = "Căng"
 "Focus and cycle its windows, or minimize and restore" = "Tập trung và xoay cửa sổ, hoặc thu nhỏ và khôi phục"
 "Every app icon in the launcher sits on one shape, so they read as a set; Theme's own keeps each icon as drawn. The dock draws freestanding icons." = "Mỗi biểu tượng ứng dụng trên trình khởi chạy nằm trên một hình để đọc như một bộ; “Của chủ đề” giữ mỗi biểu tượng như đã vẽ. Dock vẽ biểu tượng độc lập."
+
+"Already-open apps" = "Ứng dụng đang mở"
+"Always launch" = "Luôn khởi chạy"
+"Focus running window" = "Tập trung vào cửa sổ đang chạy"
+"Focus the running window, or always start another instance. Shift+Enter or Ctrl+Enter always launches; desktop actions always launch" = "Tập trung vào cửa sổ đang chạy, hoặc luôn khởi chạy thêm một phiên bản. Shift+Enter hoặc Ctrl+Enter luôn khởi chạy; thao tác máy tính luôn khởi chạy"
+"Switch to" = "Chuyển sang"
