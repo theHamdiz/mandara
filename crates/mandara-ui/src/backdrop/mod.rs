@@ -1984,25 +1984,20 @@ fn write_root_pixels(dst: &mut [u8], src: &[u8], abgr: bool) {
 }
 
 fn paint_overview_root(host: &mut Host, id: u32, pixmap: &tiny_skia::Pixmap, geom: Option<Geom>, fallback: Option<[u8; 4]>) {
+    // commit() uses root_rgba when the pixel root cannot be reused, so keep
+    // the fallback recorded even when the pixel root installs successfully.
+    host.set_base(id, fallback);
     let Some(geom) = geom else {
-        host.set_base(id, fallback);
         return;
     };
     let size = overview_root_size(geom, host.supports_viewport());
     let Some(pixels) = overview_root_pixels(pixmap, size) else {
-        host.set_base(id, fallback);
         return;
     };
-    let applied =
-        match host.set_base_pixels(id, size, |dst, abgr| write_root_pixels(dst, &pixels, abgr)) {
-            Ok(applied) => applied,
-            Err(err) => {
-                tracing::warn!("wallpaper overview root: {err:#}");
-                false
-            }
-        };
-    if !applied {
-        host.set_base(id, fallback);
+    if let Err(err) =
+        host.set_base_pixels(id, size, |dst, abgr| write_root_pixels(dst, &pixels, abgr))
+    {
+        tracing::warn!("wallpaper overview root: {err:#}");
     }
 }
 
