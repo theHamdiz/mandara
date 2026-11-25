@@ -260,6 +260,11 @@ struct Seat {
     seat: wl_seat::WlSeat,
     pointer: Option<wl_pointer::WlPointer>,
     shape: Option<wp_cursor_shape_device_v1::WpCursorShapeDeviceV1>,
+    /// Last shape sent on this seat during the current pointer enter.
+    /// Cleared on Leave so the next enter re-sends Default after another
+    /// client may have changed the cursor; within one enter it skips a
+    /// repeat set_shape that would rebuild the sprite for nothing.
+    cursor_shape: Option<wp_cursor_shape_device_v1::Shape>,
     /// Follows drags over the canvas (for the shake), never accepts them.
     data_device: Option<wl_data_device::WlDataDevice>,
 }
@@ -274,6 +279,7 @@ impl Seat {
         if let Some(d) = self.shape.take() {
             d.destroy();
         }
+        self.cursor_shape = None;
         if let Some(p) = self.pointer.take()
             && p.version() >= 3
         {
@@ -709,7 +715,7 @@ impl Host {
             if input {
                 for g in list.iter().filter(|g| g.interface == "wl_seat") {
                     let seat = globals.registry().bind::<wl_seat::WlSeat, _, _>(g.name, g.version.min(SEAT_VERSION), &qh, g.name);
-                    state.seats.push(Seat { seat, pointer: None, shape: None, data_device: None });
+                    state.seats.push(Seat { seat, pointer: None, shape: None, cursor_shape: None, data_device: None });
                 }
             }
         });
@@ -796,7 +802,7 @@ impl Host {
         let previous = s.outputs[i].canvas.take();
         let remapped = previous.is_some();
         if let Some(canvas) = previous {
-            canvas.destroy();
+            s.destroy_canvas(canvas);
         }
         let qh = s.qh.clone();
         let surface = s.compositor.create_surface(&qh, id);
@@ -864,7 +870,7 @@ impl Host {
     /// Destroys output `id`'s canvas.
     pub fn remove_canvas(&mut self, id: u32) {
         if let Some(c) = self.state.outputs.iter_mut().find(|o| o.global == id).and_then(|o| o.canvas.take()) {
-            c.destroy();
+            self.state.destroy_canvas(c);
             self.state.changed = true;
         }
     }
@@ -1407,9 +1413,9 @@ impl Planes for Host {
 
 impl Drop for Host {
     fn drop(&mut self) {
-        for o in &mut self.state.outputs {
-            if let Some(c) = o.canvas.take() {
-                c.destroy();
+        for i in 0..self.state.outputs.len() {
+            if let Some(c) = self.state.outputs[i].canvas.take() {
+                self.state.destroy_canvas(c);
             }
         }
         for s in &mut self.state.seats {
@@ -1434,7 +1440,7 @@ impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
             }
             wl_registry::Event::Global { name, interface, version } if interface == "wl_seat" && state.input => {
                 let seat = registry.bind::<wl_seat::WlSeat, _, _>(name, version.min(SEAT_VERSION), qh, name);
-                state.seats.push(Seat { seat, pointer: None, shape: None, data_device: None });
+                state.seats.push(Seat { seat, pointer: None, shape: None, cursor_shape: None, data_device: None });
             }
             wl_registry::Event::GlobalRemove { name } => {
                 if let Some(i) = state.seats.iter().position(|s| s.seat.data::<u32>() == Some(&name)) {
@@ -1447,7 +1453,7 @@ impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
                 if let Some(i) = state.outputs.iter().position(|o| o.global == name) {
                     let mut out = state.outputs.remove(i);
                     if let Some(c) = out.canvas.take() {
-                        c.destroy();
+                        state.destroy_canvas(c);
                     }
                     if let Some(xdg_output) = out.xdg_output.take() { xdg_output.destroy(); }
                     if out.output.version() >= 3 {
@@ -1558,7 +1564,7 @@ impl Dispatch<zwlr_layer_surface_v1::ZwlrLayerSurfaceV1, u32> for State {
                     && let Some(c) = output.canvas.take()
                 {
                     output.backoff.closed(c.created, Instant::now());
-                    c.destroy();
+                    state.destroy_canvas(c);
                 }
                 state.changed = true;
             }
@@ -1592,10 +1598,18 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
                 let output = state.outputs.iter().find(|o| o.canvas.as_ref().is_some_and(|c| c.surface == surface)).map(|o| o.global);
                 state.pointer = output.map(|o| (o, surface_x, surface_y));
                 state.shake.reset();
-                // The plain arrow (else the last window's resize cursor
-                // would stay); without cursor-shape the compositor's stays.
-                if let Some(d) = state.seats.iter().find(|s| s.pointer.as_ref() == Some(pointer)).and_then(|s| s.shape.as_ref()) {
+                // Reset to the plain arrow only when the pointer is actually
+                // over a canvas root (else a sticky resize cursor from the
+                // last window would stay). Deduplicate only within one
+                // enter: Leave and canvas destroy clear the cache so the
+                // next enter always replaces whatever another client set.
+                if output.is_some()
+                    && let Some(seat) = state.seats.iter_mut().find(|s| s.pointer.as_ref() == Some(pointer))
+                    && should_set_cursor_shape(seat.cursor_shape, wp_cursor_shape_device_v1::Shape::Default)
+                    && let Some(d) = seat.shape.as_ref()
+                {
                     d.set_shape(serial, wp_cursor_shape_device_v1::Shape::Default);
+                    seat.cursor_shape = Some(wp_cursor_shape_device_v1::Shape::Default);
                 }
             }
             wl_pointer::Event::Motion { surface_x, surface_y, .. } => {
@@ -1649,6 +1663,9 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
                     let (x, y) = state.pointer.map_or((f64::NAN, f64::NAN), |p| (p.1, p.2));
                     state.drag = Some(Drag { output, x, y, button, released: true });
                 }
+                if let Some(seat) = state.seats.iter_mut().find(|s| s.pointer.as_ref() == Some(pointer)) {
+                    clear_cursor_shape_cache(&mut seat.cursor_shape);
+                }
                 state.pointer = None;
                 state.scroll = 0.0;
                 state.shake.reset();
@@ -1658,7 +1675,30 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
     }
 }
 
+/// Whether a new cursor-shape request would change what this seat last sent
+/// during the current enter (Leave and canvas destroy clear the cache).
+fn should_set_cursor_shape(last: Option<wp_cursor_shape_device_v1::Shape>, next: wp_cursor_shape_device_v1::Shape) -> bool {
+    last != Some(next)
+}
+
+/// Drop the cached shape so the next enter re-sends Default after another
+/// client may have changed the cursor, or after the surface that received
+/// the last set_shape is gone.
+fn clear_cursor_shape_cache(last: &mut Option<wp_cursor_shape_device_v1::Shape>) {
+    *last = None;
+}
+
 impl State {
+    /// Destroys a canvas and drops every seat's cursor-shape cache. Leave may
+    /// not arrive for a destroyed focused surface; the cache must not outlive
+    /// the surface it was sent to.
+    fn destroy_canvas(&mut self, canvas: Canvas) {
+        canvas.destroy();
+        for seat in &mut self.seats {
+            clear_cursor_shape_cache(&mut seat.cursor_shape);
+        }
+    }
+
     /// Feeds one position to the shake detector (only while a shake level
     /// is set); a shake queues a [`SHAKE`] press there.
     fn feed_shake(&mut self, output: u32, x: f64, y: f64) {
@@ -1753,6 +1793,35 @@ ignore_events!(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cursor_shape_is_not_resent_when_unchanged() {
+        let arrow = wp_cursor_shape_device_v1::Shape::Default;
+        assert!(should_set_cursor_shape(None, arrow));
+        assert!(!should_set_cursor_shape(Some(arrow), arrow));
+        assert!(should_set_cursor_shape(Some(arrow), wp_cursor_shape_device_v1::Shape::Pointer));
+    }
+
+    #[test]
+    fn cursor_shape_is_resent_after_leave() {
+        let arrow = wp_cursor_shape_device_v1::Shape::Default;
+        let mut last = Some(arrow);
+        assert!(!should_set_cursor_shape(last, arrow), "still inside this enter");
+        clear_cursor_shape_cache(&mut last);
+        assert!(should_set_cursor_shape(last, arrow), "leave must force Default on the next enter");
+    }
+
+    #[test]
+    fn cursor_shape_is_resent_after_canvas_destroy_on_every_seat() {
+        // Mirrors State::destroy_canvas: Leave may not arrive for a destroyed
+        // focused surface, so every seat's cache is cleared with the canvas.
+        let arrow = wp_cursor_shape_device_v1::Shape::Default;
+        let mut seats = [Some(arrow), Some(arrow), None];
+        for last in &mut seats {
+            clear_cursor_shape_cache(last);
+        }
+        assert!(seats.iter().all(|last| should_set_cursor_shape(*last, arrow)));
+    }
 
     #[test]
     fn a_canvas_closed_again_and_again_is_retried_after_longer_waits() {

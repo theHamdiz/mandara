@@ -1306,10 +1306,16 @@ pub fn emit_niri(cfg: &ManagedConfig) -> Emitted {
     for ns in SHELL_SURFACES.iter().chain(MANGO_NIRI_SURFACES) {
         let _ = writeln!(s, "layer-rule {{\n    match namespace={}\n    shadow {{ off; }}\n}}", kdl_str(&format!("^{ns}$")));
     }
-    // Do NOT set `place-within-backdrop` on mandara-wallpaper: Niri then
-    // ignores all pointer input on that surface, so the desktop right-click
-    // menu never opens. Workspaces stay see-through below so the Background
-    // layer wallpaper still shows outside the Overview (it zooms with them).
+    // Explicit `false`: Niri only replaces `place_within_backdrop` when a
+    // later matching rule sets the property. Omitting it left an earlier
+    // `true` (pre-#239 drop-in, a Nix copy, or an unanchored `wallpaper`
+    // match) in force, and backdrop surfaces ignore all pointer input so
+    // the desktop right-click menu never opens. Workspaces stay see-through
+    // below so the Background wallpaper still shows outside the Overview.
+    let _ = writeln!(
+        s,
+        "layer-rule {{\n    match namespace=\"^mandara-wallpaper$\"\n    place-within-backdrop false\n}}"
+    );
     if cfg.autostart() {
         let _ = writeln!(s, "spawn-at-startup {}", kdl_str(&cfg.mandara_bin));
     }

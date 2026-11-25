@@ -198,15 +198,19 @@ fn hyprland_validates_every_dropin() {
 
 
 /// Niri needs see-through workspaces so the Background-layer wallpaper shows
-/// outside the Overview. Mandara must not set `place-within-backdrop`: that
-/// rule makes Niri ignore all pointer input on the wallpaper, so the desktop
-/// right-click menu never opens.
+/// outside the Overview. Mandara must set `place-within-backdrop false` on
+/// the wallpaper so a later drop-in overrides an earlier `true` (backdrop
+/// surfaces ignore all pointer input, which kills the desktop menu).
 #[test]
 fn niri_wallpaper_shows_outside_the_overview() {
     for (_, cfg, colors) in configs() {
         let text = emit_niri(&managed(&cfg, colors, None)).text;
         assert!(text.contains("background-color \"transparent\""), "{text}");
-        assert!(!text.contains("place-within-backdrop"), "backdrop placement kills desktop-menu input:\n{text}");
+        assert!(
+            text.contains("match namespace=\"^mandara-wallpaper$\"\n    place-within-backdrop false"),
+            "must clear backdrop placement so the desktop menu gets pointer input:\n{text}"
+        );
+        assert!(!text.contains("place-within-backdrop true"), "backdrop placement kills desktop-menu input:\n{text}");
         assert_eq!(text.matches("\nlayout {").count(), 1, "niri rejects a second `layout` node in one file:\n{text}");
     }
 }

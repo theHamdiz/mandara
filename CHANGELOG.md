@@ -6,6 +6,24 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Desktop right-click works again on Niri when an older rule still put the
+wallpaper in the Overview backdrop, and the cursor no longer flickers when
+you cross onto empty desktop.
+
+### Fixed
+
+- **Desktop right-click menu on Niri (again).** Mandara's Niri drop-in now
+  sets `place-within-backdrop false` on `mandara-wallpaper`, so it overrides
+  an earlier `true` left in a copied drop-in or a Nix config. Backdrop
+  layers ignore all pointer input; without the clear, right-click never
+  reached the desktop menu even after Mandara stopped writing `true`.
+- **Glitchy cursor over the wallpaper.** The software wallpaper canvas only
+  sets the default cursor shape when the pointer enters a canvas root, and
+  skips a repeat set during the same enter so the sprite is not rebuilt for
+  nothing. Leave and destroying the canvas clear the cache so the next enter
+  still replaces a text or resize cursor from another client, even when the
+  compositor sends no Leave for the old surface.
+
 ## 0.38.6 — 2026-11-25
 
 The changes in this release, taken from its commit history.
