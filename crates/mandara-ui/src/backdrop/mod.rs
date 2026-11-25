@@ -1980,11 +1980,11 @@ fn overview_root_pixels(pixmap: &tiny_skia::Pixmap, size: (u32, u32)) -> Option<
 }
 
 fn write_root_pixels(dst: &mut [u8], src: &[u8], abgr: bool) {
-    for (d, s) in dst.chunks_exact_mut(4).zip(src.chunks_exact(4)) {
+    for (d, s) in dst.as_chunks_mut::<4>().0.iter_mut().zip(src.as_chunks::<4>().0.iter()) {
         if abgr {
             d.copy_from_slice(s);
         } else {
-            d.copy_from_slice(&[s[2], s[1], s[0], s[3]]);
+            *d = [s[2], s[1], s[0], s[3]];
         }
     }
 }
