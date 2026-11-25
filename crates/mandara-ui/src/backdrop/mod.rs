@@ -1969,7 +1969,13 @@ fn overview_root_size(geom: Geom, viewport: bool) -> (u32, u32) {
 /// A wallpaper copy for compositors that mirror only the root surface,
 /// e.g. Umbriel's workspace overview.
 fn overview_root_pixels(pixmap: &tiny_skia::Pixmap, size: (u32, u32)) -> Option<Vec<u8>> {
-    let src = image::RgbaImage::from_raw(pixmap.width(), pixmap.height(), pixmap.data().to_vec())?;
+    // Borrow the wallpaper buffer: cloning it only to build a ≤640px root
+    // copy would allocate ~32 MiB at 4K (and ~127 MiB at 8K) for nothing.
+    let src = image::ImageBuffer::<image::Rgba<u8>, _>::from_raw(
+        pixmap.width(),
+        pixmap.height(),
+        pixmap.data(),
+    )?;
     Some(image::imageops::resize(&src, size.0, size.1, FilterType::Lanczos3).into_raw())
 }
 
@@ -2784,6 +2790,13 @@ mod tests {
         let mut argb = [0; 4];
         write_root_pixels(&mut argb, &src, false);
         assert_eq!(argb, [30, 20, 10, 40]);
+    }
+
+    #[test]
+    fn overview_root_pixels_resizes_without_owning_the_source() {
+        let pixmap = tiny_skia::Pixmap::new(8, 4).expect("pixmap");
+        let out = overview_root_pixels(&pixmap, (4, 2)).expect("root copy");
+        assert_eq!(out.len(), 4 * 2 * 4);
     }
 
     #[test]
