@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.38.7 — 2026-11-25
+
 Desktop right-click works again on Niri when an older rule still put the
 wallpaper in the Overview backdrop, and the cursor no longer flickers when
 you cross onto empty desktop.
