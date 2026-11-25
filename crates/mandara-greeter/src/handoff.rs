@@ -12,9 +12,11 @@ use std::os::fd::AsRawFd as _;
 use std::os::unix::process::CommandExt as _;
 use std::process::Command;
 
-/// Linux `KDSETMODE` / `KDGETMODE` (from `<linux/kd.h>`).
-const KDGETMODE: libc::c_ulong = 0x4B3B;
-const KDSETMODE: libc::c_ulong = 0x4B3A;
+/// Linux `KDSETMODE` / `KDGETMODE` (from `<linux/kd.h>`). Stored as `u64`
+/// and cast at the call site: glibc's `ioctl` takes `c_ulong`, musl's takes
+/// `i32` (`libc::Ioctl`).
+const KDGETMODE: u64 = 0x4B3B;
+const KDSETMODE: u64 = 0x4B3A;
 /// Graphics mode: the VT does not draw a text console.
 const KD_GRAPHICS: libc::c_int = 0x01;
 
@@ -39,12 +41,13 @@ pub fn prepare_vt() {
     let fd = tty.as_raw_fd();
     let mut mode: libc::c_int = 0;
     // SAFETY: KDGETMODE writes one int through the valid pointer; failure
-    // means this is not a Linux VT (pty, pipe, …).
-    if unsafe { libc::ioctl(fd, KDGETMODE, &mut mode) } != 0 {
+    // means this is not a Linux VT (pty, pipe, …). `as _` matches glibc
+    // (`c_ulong`) and musl (`i32`) ioctl request types.
+    if unsafe { libc::ioctl(fd, KDGETMODE as _, &mut mode) } != 0 {
         return;
     }
     // SAFETY: KDSETMODE takes the mode by value.
-    let _ = unsafe { libc::ioctl(fd, KDSETMODE, KD_GRAPHICS) };
+    let _ = unsafe { libc::ioctl(fd, KDSETMODE as _, KD_GRAPHICS) };
     let _ = tty.write_all(b"\x1b[H\x1b[2J\x1b[3J\x1b[?25l");
     let _ = tty.flush();
 }
