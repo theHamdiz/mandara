@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.38.4 — 2026-11-25
+
 Brightness on amdgpu tracks the real panel level again, and Mandara Login no
 longer shows Hyprland's start-hyprland watchdog toast at the greeter.
 
