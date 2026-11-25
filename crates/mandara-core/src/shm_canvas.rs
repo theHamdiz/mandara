@@ -802,7 +802,7 @@ impl Host {
         let previous = s.outputs[i].canvas.take();
         let remapped = previous.is_some();
         if let Some(canvas) = previous {
-            canvas.destroy();
+            s.destroy_canvas(canvas);
         }
         let qh = s.qh.clone();
         let surface = s.compositor.create_surface(&qh, id);
@@ -870,7 +870,7 @@ impl Host {
     /// Destroys output `id`'s canvas.
     pub fn remove_canvas(&mut self, id: u32) {
         if let Some(c) = self.state.outputs.iter_mut().find(|o| o.global == id).and_then(|o| o.canvas.take()) {
-            c.destroy();
+            self.state.destroy_canvas(c);
             self.state.changed = true;
         }
     }
@@ -1413,9 +1413,9 @@ impl Planes for Host {
 
 impl Drop for Host {
     fn drop(&mut self) {
-        for o in &mut self.state.outputs {
-            if let Some(c) = o.canvas.take() {
-                c.destroy();
+        for i in 0..self.state.outputs.len() {
+            if let Some(c) = self.state.outputs[i].canvas.take() {
+                self.state.destroy_canvas(c);
             }
         }
         for s in &mut self.state.seats {
@@ -1453,7 +1453,7 @@ impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
                 if let Some(i) = state.outputs.iter().position(|o| o.global == name) {
                     let mut out = state.outputs.remove(i);
                     if let Some(c) = out.canvas.take() {
-                        c.destroy();
+                        state.destroy_canvas(c);
                     }
                     if let Some(xdg_output) = out.xdg_output.take() { xdg_output.destroy(); }
                     if out.output.version() >= 3 {
@@ -1564,7 +1564,7 @@ impl Dispatch<zwlr_layer_surface_v1::ZwlrLayerSurfaceV1, u32> for State {
                     && let Some(c) = output.canvas.take()
                 {
                     output.backoff.closed(c.created, Instant::now());
-                    c.destroy();
+                    state.destroy_canvas(c);
                 }
                 state.changed = true;
             }
@@ -1601,8 +1601,8 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
                 // Reset to the plain arrow only when the pointer is actually
                 // over a canvas root (else a sticky resize cursor from the
                 // last window would stay). Deduplicate only within one
-                // enter: Leave clears the cache so the next enter always
-                // replaces whatever another client set.
+                // enter: Leave and canvas destroy clear the cache so the
+                // next enter always replaces whatever another client set.
                 if output.is_some()
                     && let Some(seat) = state.seats.iter_mut().find(|s| s.pointer.as_ref() == Some(pointer))
                     && should_set_cursor_shape(seat.cursor_shape, wp_cursor_shape_device_v1::Shape::Default)
@@ -1676,18 +1676,29 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
 }
 
 /// Whether a new cursor-shape request would change what this seat last sent
-/// during the current enter (Leave clears the cache).
+/// during the current enter (Leave and canvas destroy clear the cache).
 fn should_set_cursor_shape(last: Option<wp_cursor_shape_device_v1::Shape>, next: wp_cursor_shape_device_v1::Shape) -> bool {
     last != Some(next)
 }
 
 /// Drop the cached shape so the next enter re-sends Default after another
-/// client may have changed the cursor.
+/// client may have changed the cursor, or after the surface that received
+/// the last set_shape is gone.
 fn clear_cursor_shape_cache(last: &mut Option<wp_cursor_shape_device_v1::Shape>) {
     *last = None;
 }
 
 impl State {
+    /// Destroys a canvas and drops every seat's cursor-shape cache. Leave may
+    /// not arrive for a destroyed focused surface; the cache must not outlive
+    /// the surface it was sent to.
+    fn destroy_canvas(&mut self, canvas: Canvas) {
+        canvas.destroy();
+        for seat in &mut self.seats {
+            clear_cursor_shape_cache(&mut seat.cursor_shape);
+        }
+    }
+
     /// Feeds one position to the shake detector (only while a shake level
     /// is set); a shake queues a [`SHAKE`] press there.
     fn feed_shake(&mut self, output: u32, x: f64, y: f64) {
@@ -1798,6 +1809,18 @@ mod tests {
         assert!(!should_set_cursor_shape(last, arrow), "still inside this enter");
         clear_cursor_shape_cache(&mut last);
         assert!(should_set_cursor_shape(last, arrow), "leave must force Default on the next enter");
+    }
+
+    #[test]
+    fn cursor_shape_is_resent_after_canvas_destroy_on_every_seat() {
+        // Mirrors State::destroy_canvas: Leave may not arrive for a destroyed
+        // focused surface, so every seat's cache is cleared with the canvas.
+        let arrow = wp_cursor_shape_device_v1::Shape::Default;
+        let mut seats = [Some(arrow), Some(arrow), None];
+        for last in &mut seats {
+            clear_cursor_shape_cache(last);
+        }
+        assert!(seats.iter().all(|last| should_set_cursor_shape(*last, arrow)));
     }
 
     #[test]
