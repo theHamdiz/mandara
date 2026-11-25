@@ -346,17 +346,13 @@ pub fn wipe(s: &mut String) {
     s.clear();
 }
 
-/// Blanks the login VT and hides its cursor. Escape sequences only: the
-/// session's [`crate::handoff`] wrapper puts the VT into graphics mode after
-/// greetd resets it to text. Calling [`crate::handoff::prepare_vt`] here
-/// would leave a real console blank after mock login tests succeed.
+/// Blanks the login VT and hides its cursor when `/dev/tty` is a real
+/// console VT. Escape sequences only (no `KD_GRAPHICS`): the session's
+/// [`crate::handoff`] wrapper enters graphics mode after greetd resets the
+/// VT to text. Mock login tests on a pty are a no-op so they don't clear a
+/// developer's terminal or hide the cursor.
 fn clear_console() {
-    use std::io::Write as _;
-    let Ok(mut tty) = std::fs::OpenOptions::new().write(true).open("/dev/tty") else {
-        return;
-    };
-    let _ = tty.write_all(b"\x1b[H\x1b[2J\x1b[3J\x1b[?25l");
-    let _ = tty.flush();
+    let _ = crate::handoff::blank_console_if_vt();
 }
 
 #[cfg(test)]

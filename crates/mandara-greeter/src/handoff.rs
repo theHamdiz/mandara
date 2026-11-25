@@ -12,12 +12,23 @@ use std::os::fd::AsRawFd as _;
 use std::os::unix::process::CommandExt as _;
 use std::process::Command;
 
-/// Linux `KDSETMODE` / `KDGETMODE` (from `<linux/kd.h>`). Stored as `u64`
-/// and cast at the call site: glibc's `ioctl` takes `c_ulong`, musl's takes
-/// `i32` (`libc::Ioctl`).
+/// `KDGETMODE` / `KDSETMODE` request numbers. Stored as `u64` and cast at the
+/// call site: glibc's `ioctl` takes `c_ulong`, musl's takes `i32`.
+#[cfg(target_os = "linux")]
 const KDGETMODE: u64 = 0x4B3B;
+#[cfg(target_os = "linux")]
 const KDSETMODE: u64 = 0x4B3A;
-/// Graphics mode: the VT does not draw a text console.
+
+/// FreeBSD `sys/consio.h`: `KDGETMODE = _IOR('K', 9, int)`,
+/// `KDSETMODE = _IOWINT('K', 10)`.
+#[cfg(target_os = "freebsd")]
+const KDGETMODE: u64 = 0x4004_4B09;
+#[cfg(target_os = "freebsd")]
+const KDSETMODE: u64 = 0x2004_4B0A;
+
+/// Graphics mode: the VT does not draw a text console (same value on Linux
+/// and FreeBSD).
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
 const KD_GRAPHICS: libc::c_int = 0x01;
 
 /// Runs as `mandara greeter handoff -- <session…>`: prepares the VT, then
@@ -32,24 +43,58 @@ pub fn run(argv: &[String]) -> anyhow::Result<()> {
     Err(anyhow::anyhow!("exec {program}: {err}"))
 }
 
-/// Puts `/dev/tty` into graphics mode and blanks it when it is a Linux VT.
-/// Best effort: a pty or a missing device is left alone.
+/// Puts `/dev/tty` into graphics mode and blanks it when it is a console VT.
+/// Best effort: a pty or a missing / unsupported device is left alone.
 pub fn prepare_vt() {
     let Ok(mut tty) = std::fs::OpenOptions::new().read(true).write(true).open("/dev/tty") else {
         return;
     };
-    let fd = tty.as_raw_fd();
-    let mut mode: libc::c_int = 0;
-    // SAFETY: KDGETMODE writes one int through the valid pointer; failure
-    // means this is not a Linux VT (pty, pipe, …). `as _` matches glibc
-    // (`c_ulong`) and musl (`i32`) ioctl request types.
-    if unsafe { libc::ioctl(fd, KDGETMODE as _, &mut mode) } != 0 {
+    if !enter_graphics(tty.as_raw_fd()) {
         return;
+    }
+    let _ = tty.write_all(b"\x1b[H\x1b[2J\x1b[3J\x1b[?25l");
+    let _ = tty.flush();
+}
+
+/// Clears and hides the cursor on a real console VT only. Returns whether a
+/// VT was touched — so mock login tests on a pty/developer terminal do nothing.
+pub fn blank_console_if_vt() -> bool {
+    let Ok(mut tty) = std::fs::OpenOptions::new().read(true).write(true).open("/dev/tty") else {
+        return false;
+    };
+    if !is_console_vt(tty.as_raw_fd()) {
+        return false;
+    }
+    let _ = tty.write_all(b"\x1b[H\x1b[2J\x1b[3J\x1b[?25l");
+    let _ = tty.flush();
+    true
+}
+
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+fn is_console_vt(fd: std::os::fd::RawFd) -> bool {
+    let mut mode: libc::c_int = 0;
+    // SAFETY: KDGETMODE writes one int; failure means not a console VT.
+    unsafe { libc::ioctl(fd, KDGETMODE as _, &mut mode) == 0 }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+fn is_console_vt(_fd: std::os::fd::RawFd) -> bool {
+    false
+}
+
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+fn enter_graphics(fd: std::os::fd::RawFd) -> bool {
+    if !is_console_vt(fd) {
+        return false;
     }
     // SAFETY: KDSETMODE takes the mode by value.
     let _ = unsafe { libc::ioctl(fd, KDSETMODE as _, KD_GRAPHICS) };
-    let _ = tty.write_all(b"\x1b[H\x1b[2J\x1b[3J\x1b[?25l");
-    let _ = tty.flush();
+    true
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+fn enter_graphics(_fd: std::os::fd::RawFd) -> bool {
+    false
 }
 
 /// Point stdout/stderr at `/dev/null` so session banners never hit the VT.
@@ -74,9 +119,7 @@ fn silence_stdio() {
 /// falls back to the stable installed greeter path, then `mandara` on PATH.
 fn handoff_exe() -> String {
     let reported = std::env::current_exe().ok().and_then(|p| p.into_os_string().into_string().ok());
-    let file_ok = reported.as_ref().is_some_and(|p| {
-        !p.ends_with(" (deleted)") && std::path::Path::new(p).is_file()
-    });
+    let file_ok = reported.as_ref().is_some_and(|p| !p.ends_with(" (deleted)") && std::path::Path::new(p).is_file());
     resolve_handoff_exe(reported.as_deref(), file_ok, std::path::Path::new(crate::install::INSTALLED_EXE).is_file())
 }
 
@@ -132,5 +175,20 @@ mod tests {
         assert_eq!(resolve_handoff_exe(Some(&deleted), false, false), "mandara");
         assert_eq!(resolve_handoff_exe(Some("/opt/mandara/mandara"), true, true), "/opt/mandara/mandara");
         assert_eq!(resolve_handoff_exe(None, false, true), crate::install::INSTALLED_EXE);
+    }
+
+    #[test]
+    fn blank_console_is_safe_without_a_console_vt() {
+        // cargo test runs on a pty in CI: KDGETMODE fails and this is a no-op
+        // (must not panic, clear the screen, or hide the cursor).
+        let _ = blank_console_if_vt();
+    }
+
+    #[cfg(target_os = "freebsd")]
+    #[test]
+    fn freebsd_kd_request_encodings_match_consio() {
+        // _IOR('K', 9, int) and _IOWINT('K', 10) from sys/consio.h / ioccom.h.
+        assert_eq!(KDGETMODE, 0x4004_4B09);
+        assert_eq!(KDSETMODE, 0x2004_4B0A);
     }
 }
