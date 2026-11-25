@@ -66,12 +66,35 @@ fn silence_stdio() {
     }
 }
 
+/// Pathname used as argv0 for the handoff wrapper. Prefers this process's
+/// executable; when the installer replaced it under us (`… (deleted)`),
+/// falls back to the stable installed greeter path, then `mandara` on PATH.
+fn handoff_exe() -> String {
+    let reported = std::env::current_exe().ok().and_then(|p| p.into_os_string().into_string().ok());
+    let file_ok = reported.as_ref().is_some_and(|p| {
+        !p.ends_with(" (deleted)") && std::path::Path::new(p).is_file()
+    });
+    resolve_handoff_exe(reported.as_deref(), file_ok, std::path::Path::new(crate::install::INSTALLED_EXE).is_file())
+}
+
+/// Picks a launchable pathname for the handoff wrapper.
+fn resolve_handoff_exe(reported: Option<&str>, file_ok: bool, installed_exists: bool) -> String {
+    if file_ok
+        && let Some(path) = reported.filter(|p| !p.is_empty())
+    {
+        return path.into();
+    }
+    if installed_exists {
+        return crate::install::INSTALLED_EXE.into();
+    }
+    "mandara".into()
+}
+
 /// Prefixes a Wayland session argv with this binary's handoff entry so the
 /// VT stays dark until the compositor owns the display.
 pub fn wrap_wayland_command(session: &[String]) -> Vec<String> {
-    let exe = std::env::current_exe().ok().and_then(|p| p.into_os_string().into_string().ok()).unwrap_or_else(|| "mandara".into());
     let mut out = Vec::with_capacity(session.len() + 4);
-    out.push(exe);
+    out.push(handoff_exe());
     out.push("greeter".into());
     out.push("handoff".into());
     out.push("--".into());
@@ -97,5 +120,14 @@ mod tests {
     fn wrap_keeps_session_arguments() {
         let wrapped = wrap_wayland_command(&["Hyprland".into(), "--config".into(), "/tmp/x.conf".into()]);
         assert_eq!(&wrapped[wrapped.len() - 3..], ["Hyprland", "--config", "/tmp/x.conf"]);
+    }
+
+    #[test]
+    fn deleted_current_exe_uses_the_installed_path() {
+        let deleted = format!("{} (deleted)", crate::install::INSTALLED_EXE);
+        assert_eq!(resolve_handoff_exe(Some(&deleted), false, true), crate::install::INSTALLED_EXE);
+        assert_eq!(resolve_handoff_exe(Some(&deleted), false, false), "mandara");
+        assert_eq!(resolve_handoff_exe(Some("/opt/mandara/mandara"), true, true), "/opt/mandara/mandara");
+        assert_eq!(resolve_handoff_exe(None, false, true), crate::install::INSTALLED_EXE);
     }
 }

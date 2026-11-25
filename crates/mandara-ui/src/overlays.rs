@@ -944,7 +944,7 @@ fn prefers_focus(app: &DesktopApp, cx: &App) -> bool {
 }
 
 /// The most recently used open window for `app`, if any (same matching as
-/// the dock: desktop id, `StartupWMClass`, reverse-DNS tails).
+/// the dock: desktop id, `StartupWMClass`, reverse-DNS tails, `[apps] id_map`).
 fn running_window_for(app: &DesktopApp, cx: &App) -> Option<u64> {
     let list = crate::windows::windows(cx)?.read(cx).list();
     list.iter()

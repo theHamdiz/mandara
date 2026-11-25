@@ -22,7 +22,7 @@ About → What's new shows it too.
   compositor — so greetd's text-mode reset between greeter and desktop no
   longer flashes a terminal.
 
-### Added
+### New
 
 - **Launcher: focus a running app.** Studio → Launcher → Starting apps →
   **Already-open apps** (`[launcher.launch] running_apps = "focus"`) focuses

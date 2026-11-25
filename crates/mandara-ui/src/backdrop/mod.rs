@@ -2050,8 +2050,10 @@ fn show(host: &mut Host, out: &mut Out, want: Want, bg: paint::Background, cut: 
     // Keep the root transparent so Umbriel's overview, which mirrors only
     // the root, has no solid tile. Hyprland skips compositing layer
     // subsurfaces when the parent buffer is fully transparent — leave an
-    // opaque black root there so the wallpaper planes stay visible.
-    host.set_base(id, hyprland_opaque_root());
+    // opaque black root there so the wallpaper planes stay visible. Live
+    // scenes sit on Background under a transparent canvas; an opaque root
+    // would cover them.
+    host.set_base(id, if want.live { None } else { hyprland_opaque_root() });
     Ok(())
 }
 

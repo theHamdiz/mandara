@@ -346,12 +346,17 @@ pub fn wipe(s: &mut String) {
     s.clear();
 }
 
-/// Blanks the login VT, hides its cursor and switches it to graphics mode
-/// so nothing shows on it between the greeter and the desktop. Best effort:
-/// only a real VT is touched. The session command is also wrapped with
-/// [`crate::handoff`] because greetd resets the VT to text after we exit.
+/// Blanks the login VT and hides its cursor. Escape sequences only: the
+/// session's [`crate::handoff`] wrapper puts the VT into graphics mode after
+/// greetd resets it to text. Calling [`crate::handoff::prepare_vt`] here
+/// would leave a real console blank after mock login tests succeed.
 fn clear_console() {
-    crate::handoff::prepare_vt();
+    use std::io::Write as _;
+    let Ok(mut tty) = std::fs::OpenOptions::new().write(true).open("/dev/tty") else {
+        return;
+    };
+    let _ = tty.write_all(b"\x1b[H\x1b[2J\x1b[3J\x1b[?25l");
+    let _ = tty.flush();
 }
 
 #[cfg(test)]
