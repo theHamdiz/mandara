@@ -171,7 +171,9 @@ Other kiosk compositors: `sudo mandara greeter install --compositor niri`
 (writes `/etc/mandara/greeter-niri.kdl` and runs `niri -c …`) or
 `--compositor hyprland` (writes `/etc/mandara/greeter-hyprland.conf`, or
 `/etc/mandara/greeter-hyprland.lua` when the installed Hyprland is 0.57 or
-newer — that version reads only Lua configs).
+newer — that version reads only Lua configs). The greeter config sets
+`misc.disable_watchdog_warning` so Hyprland does not warn about starting
+without `start-hyprland` (greetd launches the compositor directly).
 
 ### Uninstall
 

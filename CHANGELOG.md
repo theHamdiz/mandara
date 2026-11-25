@@ -6,6 +6,15 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Fixed
+
+- **Hyprland login-screen watchdog warning.** The generated Mandara Login
+  Hyprland config (`/etc/mandara/greeter-hyprland.lua` or `.conf`) sets
+  `misc.disable_watchdog_warning = true`, so boot no longer shows "Hyprland
+  was started without start-hyprland" when greetd launches Hyprland directly.
+  Re-run `sudo mandara greeter install --compositor hyprland` to refresh an
+  existing install. (#241)
+
 ## 0.38.3 — 2026-11-25
 
 Desktop right-click works again on Niri, Hyprland shows wallpapers instead of
