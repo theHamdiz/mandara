@@ -1534,9 +1534,10 @@ mod tests {
         assert_eq!(AppsTab::parse("Autostart"), Some(AppsTab::Startup));
         assert_eq!(AppsTab::parse("uninstall"), Some(AppsTab::Installed));
         assert_eq!(AppsTab::parse("weather"), None);
-        // The Launching tab shows the launcher's launch options (not auto-paste).
+        // The Launching tab shows the launcher's launch options (not auto-paste):
+        // wrapper, systemd scope, terminal, already-open apps.
         let launch = registry::in_section(Section::Launcher).filter(|s| s.group == LAUNCHING && !LAUNCHER_ONLY.contains(&s.path)).count();
-        assert_eq!(launch, 3);
+        assert_eq!(launch, 4);
     }
 
     #[test]
