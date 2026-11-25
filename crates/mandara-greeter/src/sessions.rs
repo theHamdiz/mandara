@@ -28,9 +28,13 @@ impl Session {
     /// The command greetd should run.
     pub fn command(&self) -> Vec<String> {
         match self.kind {
-            SessionKind::Wayland => self.exec.clone(),
+            // Wayland: wrap with `mandara greeter handoff` so the login VT
+            // stays in graphics mode until the compositor takes the display
+            // (greetd itself switches it back to text between greeter exit
+            // and the session).
+            SessionKind::Wayland => crate::handoff::wrap_wayland_command(&self.exec),
             // X sessions need an X server; startx runs the session's Exec
-            // as its client.
+            // as its client. No VT handoff: startx owns the display.
             SessionKind::X11 => ["startx", "/usr/bin/env"].iter().map(|s| s.to_string()).chain(self.exec.iter().cloned()).collect(),
         }
     }
@@ -267,7 +271,8 @@ DesktopNames=niri
         let s = parse_desktop("niri", NIRI, SessionKind::Wayland, "en_US.UTF-8", &|_| true).unwrap();
         assert_eq!(s.name, "Niri");
         assert_eq!(s.exec, vec!["niri-session"]);
-        assert_eq!(s.command(), vec!["niri-session"]);
+        let cmd = s.command();
+        assert!(cmd.ends_with(&["greeter".into(), "handoff".into(), "--".into(), "niri-session".into()]), "{cmd:?}");
         assert!(s.env().contains(&"XDG_SESSION_TYPE=wayland".to_string()));
         assert!(s.env().contains(&"XDG_CURRENT_DESKTOP=niri".to_string()));
         let ar = parse_desktop("niri", NIRI, SessionKind::Wayland, "ar_EG.UTF-8", &|_| true).unwrap();

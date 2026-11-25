@@ -11025,3 +11025,9 @@
 "Taut" = "Ngumu"
 "Focus and cycle its windows, or minimize and restore" = "Lenga na zungusha madirisha yake, au punguza na urejeshe"
 "Every app icon in the launcher sits on one shape, so they read as a set; Theme's own keeps each icon as drawn. The dock draws freestanding icons." = "Kila aikoni ya programu kwenye kizinduzi hukaa kwenye umbo moja ili zisomwe kama seti; “Ya mandhari yenyewe” huacha kila aikoni kama ilivyochorwa. Dock huchora aikoni zinazojitegemea."
+
+"Already-open apps" = "Programu zilizofunguliwa"
+"Always launch" = "Anzisha kila wakati"
+"Focus running window" = "Zingatia dirisha lililofunguliwa"
+"Focus the running window, or always start another instance. Shift+Enter or Ctrl+Enter always launches; desktop actions always launch" = "Zingatia dirisha lililofunguliwa, au anzisha kila wakati mfano mwingine. Shift+Enter au Ctrl+Enter huanzisha kila wakati; vitendo vya eneo-kazi huanzisha kila wakati"
+"Switch to" = "Badilisha kwenda"

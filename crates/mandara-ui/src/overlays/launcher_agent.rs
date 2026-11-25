@@ -256,7 +256,7 @@ impl LauncherView {
             self.agent_refilter_selected(Some(command.to_owned()), cx);
         } else if key == "setup" {
             self.close(cx);
-            execute(Effect::Commands(vec![vec!["studio".into(), "ai-shell-agent".into()]]), cx);
+            execute(Effect::Commands(vec![vec!["studio".into(), "ai-shell-agent".into()]]), false, cx);
         } else if let Ok(i) = key.parse::<usize>() {
             if let Some(example) = EXAMPLES.get(i) {
                 self.set_query(format!("!{example}"), cx);
@@ -282,7 +282,7 @@ impl LauncherView {
                 self.selected = 0;
             } else {
                 self.close(cx);
-                execute(Effect::Commands(words), cx);
+                execute(Effect::Commands(words), false, cx);
             }
         }
         cx.notify();

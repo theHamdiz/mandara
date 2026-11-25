@@ -1507,7 +1507,7 @@ impl Renderer {
             }
             out.widgets.remove_all(host, id);
             out.reset();
-            host.set_base(id, None);
+            host.set_base(id, None); // no wallpaper: stay clear for other daemons
             host.commit(id, false)?;
             return Ok(());
         };
@@ -2047,10 +2047,18 @@ fn show(host: &mut Host, out: &mut Out, want: Want, bg: paint::Background, cut: 
         out.trans = Some(Trans { from, kind, start: Instant::now(), dur, rtl: scene.rtl, raw, baked_cut: baked == Some(true) });
     }
     // Posters include their fill; decoded video keeps it on a child plane.
-    // Keep the root transparent so
-    // Umbriel's overview, which mirrors only the root, has no solid tile.
-    host.set_base(id, None);
+    // Keep the root transparent so Umbriel's overview, which mirrors only
+    // the root, has no solid tile. Hyprland skips compositing layer
+    // subsurfaces when the parent buffer is fully transparent — leave an
+    // opaque black root there so the wallpaper planes stay visible.
+    host.set_base(id, hyprland_opaque_root());
     Ok(())
+}
+
+/// Opaque black root under wallpaper planes on Hyprland; transparent
+/// everywhere else (Umbriel overview mirrors the root).
+fn hyprland_opaque_root() -> Option<[u8; 4]> {
+    std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").map(|_| [0, 0, 0, 255])
 }
 
 /// The transition surface's request for a change on `out` to `slot`

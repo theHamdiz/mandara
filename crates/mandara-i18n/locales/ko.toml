@@ -11124,3 +11124,9 @@
 "Taut" = "팽팽함"
 "Focus and cycle its windows, or minimize and restore" = "포커스하고 창을 순환하거나, 최소화/복원합니다"
 "Every app icon in the launcher sits on one shape, so they read as a set; Theme's own keeps each icon as drawn. The dock draws freestanding icons." = "런처의 앱 아이콘은 하나의 모양에 올려 세트로 보이게 합니다. ‘테마 자체’는 그려진 그대로 둡니다. 독은 독립형 아이콘을 그립니다."
+
+"Already-open apps" = "이미 열린 앱"
+"Always launch" = "항상 실행"
+"Focus running window" = "실행 중인 창으로 포커스"
+"Focus the running window, or always start another instance. Shift+Enter or Ctrl+Enter always launches; desktop actions always launch" = "실행 중인 창으로 포커스하거나 항상 새 인스턴스를 실행합니다. Shift+Enter 또는 Ctrl+Enter는 항상 실행하며, 데스크톱 작업도 항상 실행합니다"
+"Switch to" = "전환"

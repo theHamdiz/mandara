@@ -440,7 +440,7 @@ impl StudioView {
                     return;
                 };
                 update_config(cx, move |c| {
-                    c.launcher.overrides.entry(id).or_insert_with(|| mandara_config::workflow::AppOverride { name, icon: String::new() });
+                    c.launcher.overrides.entry(id).or_insert_with(|| mandara_config::workflow::AppOverride { name, icon: String::new(), running: None });
                 });
             }),
             cx,

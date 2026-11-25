@@ -571,6 +571,7 @@ Already bound in your compositor config: {chords}
 Already in your rules below
 Already preparing a share
 Already waiting for the next boot: {packages}
+Already-open apps
 Also check Flatpak apps and runtimes
 Also check and update AUR packages with the installed AUR helper
 Also checks the plugins you installed from the marketplace (Mandara's own plugins update with the shell)
@@ -597,6 +598,7 @@ Always
 Always above other windows
 Always available
 Always clear of the bar; left and right draw a vertical pill
+Always launch
 Always on
 Always open on the first tab
 Amber
@@ -2806,7 +2808,9 @@ Focus and close windows
 Focus and cycle its windows, or minimize and restore
 Focus follows the pointer
 Focus next window
+Focus running window
 Focus session {count} done
+Focus the running window, or always start another instance. Shift+Enter or Ctrl+Enter always launches; desktop actions always launch
 Focus timer
 Focus timer with breaks and session tracking
 Focus {direction}
@@ -7628,6 +7632,7 @@ Switch on the Prayer times plugin to see today's times
 Switch on the Screen time plugin to record your day
 Switch the interface language instantly
 Switch the login screen to {name}?
+Switch to
 Switch to a saved profile
 Switch to a theme preset (OKLCH crossfade)
 Switch to dark mode

@@ -137,7 +137,7 @@ mod tests {
                         let theme = root.join(name);
                         let mut config = ShellConfig::default();
                         config.appearance.icon_theme = Some(theme.to_string_lossy().into_owned());
-                        if icon == "override" { config.launcher.overrides.insert("demo".into(), mandara_config::workflow::AppOverride { name: String::new(), icon: icon.into() }); }
+                        if icon == "override" { config.launcher.overrides.insert("demo".into(), mandara_config::workflow::AppOverride { name: String::new(), icon: icon.into(), running: None }); }
                         let request = CatalogRequest::new(&config, &[]);
                         barrier.wait();
                         let catalog = read_catalog_from(request, |language, theme| apps::discover_in_for(&[root.to_path_buf()], language, theme));

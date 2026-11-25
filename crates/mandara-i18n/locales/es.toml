@@ -11361,3 +11361,9 @@
 "Taut" = "Tenso"
 "Focus and cycle its windows, or minimize and restore" = "Enfocar y ciclar sus ventanas, o minimizar y restaurar"
 "Every app icon in the launcher sits on one shape, so they read as a set; Theme's own keeps each icon as drawn. The dock draws freestanding icons." = "Cada icono de app en el lanzador usa una misma forma para leerse como conjunto; «La del tema» deja cada icono como se dibujó. El dock dibuja iconos independientes."
+
+"Already-open apps" = "Apps ya abiertas"
+"Always launch" = "Abrir siempre"
+"Focus running window" = "Enfocar la ventana abierta"
+"Focus the running window, or always start another instance. Shift+Enter or Ctrl+Enter always launches; desktop actions always launch" = "Enfoca la ventana abierta, o abre siempre otra instancia. Shift+Enter o Ctrl+Enter siempre abren; las acciones de escritorio siempre abren"
+"Switch to" = "Cambiar a"

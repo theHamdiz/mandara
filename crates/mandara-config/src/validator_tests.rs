@@ -197,14 +197,16 @@ fn hyprland_validates_every_dropin() {
 }
 
 
-/// Niri keeps the wallpaper in the Overview backdrop; without see-through
-/// workspaces it would only show in the Overview (found in a nested niri
-/// 26.04 session: a plain grey desktop).
+/// Niri needs see-through workspaces so the Background-layer wallpaper shows
+/// outside the Overview. Mandara must not set `place-within-backdrop`: that
+/// rule makes Niri ignore all pointer input on the wallpaper, so the desktop
+/// right-click menu never opens.
 #[test]
 fn niri_wallpaper_shows_outside_the_overview() {
     for (_, cfg, colors) in configs() {
         let text = emit_niri(&managed(&cfg, colors, None)).text;
-        assert!(text.contains("place-within-backdrop true") && text.contains("background-color \"transparent\""), "{text}");
+        assert!(text.contains("background-color \"transparent\""), "{text}");
+        assert!(!text.contains("place-within-backdrop"), "backdrop placement kills desktop-menu input:\n{text}");
         assert_eq!(text.matches("\nlayout {").count(), 1, "niri rejects a second `layout` node in one file:\n{text}");
     }
 }

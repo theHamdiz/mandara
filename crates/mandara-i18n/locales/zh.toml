@@ -11362,3 +11362,9 @@
 "Taut" = "紧绷"
 "Focus and cycle its windows, or minimize and restore" = "聚焦并循环其窗口，或最小化/还原"
 "Every app icon in the launcher sits on one shape, so they read as a set; Theme's own keeps each icon as drawn. The dock draws freestanding icons." = "启动器里的每个应用图标使用同一形状，以便成套阅读；“主题自带”保持每个图标原样。程序坞绘制独立图标。"
+
+"Already-open apps" = "已打开的应用"
+"Always launch" = "始终启动"
+"Focus running window" = "聚焦到已打开窗口"
+"Focus the running window, or always start another instance. Shift+Enter or Ctrl+Enter always launches; desktop actions always launch" = "聚焦到已打开的窗口，或始终再启动一个实例。Shift+Enter 或 Ctrl+Enter 始终启动；桌面操作始终启动"
+"Switch to" = "切换到"

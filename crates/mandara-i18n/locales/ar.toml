@@ -11370,3 +11370,9 @@
 "Taut" = "مشدود"
 "Focus and cycle its windows, or minimize and restore" = "التركيز وتدوير نوافذها، أو التصغير والاستعادة"
 "Every app icon in the launcher sits on one shape, so they read as a set; Theme's own keeps each icon as drawn. The dock draws freestanding icons." = "كل أيقونة تطبيق في المشغّل تجلس على شكل واحد لتُقرأ كمجموعة؛ «شكل السمة» يبقي كل أيقونة كما رُسمت. الشريط يرسم أيقونات مستقلة."
+
+"Already-open apps" = "تطبيقات مفتوحة"
+"Always launch" = "تشغيل دائمًا"
+"Focus running window" = "التركيز على النافذة المفتوحة"
+"Focus the running window, or always start another instance. Shift+Enter or Ctrl+Enter always launches; desktop actions always launch" = "التركيز على النافذة المفتوحة، أو تشغيل نسخة جديدة دائمًا. Shift+Enter أو Ctrl+Enter يشغّلان دائمًا؛ وإجراءات سطح المكتب تشغّل دائمًا"
+"Switch to" = "التبديل إلى"

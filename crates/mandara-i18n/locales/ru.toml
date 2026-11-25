@@ -11366,3 +11366,9 @@
 "Taut" = "Тугой"
 "Focus and cycle its windows, or minimize and restore" = "Сфокусировать и переключать окна, или свернуть и восстановить"
 "Every app icon in the launcher sits on one shape, so they read as a set; Theme's own keeps each icon as drawn. The dock draws freestanding icons." = "Каждая иконка приложения в панели запуска сидит на одной форме, чтобы читаться набором; «Своя темы» оставляет иконку как нарисована. Док рисует самостоятельные иконки."
+
+"Already-open apps" = "Уже открытые приложения"
+"Always launch" = "Всегда запускать"
+"Focus running window" = "Перейти к открытому окну"
+"Focus the running window, or always start another instance. Shift+Enter or Ctrl+Enter always launches; desktop actions always launch" = "Перейти к открытому окну или всегда запускать новый экземпляр. Shift+Enter или Ctrl+Enter всегда запускают; действия рабочего стола всегда запускают"
+"Switch to" = "Переключиться на"

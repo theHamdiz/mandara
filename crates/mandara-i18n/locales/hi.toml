@@ -11369,3 +11369,9 @@
 "Taut" = "तनावपूर्ण"
 "Focus and cycle its windows, or minimize and restore" = "फ़ोकस करें और विंडो चक्र चलाएँ, या छोटा करें और पुनर्स्थापित करें"
 "Every app icon in the launcher sits on one shape, so they read as a set; Theme's own keeps each icon as drawn. The dock draws freestanding icons." = "लॉन्चर में हर ऐप आइकन एक आकार पर बैठता है ताकि वे एक सेट लगें; थीम का अपना हर आइकन जैसा खींचा गया वैसा रखता है। डॉक स्वतंत्र आइकन बनाता है।"
+
+"Already-open apps" = "पहले से खुले ऐप"
+"Always launch" = "हमेशा लॉन्च करें"
+"Focus running window" = "चल रहे विंडो पर फ़ोकस"
+"Focus the running window, or always start another instance. Shift+Enter or Ctrl+Enter always launches; desktop actions always launch" = "चल रहे विंडो पर फ़ोकस करें, या हमेशा नया इंस्टेंस लॉन्च करें। Shift+Enter या Ctrl+Enter हमेशा लॉन्च करते हैं; डेस्कटॉप क्रियाएँ हमेशा लॉन्च करती हैं"
+"Switch to" = "इस पर जाएँ"

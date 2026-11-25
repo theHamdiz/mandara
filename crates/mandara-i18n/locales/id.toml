@@ -11125,3 +11125,9 @@
 "Taut" = "Kencang"
 "Focus and cycle its windows, or minimize and restore" = "Fokus dan putar jendelanya, atau ciutkan dan pulihkan"
 "Every app icon in the launcher sits on one shape, so they read as a set; Theme's own keeps each icon as drawn. The dock draws freestanding icons." = "Setiap ikon aplikasi di peluncur memakai satu bentuk agar terbaca sebagai satu set; “Milik tema” menjaga setiap ikon seperti digambar. Dock menggambar ikon mandiri."
+
+"Already-open apps" = "Aplikasi yang sudah terbuka"
+"Always launch" = "Selalu jalankan"
+"Focus running window" = "Fokus ke jendela yang berjalan"
+"Focus the running window, or always start another instance. Shift+Enter or Ctrl+Enter always launches; desktop actions always launch" = "Fokus ke jendela yang berjalan, atau selalu jalankan instance lain. Shift+Enter atau Ctrl+Enter selalu menjalankan; aksi desktop selalu menjalankan"
+"Switch to" = "Beralih ke"

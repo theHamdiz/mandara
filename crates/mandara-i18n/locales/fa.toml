@@ -11125,3 +11125,9 @@
 "Taut" = "کشیده"
 "Focus and cycle its windows, or minimize and restore" = "تمرکز و چرخاندن پنجره‌ها، یا کمینه و بازگردانی"
 "Every app icon in the launcher sits on one shape, so they read as a set; Theme's own keeps each icon as drawn. The dock draws freestanding icons." = "هر شمایل برنامه در راه‌انداز روی یک شکل می‌نشیند تا یک مجموعه خوانده شود؛ «خود تم» هر شمایل را همان‌گونه که کشیده شده نگه می‌دارد. داک شمایل‌های مستقل می‌کشد."
+
+"Already-open apps" = "برنامه‌های باز"
+"Always launch" = "همیشه اجرا کن"
+"Focus running window" = "تمرکز روی پنجرهٔ در حال اجرا"
+"Focus the running window, or always start another instance. Shift+Enter or Ctrl+Enter always launches; desktop actions always launch" = "روی پنجرهٔ در حال اجرا تمرکز کن، یا همیشه نمونهٔ دیگری اجرا کن. Shift+Enter یا Ctrl+Enter همیشه اجرا می‌کنند؛ کنش‌های رومیزی همیشه اجرا می‌کنند"
+"Switch to" = "رفتن به"

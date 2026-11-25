@@ -11026,3 +11026,9 @@
 "Taut" = "బిగువు"
 "Focus and cycle its windows, or minimize and restore" = "ఫోకస్ చేసి విండోలు సైకిల్ చేయండి, లేదా మినిమైజ్/రీస్టోర్ చేయండి"
 "Every app icon in the launcher sits on one shape, so they read as a set; Theme's own keeps each icon as drawn. The dock draws freestanding icons." = "లాంచర్‌లో ప్రతి యాప్ చిహ్నం ఒక ఆకారంపై ఉంటుంది కాబట్టి సెట్‌గా కనిపిస్తాయి; థీమ్ స్వంతం ప్రతి చిహ్నాన్ని గీసినట్టే ఉంచుతుంది. డాక్ స్వతంత్ర చిహ్నాలు గీస్తుంది."
+
+"Already-open apps" = "ఇప్పటికే తెరిచిన యాప్‌లు"
+"Always launch" = "ఎల్లప్పుడూ ప్రారంభించు"
+"Focus running window" = "నడుస్తున్న విండోపై దృష్టి పెట్టు"
+"Focus the running window, or always start another instance. Shift+Enter or Ctrl+Enter always launches; desktop actions always launch" = "నడుస్తున్న విండోపై దృష్టి పెట్టండి, లేదా ఎల్లప్పుడూ మరో ఉదాహరణను ప్రారంభించండి. Shift+Enter లేదా Ctrl+Enter ఎల్లప్పుడూ ప్రారంభిస్తాయి; డెస్క్‌టాప్ చర్యలు ఎల్లప్పుడూ ప్రారంభిస్తాయి"
+"Switch to" = "దీనికి మార్చు"

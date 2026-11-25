@@ -814,6 +814,11 @@ under the field, follow-up prompts (OTP codes, "new password") reuse it.
 * **Black screen / greetd falls back to a text prompt** — check
   `journalctl -u greetd -b`. Make sure `cage` is installed and that
   `/usr/local/lib/mandara/mandara-greeter greeter` exists and is executable.
+* **A TTY/terminal flashes between login and the desktop** — Mandara wraps
+  every Wayland session with `mandara greeter handoff`, which keeps the login
+  VT in graphics mode until the compositor takes over. Update Mandara and
+  refresh the installed greeter with `sudo mandara greeter use mandara --apply`
+  so the new handoff is on the path greetd runs.
 * **"GREETD_SOCK is not set"** — `mandara greeter` without `--demo` only runs
   under greetd.
 * **No avatar** — the greeter user can't read `~/.face`; set a picture in
