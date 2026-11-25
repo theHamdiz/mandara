@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Brightness steps and the OSD percentage track the real amdgpu scale again.
+
 ### Fixed
 
 - **amdgpu brightness steps and percentage.** Mandara reads the panel level
