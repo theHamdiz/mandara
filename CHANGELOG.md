@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.38.3 — 2026-11-25
+
 Desktop right-click works again on Niri, Hyprland shows wallpapers instead of
 a black hole, Mandara Login no longer flashes a TTY into the session, and the
 launcher can focus a running app instead of starting another one.
