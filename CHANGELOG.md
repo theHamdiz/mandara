@@ -6,6 +6,26 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Brightness on amdgpu tracks the real panel level again, and Mandara Login no
+longer shows Hyprland's start-hyprland watchdog toast at the greeter.
+
+### Fixed
+
+- **amdgpu brightness steps and percentage.** Mandara reads the panel level
+  from sysfs `brightness` (the same linear scale logind writes), not
+  `actual_brightness`. On amdgpu that second file is a non-linear panel
+  curve that never reaches max, so up/down looked stuck or jumped to the
+  floor and full brightness showed about 89%. External changes (including
+  `brightnessctl`) still drive the OSD: the watcher keeps polling
+  `actual_brightness` for notifications, then re-reads `brightness` for
+  the value. The quick-settings and sidebar sliders share this path. (#240)
+- **Hyprland login-screen watchdog warning.** The generated Mandara Login
+  Hyprland config (`/etc/mandara/greeter-hyprland.lua` or `.conf`) sets
+  `misc.disable_watchdog_warning = true`, so boot no longer shows "Hyprland
+  was started without start-hyprland" when greetd launches Hyprland directly.
+  Re-run `sudo mandara greeter install --compositor hyprland` to refresh an
+  existing install. (#241)
+
 ## 0.38.3 — 2026-11-25
 
 Desktop right-click works again on Niri, Hyprland shows wallpapers instead of
