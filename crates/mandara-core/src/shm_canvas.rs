@@ -260,10 +260,10 @@ struct Seat {
     seat: wl_seat::WlSeat,
     pointer: Option<wl_pointer::WlPointer>,
     shape: Option<wp_cursor_shape_device_v1::WpCursorShapeDeviceV1>,
-    /// Last shape sent on this seat's cursor-shape device, so a repeat
-    /// enter over the canvas does not rebuild the compositor's sprite
-    /// (that swap is what made the cursor look glitchy once the wallpaper
-    /// started receiving pointer input again).
+    /// Last shape sent on this seat during the current pointer enter.
+    /// Cleared on Leave so the next enter re-sends Default after another
+    /// client may have changed the cursor; within one enter it skips a
+    /// repeat set_shape that would rebuild the sprite for nothing.
     cursor_shape: Option<wp_cursor_shape_device_v1::Shape>,
     /// Follows drags over the canvas (for the shake), never accepts them.
     data_device: Option<wl_data_device::WlDataDevice>,
@@ -1600,10 +1600,9 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
                 state.shake.reset();
                 // Reset to the plain arrow only when the pointer is actually
                 // over a canvas root (else a sticky resize cursor from the
-                // last window would stay). Skip a repeat Default: Niri
-                // rebuilds the sprite on every set_shape, and that swap
-                // against the xcursor theme looked like a glitchy cursor
-                // once the wallpaper took pointer input again.
+                // last window would stay). Deduplicate only within one
+                // enter: Leave clears the cache so the next enter always
+                // replaces whatever another client set.
                 if output.is_some()
                     && let Some(seat) = state.seats.iter_mut().find(|s| s.pointer.as_ref() == Some(pointer))
                     && should_set_cursor_shape(seat.cursor_shape, wp_cursor_shape_device_v1::Shape::Default)
@@ -1664,6 +1663,9 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
                     let (x, y) = state.pointer.map_or((f64::NAN, f64::NAN), |p| (p.1, p.2));
                     state.drag = Some(Drag { output, x, y, button, released: true });
                 }
+                if let Some(seat) = state.seats.iter_mut().find(|s| s.pointer.as_ref() == Some(pointer)) {
+                    clear_cursor_shape_cache(&mut seat.cursor_shape);
+                }
                 state.pointer = None;
                 state.scroll = 0.0;
                 state.shake.reset();
@@ -1673,9 +1675,16 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
     }
 }
 
-/// Whether a new cursor-shape request would change what this seat last sent.
+/// Whether a new cursor-shape request would change what this seat last sent
+/// during the current enter (Leave clears the cache).
 fn should_set_cursor_shape(last: Option<wp_cursor_shape_device_v1::Shape>, next: wp_cursor_shape_device_v1::Shape) -> bool {
     last != Some(next)
+}
+
+/// Drop the cached shape so the next enter re-sends Default after another
+/// client may have changed the cursor.
+fn clear_cursor_shape_cache(last: &mut Option<wp_cursor_shape_device_v1::Shape>) {
+    *last = None;
 }
 
 impl State {
@@ -1780,6 +1789,15 @@ mod tests {
         assert!(should_set_cursor_shape(None, arrow));
         assert!(!should_set_cursor_shape(Some(arrow), arrow));
         assert!(should_set_cursor_shape(Some(arrow), wp_cursor_shape_device_v1::Shape::Pointer));
+    }
+
+    #[test]
+    fn cursor_shape_is_resent_after_leave() {
+        let arrow = wp_cursor_shape_device_v1::Shape::Default;
+        let mut last = Some(arrow);
+        assert!(!should_set_cursor_shape(last, arrow), "still inside this enter");
+        clear_cursor_shape_cache(&mut last);
+        assert!(should_set_cursor_shape(last, arrow), "leave must force Default on the next enter");
     }
 
     #[test]
