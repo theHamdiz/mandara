@@ -1966,8 +1966,8 @@ fn overview_root_size(geom: Geom, viewport: bool) -> (u32, u32) {
     )
 }
 
-/// A small copy of the wallpaper for compositors that mirror only the root
-/// surface, e.g. Umbriel's workspace overview.
+/// A wallpaper copy for compositors that mirror only the root surface,
+/// e.g. Umbriel's workspace overview.
 fn overview_root_pixels(pixmap: &tiny_skia::Pixmap, size: (u32, u32)) -> Option<Vec<u8>> {
     let src = image::RgbaImage::from_raw(pixmap.width(), pixmap.height(), pixmap.data().to_vec())?;
     Some(image::imageops::resize(&src, size.0, size.1, FilterType::Lanczos3).into_raw())
@@ -1993,16 +1993,16 @@ fn paint_overview_root(host: &mut Host, id: u32, pixmap: &tiny_skia::Pixmap, geo
         host.set_base(id, fallback);
         return;
     };
-    match host.set_base_pixels(id, size, |dst, abgr| {
-        write_root_pixels(dst, &pixels, abgr);
-        Ok::<(), anyhow::Error>(())
-    }) {
-        Ok(true) => {}
-        Ok(false) => host.set_base(id, fallback),
-        Err(err) => {
-            tracing::warn!("wallpaper overview root: {err:#}");
-            host.set_base(id, fallback);
-        }
+    let applied =
+        match host.set_base_pixels(id, size, |dst, abgr| write_root_pixels(dst, &pixels, abgr)) {
+            Ok(applied) => applied,
+            Err(err) => {
+                tracing::warn!("wallpaper overview root: {err:#}");
+                false
+            }
+        };
+    if !applied {
+        host.set_base(id, fallback);
     }
 }
 
@@ -2075,9 +2075,10 @@ fn show(host: &mut Host, out: &mut Out, want: Want, bg: paint::Background, cut: 
     let slot = Slot { want: want.clone(), tone: bg.tone, cut, cut_key, cut_fade: CutFade::Shown, cut_loading: None, cut_refresh: false };
     let pixmap = bg.pixmap;
     // Live scenes sit on Background under a transparent canvas; an opaque
-    // root would cover them. Otherwise the root holds a small wallpaper
-    // copy: Umbriel's overview mirrors only the root, while Hyprland needs
-    // an opaque root for the wallpaper planes to composite at all.
+    // root would cover them. Otherwise the root holds a wallpaper copy,
+    // downscaled when a viewporter can stretch it: Umbriel's overview
+    // mirrors only the root. Hyprland's fallback is opaque black so the
+    // wallpaper planes still composite when no copy can be painted.
     if want.live {
         host.set_base(id, None);
     } else {
@@ -2118,7 +2119,6 @@ fn show(host: &mut Host, out: &mut Out, want: Want, bg: paint::Background, cut: 
         }
         out.trans = Some(Trans { from, kind, start: Instant::now(), dur, rtl: scene.rtl, raw, baked_cut: baked == Some(true) });
     }
-    // Posters include their fill; decoded video keeps it on a child plane.
     Ok(())
 }
 
@@ -2773,7 +2773,7 @@ mod tests {
     }
 
     #[test]
-    fn overview_root_copy_is_small_and_keeps_aspect() {
+    fn overview_root_size_tracks_viewport() {
         assert_eq!(overview_root_size(geom(), true), (640, 360));
         assert_eq!(overview_root_size(geom(), false), geom().physical);
         let small = Geom { physical: (480, 270), ..geom() };

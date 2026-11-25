@@ -7,9 +7,9 @@
 //! connection — the approach the lock screen ([`crate::session_lock`])
 //! proved — and gives every output one `zwlr_layer_surface_v1` *canvas*:
 //!
-//! * the root surface is a shared-memory buffer stretched over the output by
-//!   `wp_viewporter`: a 1 × 1 fill pixel, or a small wallpaper copy that
-//!   compositors which mirror only the root (Umbriel's overview) can show;
+//! * the root surface is a shared-memory buffer, a 1 × 1 fill pixel or a
+//!   wallpaper copy (downscaled when `wp_viewporter` can stretch it) that
+//!   compositors mirroring only the root (Umbriel's overview) can show;
 //! * each *plane* is a synchronized `wl_subsurface` with its own shm buffer,
 //!   its own position and size (only the pixels it covers), an optional
 //!   `wp_alpha_modifier_v1` multiplier (crossfades done by the compositor at
@@ -401,8 +401,8 @@ struct Canvas {
     root: Option<ShmBuffer>,
     root_rgba: Option<[u8; 4]>,
     /// The root holds pixels supplied by [`Host::set_base_pixels`], not a
-    /// solid fill colour. It stays small: the opaque wallpaper itself lives
-    /// on a child plane.
+    /// solid fill colour. It's downscaled only when a viewporter can stretch
+    /// it back over the output; the wallpaper itself is on a child plane.
     root_pixels: bool,
     root_dirty: bool,
     planes: Vec<Plane>,
@@ -907,11 +907,16 @@ impl Host {
         }
     }
 
-    /// Puts caller-painted pixels on the root surface, scaled to the output.
-    /// `size` is the buffer size: an output-sized buffer when there is no
-    /// `wp_viewporter`, otherwise a small copy (the wallpaper itself is
-    /// painted on a child plane at full resolution).
-    pub fn set_base_pixels(&mut self, id: u32, size: (u32, u32), draw: impl FnOnce(&mut [u8], bool) -> Result<()>) -> Result<bool> {
+    /// Attaches caller-painted pixels as the root buffer. `size` must be
+    /// output-sized without a viewporter; with one it can be a smaller copy
+    /// that the compositor scales. The callback gets the buffer and whether
+    /// its channels are ABGR.
+    pub fn set_base_pixels(
+        &mut self,
+        id: u32,
+        size: (u32, u32),
+        draw: impl FnOnce(&mut [u8], bool),
+    ) -> Result<bool> {
         let (abgr, shm, qh) = (self.state.abgr, self.state.shm.clone(), self.state.qh.clone());
         let Some(c) = self.state.canvas_mut(id) else { return Ok(false) };
         if !c.configured {
@@ -919,7 +924,7 @@ impl Host {
         }
         let (w, h) = (size.0.max(1), size.1.max(1));
         let mut buf = new_buffer(&shm, &qh, w, h, abgr)?;
-        draw(&mut buf.map[..], abgr)?;
+        draw(&mut buf.map[..], abgr);
         buf.busy.store(true, Ordering::Release);
         c.surface.attach(Some(&buf.buffer), 0, 0);
         c.surface.damage_buffer(0, 0, w as i32, h as i32);
