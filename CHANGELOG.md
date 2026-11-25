@@ -6,6 +6,14 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.38.6 — 2026-11-25
+
+The changes in this release, taken from its commit history.
+
+### Changes
+
+- Show wallpaper on Umbriel overview (#245).
+
 ## 0.38.5 — 2026-11-25
 
 The changes in this release, taken from its commit history.
