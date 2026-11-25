@@ -3,9 +3,15 @@
 //! `Session.SetBrightness` so no root or udev rule is needed) and the
 //! keyboard Caps Lock LED.
 //!
-//! The backlight watcher blocks in `poll(2)` on `actual_brightness`, which
-//! the kernel `sysfs_notify`s on every change (hotkeys and sysfs writes), so
-//! it costs nothing while the brightness is idle. Machines without a
+//! Levels and step maths read the `brightness` sysfs attribute — the same
+//! linear scale logind's `SetBrightness` and tools like `brightnessctl`
+//! write. On some drivers (notably amdgpu) `actual_brightness` is the
+//! panel's non-linear curve and never reaches `max_brightness`, so using it
+//! for the level makes steps stall and the percentage sit below 100 %.
+//!
+//! The backlight watcher still blocks in `poll(2)` on `actual_brightness`
+//! when present (the kernel `sysfs_notify`s that file on every change), then
+//! re-reads `brightness` for the value it reports. Machines without a
 //! backlight (desktops) simply get no watcher.
 
 #[cfg(not(target_os = "freebsd"))]
@@ -54,7 +60,9 @@ impl Backlight {
     fn read(dir: &Path) -> Option<Self> {
         let name = dir.file_name()?.to_string_lossy().to_string();
         let max = read_u32(&dir.join("max_brightness"))?;
-        let brightness = read_u32(&dir.join("actual_brightness")).or_else(|| read_u32(&dir.join("brightness")))?;
+        // Prefer `brightness` (the programmable linear scale). Fall back to
+        // `actual_brightness` only when the write path is missing.
+        let brightness = read_u32(&dir.join("brightness")).or_else(|| read_u32(&dir.join("actual_brightness")))?;
         Some(Self { name, brightness: brightness.min(max), max })
     }
 }
@@ -128,22 +136,33 @@ pub fn watch_backlight() -> Option<async_channel::Receiver<Backlight>> {
     // async reactor doesn't wait for. Laptops only.
     let _ = std::thread::Builder::new().name("mandara-backlight".into()).spawn(move || {
         use rustix::event::{PollFd, PollFlags, Timespec, poll};
-        let path = if dir.join("actual_brightness").exists() { dir.join("actual_brightness") } else { dir.join("brightness") };
-        let Ok(file) = std::fs::File::open(&path) else { return };
+        // Notify on `actual_brightness` when the kernel exposes it (amdgpu and
+        // others `sysfs_notify` that file). The level itself always comes from
+        // `brightness`, so steps and the OSD percentage stay on the linear scale.
+        let notify = if dir.join("actual_brightness").exists() { dir.join("actual_brightness") } else { dir.join("brightness") };
+        let level_path = dir.join("brightness");
+        let Ok(notify_file) = std::fs::File::open(&notify) else { return };
+        let level_file = std::fs::File::open(&level_path).ok();
         let mut last = device.brightness;
         loop {
-            // sysfs attributes must be read before poll() reports changes.
-            let Some(v) = pread_u32(&file) else { return };
+            // Drain the notify fd before poll(); the level is a separate file.
+            if pread_u32(&notify_file).is_none() {
+                return;
+            }
+            let Some(v) = level_file.as_ref().and_then(pread_u32).or_else(|| read_u32(&level_path)).or_else(|| pread_u32(&notify_file)) else {
+                return;
+            };
+            let v = v.min(device.max);
             if v != last {
                 last = v;
-                if tx.send_blocking(Backlight { name: device.name.clone(), brightness: v.min(device.max), max: device.max }).is_err() {
+                if tx.send_blocking(Backlight { name: device.name.clone(), brightness: v, max: device.max }).is_err() {
                     return;
                 }
             }
             if tx.is_closed() {
                 return;
             }
-            let mut fds = [PollFd::new(&file, PollFlags::PRI | PollFlags::ERR)];
+            let mut fds = [PollFd::new(&notify_file, PollFlags::PRI | PollFlags::ERR)];
             // A long timeout only resyncs drivers that never notify.
             let timeout = Timespec { tv_sec: BACKLIGHT_RESYNC.as_secs() as i64, tv_nsec: 0 };
             if poll(&mut fds, Some(&timeout)).is_err() {
@@ -239,10 +258,47 @@ mod tests {
         assert_eq!(tiny.raw_for(0.0), 1);
     }
 
+    /// amdgpu's `actual_brightness` is a non-linear panel curve that never
+    /// hits `max_brightness`. Steps and the OSD percentage must use the
+    /// programmable `brightness` scale (what logind writes), not that curve.
+    #[test]
+    fn level_uses_programmable_brightness_not_panel_curve() {
+        // Reporter's full-bright amdgpu_bl2: brightness=65535, actual=58339.
+        let from_brightness = Backlight { name: "amdgpu_bl2".into(), brightness: 65535, max: 65535 };
+        assert!((from_brightness.level() - 1.0).abs() < 1e-6, "full brightness must read as 100%");
+        let from_actual = Backlight { name: "amdgpu_bl2".into(), brightness: 58339, max: 65535 };
+        assert!(from_actual.level() < 0.9, "the panel curve alone looks like ~89%");
+
+        // At brightness=5590, actual≈2313 (~3.5%). Stepping +5% from the curve
+        // lands on the same programmable value and looks stuck; from brightness
+        // it moves.
+        let at_5590 = Backlight { name: "amdgpu_bl2".into(), brightness: 5590, max: 65535 };
+        let next = at_5590.raw_for(at_5590.level() + 0.05);
+        assert!(next > 5590, "a +5% step from brightness must raise the level, got {next}");
+        let stuck = Backlight { name: "amdgpu_bl2".into(), brightness: 2313, max: 65535 };
+        let same = stuck.raw_for(stuck.level() + 0.05);
+        assert_eq!(same, 5590, "the bug: +5% from actual lands back on the current brightness");
+    }
+
     #[test]
     fn absent_hardware_is_graceful() {
         // Never panics, whatever the machine has.
         let _ = devices();
         let _ = primary();
+    }
+
+    /// `Backlight::read` prefers the `brightness` attribute when both exist.
+    #[cfg(not(target_os = "freebsd"))]
+    #[test]
+    fn read_prefers_brightness_over_actual() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("amdgpu_bl2");
+        std::fs::create_dir(&root).unwrap();
+        std::fs::write(root.join("max_brightness"), "65535\n").unwrap();
+        std::fs::write(root.join("brightness"), "65535\n").unwrap();
+        std::fs::write(root.join("actual_brightness"), "58339\n").unwrap();
+        let b = Backlight::read(&root).expect("fixture backlight");
+        assert_eq!(b.brightness, 65535);
+        assert!((b.level() - 1.0).abs() < 1e-6);
     }
 }
