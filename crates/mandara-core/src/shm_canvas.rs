@@ -260,6 +260,11 @@ struct Seat {
     seat: wl_seat::WlSeat,
     pointer: Option<wl_pointer::WlPointer>,
     shape: Option<wp_cursor_shape_device_v1::WpCursorShapeDeviceV1>,
+    /// Last shape sent on this seat's cursor-shape device, so a repeat
+    /// enter over the canvas does not rebuild the compositor's sprite
+    /// (that swap is what made the cursor look glitchy once the wallpaper
+    /// started receiving pointer input again).
+    cursor_shape: Option<wp_cursor_shape_device_v1::Shape>,
     /// Follows drags over the canvas (for the shake), never accepts them.
     data_device: Option<wl_data_device::WlDataDevice>,
 }
@@ -274,6 +279,7 @@ impl Seat {
         if let Some(d) = self.shape.take() {
             d.destroy();
         }
+        self.cursor_shape = None;
         if let Some(p) = self.pointer.take()
             && p.version() >= 3
         {
@@ -709,7 +715,7 @@ impl Host {
             if input {
                 for g in list.iter().filter(|g| g.interface == "wl_seat") {
                     let seat = globals.registry().bind::<wl_seat::WlSeat, _, _>(g.name, g.version.min(SEAT_VERSION), &qh, g.name);
-                    state.seats.push(Seat { seat, pointer: None, shape: None, data_device: None });
+                    state.seats.push(Seat { seat, pointer: None, shape: None, cursor_shape: None, data_device: None });
                 }
             }
         });
@@ -1434,7 +1440,7 @@ impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
             }
             wl_registry::Event::Global { name, interface, version } if interface == "wl_seat" && state.input => {
                 let seat = registry.bind::<wl_seat::WlSeat, _, _>(name, version.min(SEAT_VERSION), qh, name);
-                state.seats.push(Seat { seat, pointer: None, shape: None, data_device: None });
+                state.seats.push(Seat { seat, pointer: None, shape: None, cursor_shape: None, data_device: None });
             }
             wl_registry::Event::GlobalRemove { name } => {
                 if let Some(i) = state.seats.iter().position(|s| s.seat.data::<u32>() == Some(&name)) {
@@ -1592,10 +1598,19 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
                 let output = state.outputs.iter().find(|o| o.canvas.as_ref().is_some_and(|c| c.surface == surface)).map(|o| o.global);
                 state.pointer = output.map(|o| (o, surface_x, surface_y));
                 state.shake.reset();
-                // The plain arrow (else the last window's resize cursor
-                // would stay); without cursor-shape the compositor's stays.
-                if let Some(d) = state.seats.iter().find(|s| s.pointer.as_ref() == Some(pointer)).and_then(|s| s.shape.as_ref()) {
+                // Reset to the plain arrow only when the pointer is actually
+                // over a canvas root (else a sticky resize cursor from the
+                // last window would stay). Skip a repeat Default: Niri
+                // rebuilds the sprite on every set_shape, and that swap
+                // against the xcursor theme looked like a glitchy cursor
+                // once the wallpaper took pointer input again.
+                if output.is_some()
+                    && let Some(seat) = state.seats.iter_mut().find(|s| s.pointer.as_ref() == Some(pointer))
+                    && should_set_cursor_shape(seat.cursor_shape, wp_cursor_shape_device_v1::Shape::Default)
+                    && let Some(d) = seat.shape.as_ref()
+                {
                     d.set_shape(serial, wp_cursor_shape_device_v1::Shape::Default);
+                    seat.cursor_shape = Some(wp_cursor_shape_device_v1::Shape::Default);
                 }
             }
             wl_pointer::Event::Motion { surface_x, surface_y, .. } => {
@@ -1656,6 +1671,11 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
             _ => {}
         }
     }
+}
+
+/// Whether a new cursor-shape request would change what this seat last sent.
+fn should_set_cursor_shape(last: Option<wp_cursor_shape_device_v1::Shape>, next: wp_cursor_shape_device_v1::Shape) -> bool {
+    last != Some(next)
 }
 
 impl State {
@@ -1753,6 +1773,14 @@ ignore_events!(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cursor_shape_is_not_resent_when_unchanged() {
+        let arrow = wp_cursor_shape_device_v1::Shape::Default;
+        assert!(should_set_cursor_shape(None, arrow));
+        assert!(!should_set_cursor_shape(Some(arrow), arrow));
+        assert!(should_set_cursor_shape(Some(arrow), wp_cursor_shape_device_v1::Shape::Pointer));
+    }
 
     #[test]
     fn a_canvas_closed_again_and_again_is_retried_after_longer_waits() {
