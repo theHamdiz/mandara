@@ -119,14 +119,14 @@ pub fn hyprland_greeter_config(lua: bool) -> (&'static str, String) {
         (
             HYPRLAND_GREETER_LUA,
             format!(
-                "-- Hyprland as the login screen's compositor ({marker}).\nhl.config({{ misc = {{ disable_hyprland_logo = true, disable_splash_rendering = true }}, animations = {{ enabled = false }} }})\nhl.window_rule({{ match = {{ class = \"^(org\\\\.mandara\\\\.greeter)$\" }}, fullscreen = true }})\nhl.on(\"hyprland.start\", function() hl.exec_cmd(\"{INSTALLED_EXE} greeter; hyprctl dispatch 'hl.dsp.exit()'\") end)\n"
+                "-- Hyprland as the login screen's compositor ({marker}).\nhl.config({{ misc = {{ disable_hyprland_logo = true, disable_splash_rendering = true, disable_watchdog_warning = true }}, animations = {{ enabled = false }} }})\nhl.window_rule({{ match = {{ class = \"^(org\\\\.mandara\\\\.greeter)$\" }}, fullscreen = true }})\nhl.on(\"hyprland.start\", function() hl.exec_cmd(\"{INSTALLED_EXE} greeter; hyprctl dispatch 'hl.dsp.exit()'\") end)\n"
             ),
         )
     } else {
         (
             HYPRLAND_GREETER_CONF,
             format!(
-                "# Hyprland as the login screen's compositor ({MARKER}).\nmisc {{\n  disable_hyprland_logo = true\n  disable_splash_rendering = true\n}}\nanimations {{\n  enabled = false\n}}\nwindowrule = match:class ^(org\\.mandara\\.greeter)$, fullscreen on\nexec-once = {INSTALLED_EXE} greeter; hyprctl dispatch exit\n"
+                "# Hyprland as the login screen's compositor ({MARKER}).\nmisc {{\n  disable_hyprland_logo = true\n  disable_splash_rendering = true\n  disable_watchdog_warning = true\n}}\nanimations {{\n  enabled = false\n}}\nwindowrule = match:class ^(org\\.mandara\\.greeter)$, fullscreen on\nexec-once = {INSTALLED_EXE} greeter; hyprctl dispatch exit\n"
             ),
         )
     }
@@ -782,11 +782,51 @@ mod tests {
         assert!(Kiosk::Niri.config_file().unwrap().1.contains("spawn-at-startup"));
         assert!(Kiosk::Hyprland.command().contains("--config /etc/mandara/greeter-hyprland."));
         // hyprlang (≤ 0.56): current rule syntax (`windowrulev2` is an error).
+        // `disable_watchdog_warning` keeps the greeter from showing Hyprland's
+        // "started without start-hyprland" toast (greetd starts Hyprland directly).
         let (path, conf) = hyprland_greeter_config(false);
-        assert!(path.ends_with(".conf") && conf.contains("windowrule = match:class ^(org\\.mandara\\.greeter)$, fullscreen on") && !conf.contains("windowrulev2"));
+        assert!(
+            path.ends_with(".conf")
+                && conf.contains("windowrule = match:class ^(org\\.mandara\\.greeter)$, fullscreen on")
+                && conf.contains("disable_watchdog_warning = true")
+                && !conf.contains("windowrulev2")
+        );
         // Lua (0.57+): a Lua dispatch to quit.
         let (path, lua) = hyprland_greeter_config(true);
-        assert!(path.ends_with(".lua") && lua.starts_with("-- ") && lua.contains("fullscreen = true") && lua.contains("hl.dsp.exit()"), "{lua}");
+        assert!(
+            path.ends_with(".lua")
+                && lua.starts_with("-- ")
+                && lua.contains("fullscreen = true")
+                && lua.contains("hl.dsp.exit()")
+                && lua.contains("disable_watchdog_warning = true"),
+            "{lua}"
+        );
+    }
+
+    /// Hyprland's own checker accepts the greeter config dialect it reads, when Hyprland is installed.
+    #[test]
+    fn hyprland_validates_the_greeter_config() {
+        if !std::process::Command::new("Hyprland").arg("--version").output().is_ok_and(|o| o.status.success()) {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        // Only the dialect the installed Hyprland parses: 0.57+ rejects hyprlang.
+        let (name, text) = hyprland_greeter_config(hyprland_lua());
+        let file = dir.path().join(Path::new(name).file_name().unwrap());
+        std::fs::write(&file, &text).unwrap();
+        let out = std::process::Command::new("Hyprland")
+            .arg("--config")
+            .arg(&file)
+            .arg("--verify-config")
+            .env("XDG_RUNTIME_DIR", dir.path())
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{name}: {}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
     }
 
     /// Niri's own parser accepts the greeter config, when niri is installed.
