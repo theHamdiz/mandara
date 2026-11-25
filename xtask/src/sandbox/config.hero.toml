@@ -1,0 +1,152 @@
+# `cargo xtask sandbox up --config hero --size 2880x1620 --scale 1.5`: the
+# README hero shot — the edge-frame bar with rounded screen corners, a
+# headline clock, a taped to-do list on torn paper, two sticky notes, the
+# month and the agenda, over sculpted glass ribbons in dark and light
+# mode. Everything else keeps the shell's defaults.
+#
+# The shot needs its two wallpapers once (the generator is on in this
+# config):
+#   sandbox msg wallgen generate glass --palette catppuccin-mocha --seed 0x20 --size 2880x1620 --format png --no-apply
+#   sandbox msg wallgen generate glass --palette catppuccin-mocha --seed 0x21 --size 2880x1620 --format png --no-apply --light
+# and some demo content:
+#   sandbox msg todo add "Water the basil"   (then four more; `todo done 1`)
+#   sandbox msg notes add "Weekend plans⏎…"  and  notes add "Ideas⏎…"
+#   an .ics file with four upcoming events at ~/Documents/demo.ics
+#   sandbox audio play   (a song in the bar)
+# then `sandbox msg notifications clear` and `sandbox shot hero.png`
+# (`sandbox msg theme mode light` for hero-light).
+
+[appearance]
+icon_theme = "Papirus-Dark"
+
+[desktop.widgets]
+migrated = true
+
+[[desktop.widgets.items]]
+id = "hero-clock"
+kind = "clock"
+face = "headline"
+date = true
+weather = true
+seconds = false
+
+[desktop.widgets.items.look]
+font = "display"
+
+[desktop.widgets.items.place]
+depth = "front"
+anchor = "top-left"
+x = 0.045
+y = 0.075
+scale = 1.0
+
+[[desktop.widgets.items]]
+id = "hero-todo"
+kind = "todo"
+rows = 5
+show_done = true
+title = true
+add_row = true
+width = 360.0
+
+[desktop.widgets.items.look]
+plate = "solid"
+plate_shape = "deckle"
+plate_opacity = 0.96
+chrome = "tape"
+shadow = "soft"
+
+[desktop.widgets.items.place]
+depth = "front"
+anchor = "bottom-left"
+x = 0.06
+y = -0.13
+rotation = -2.0
+
+[[desktop.widgets.items]]
+id = "hero-note"
+kind = "note"
+note = "Weekend plans"
+lines = 4
+sheet = "pastel"
+ruling = "ruled"
+width = 320.0
+
+[desktop.widgets.items.look]
+shadow = "soft"
+
+[desktop.widgets.items.place]
+depth = "front"
+anchor = "bottom"
+x = -0.07
+y = -0.15
+rotation = 3.0
+
+[[desktop.widgets.items]]
+id = "hero-note-2"
+kind = "note"
+note = "Ideas"
+lines = 4
+sheet = "custom"
+sheet_color = "#ffd8a8"
+ruling = "plain"
+width = 280.0
+
+[desktop.widgets.items.look]
+shadow = "soft"
+chrome = "tape"
+
+[desktop.widgets.items.place]
+depth = "front"
+anchor = "bottom"
+x = 0.13
+y = -0.17
+rotation = -4.0
+
+[[desktop.widgets.items]]
+id = "hero-month"
+kind = "date"
+layout = "month"
+
+[desktop.widgets.items.look]
+plate = "glass"
+
+[desktop.widgets.items.place]
+depth = "front"
+anchor = "top-right"
+x = -0.045
+y = 0.075
+
+[[desktop.widgets.items]]
+id = "hero-agenda"
+kind = "date"
+layout = "agenda"
+rows = 4
+
+[desktop.widgets.items.place]
+depth = "front"
+anchor = "bottom-right"
+x = -0.045
+y = -0.13
+
+[dock]
+pinned = ["org.mandara.demo.files", "org.mandara.demo.browser", "org.mandara.demo.terminal", "org.mandara.demo.music", "org.mandara.demo.photos"]
+
+[location]
+shared = true
+
+[plugins]
+defaults_version = 1
+enabled = ["dock", "todo", "notes", "desktop-productivity", "desktop-calendar", "desktop-clocks", "wallpaper-generator"]
+
+[wallpaper]
+path = "/home/demo/Pictures/Wallpapers/Generated/glass-000020-2880x1620.png"
+
+[[calendar.sources]]
+name = "Demo"
+location = "/home/demo/Documents/demo.ics"
+enabled = true
+
+[wallpaper.variants]
+light = "/home/demo/Pictures/Wallpapers/Generated/glass-000021-2880x1620.png"
+dark = "/home/demo/Pictures/Wallpapers/Generated/glass-000020-2880x1620.png"

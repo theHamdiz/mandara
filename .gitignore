@@ -1,0 +1,7 @@
+# Rust build output: the workspace's target/, the example plugins' and the
+# delta tool's own target directories (they are excluded workspace roots),
+# and the demo sandbox's state under target/sandbox/.
+target/
+
+# `cargo xtask plugins --out dist` and the release pipeline's artefacts.
+/dist/

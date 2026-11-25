@@ -1,0 +1,15 @@
+id = "vesper"
+name = "Vesper"
+description = "Warm peach and mint on near-black (light variant derived)."
+
+[dark]
+surface = "#101010"
+surface_dim = "#0a0a0a"
+surface_variant = "#1c1c1c"
+on_surface = "#ffffff"
+on_surface_variant = "#a0a0a0"
+outline = "#505050"
+primary = "#ffc799"
+secondary = "#99ffe4"
+tertiary = "#fbadff"
+error = "#ff8080"

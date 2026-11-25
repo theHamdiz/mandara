@@ -1,0 +1,158 @@
+//! Studio → Plugins → a third-party plugin's page: what the person lets it
+//! do, and where its code and issue tracker live.
+//!
+//! * **Permissions:** every capability its plugin.toml asks for that needs
+//!   the person's yes (media, wallpapers, folders, a network host, another
+//!   plugin) is a switch, off until switched on. Switching one off revokes
+//!   it at once: the shell checks every request against
+//!   `[plugins.grants.<id>]` when it arrives and closes what relied on it.
+//!   Folders for `files.folders` are chosen with the desktop's own picker.
+//! * **Links:** "Source code" and "Report an issue" open the plugin's
+//!   repository and tracker (from plugin.toml's `repository` / `support`,
+//!   its GitHub homepage, or the marketplace repository it came from).
+
+use std::path::Path;
+
+use gpui::{AnyElement, ClickEvent, Context, FontWeight, InteractiveElement, IntoElement, KeyDownEvent, ParentElement, SharedString, StatefulInteractiveElement, Styled, div, px};
+use mandara_config::ShellConfig;
+use mandara_core::ToGpui;
+use mandara_i18n::{t, tf, tr};
+use mandara_plugins::PluginManifest;
+use mandara_plugins::extension::{self, Capability};
+use mandara_theme::MandaraPalette;
+use mandara_ui::bidi::Bidi as _;
+use mandara_ui::icons::icon;
+use mandara_ui::state::update_config;
+
+use super::StudioView;
+use super::plugin_modal::action;
+use crate::tokens::*;
+
+pub(super) fn needs_permissions(m: &PluginManifest, cfg: &ShellConfig) -> bool {
+    let granted = cfg.plugins.granted(&m.id);
+    extension::split_capabilities(&m.permissions).0.iter().any(|c| c.needs_grant() && !granted.iter().any(|g| Capability::parse(g).is_ok_and(|g| g == *c)))
+}
+
+
+impl StudioView {
+    /// The switches for the capabilities `m` asks for (none: `None`).
+    pub(super) fn plugin_grants(&mut self, m: &PluginManifest, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let asks: Vec<Capability> = extension::split_capabilities(&m.permissions).0.into_iter().filter(Capability::needs_grant).collect();
+        if asks.is_empty() {
+            return None;
+        }
+        let granted = cfg.plugins.granted(&m.id);
+        let mut list = div().row().flex_col().gap(px(SPACE_8_PX)).child(
+            div().text_size(px(TEXT_12_PX)).line_height(px(LEADING_17_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(t("It asks for these. Each stays off until you switch it on, and you can switch it off again at any time."))),
+        );
+        for c in asks {
+            let name = c.to_string();
+            let on = granted.contains(&name);
+            let what = match c.target() {
+                Some((key, value)) => tf(c.describe(), &[(key, &value)]),
+                None => tr(c.describe()).to_string(),
+            };
+            let (id, cap) = (m.id.clone(), name.clone());
+            let (key_id, key_cap) = (id.clone(), cap.clone());
+            let row = div()
+                .id(SharedString::from(format!("plugin-grant-{}-{name}", m.id)))
+                .focusable().tab_index(0)
+                .px(px(SPACE_14_PX))
+                .py(px(SPACE_12_PX))
+                .rounded(px(RADIUS_16_PX))
+                .bg(p.surface_container.hsla())
+                .row()
+                .items_center()
+                .gap(px(SPACE_12_PX))
+                .cursor_pointer()
+                .child(div().size(px(DIM_36_PX)).flex_none().rounded(px(RADIUS_11_PX)).row().items_center().justify_center().bg(p.primary.with_alpha(ALPHA_14).hsla()).child(icon(c.icon(), ICON_16_PX, p.primary)))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(0.0))
+                        .row()
+                        .flex_col()
+                        .gap(px(SPACE_3_PX))
+                        .child(div().text_size(px(TEXT_13_PX)).font_weight(FontWeight::MEDIUM).child(mandara_ui::bidi::paragraph(what)))
+                        .child(div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).font_family(mandara_ui::fonts::fonts(cx).mono.clone()).child(name.clone())),
+                )
+                .child(mandara_ui::components::toggles::switch(on, mandara_ui::style::toggle_design(), p))
+                .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
+                    update_config(cx, |c| {
+                        c.plugins.set_granted(&id, &cap, !on);
+                    });
+                    cx.notify();
+                }))
+                .on_key_down(cx.listener(move |_, event: &KeyDownEvent, _, cx| {
+                    if matches!(event.keystroke.key.as_str(), "enter" | "space") {
+                        update_config(cx, |config| { config.plugins.set_granted(&key_id, &key_cap, !on); });
+                        cx.notify();
+                        cx.stop_propagation();
+                    }
+                }));
+            list = list.child(row);
+            if c == Capability::Folders && on {
+                list = list.child(self.granted_folders(m, cfg.plugins.granted_folders(&m.id), p, cx));
+            }
+        }
+        // Grants add up: what it may read, it could send where it connects.
+        let has = |c: &Capability| granted.iter().any(|g| Capability::parse(g).is_ok_and(|g| g == *c));
+        let reads = [Capability::MediaRead, Capability::ClipboardRead, Capability::WindowsRead, Capability::Folders, Capability::FilesRead, Capability::WallpaperRead, Capability::SystemRead, Capability::LauncherGlobal];
+        let online = granted.iter().any(|g| matches!(Capability::parse(g), Ok(Capability::Net(_))));
+        if online && reads.iter().any(has) {
+            list = list.child(
+                div()
+                    .row()
+                    .items_center()
+                    .gap(px(SPACE_8_PX))
+                    .text_size(px(TEXT_12_PX))
+                    .text_color(p.warning_amber.hsla())
+                    .child(icon("alert", ICON_12_PX, p.warning_amber))
+                    .child(mandara_ui::bidi::paragraph(t("It can also send what it sees to the sites it connects to. Keep both on only for plugins you trust."))),
+            );
+        }
+        Some(list.into_any_element())
+    }
+
+    /// "Source code" and "Report an issue" for a third-party plugin in
+    /// `dir`, opened in the browser.
+    pub(super) fn plugin_links(&self, m: &PluginManifest, dir: &Path, p: &MandaraPalette) -> Vec<gpui::Stateful<gpui::Div>> {
+        let market = self.market_repo_of(dir).map(|repo| format!("https://github.com/{repo}"));
+        let repository = if m.repository.is_empty() { market.clone().unwrap_or_default() } else { m.repository.clone() };
+        let source = extension::source_url(&repository, &m.homepage);
+        let issues = extension::issues_url(&m.support, &repository, &m.homepage);
+        let mut out = Vec::new();
+        if let Some(url) = source {
+            out.push(action("plugin-modal-source", "git-branch", t("Source code").into(), false, p).on_click(move |_, _, _| {
+                let _ = mandara_services::session::open_uri(&url);
+            }));
+        }
+        if let Some(url) = issues {
+            out.push(action("plugin-modal-issues", "bug", t("Report an issue").into(), false, p).on_click(move |_, _, _| {
+                let _ = mandara_services::session::open_uri(&url);
+            }));
+        }
+        out
+    }
+}
+
+#[cfg(test)]
+mod permission_tests {
+    use super::*;
+
+    #[test]
+    fn installation_prompts_only_for_missing_grants_and_upgrade_keeps_existing_choices() {
+        let mut manifest = PluginManifest::builtin("picker", "Picker", "", None);
+        let mut config = ShellConfig::default();
+        manifest.permissions = vec!["commands".into(), "timers".into()];
+        assert!(!needs_permissions(&manifest, &config));
+        manifest.permissions.push("clipboard.write".into());
+        assert!(needs_permissions(&manifest, &config));
+        config.plugins.set_granted("picker", "clipboard.write", true);
+        assert!(!needs_permissions(&manifest, &config));
+        manifest.permissions.push("net:example.com".into());
+        assert!(needs_permissions(&manifest, &config), "an upgrade's new permission needs a choice");
+        assert!(config.plugins.granted("picker").contains(&"clipboard.write".to_owned()));
+        assert!(!config.plugins.granted("picker").contains(&"net:example.com".to_owned()));
+    }
+}

@@ -1,0 +1,36 @@
+[package]
+name = "mandara-config"
+description = "Reactive TOML ConfigStore, file watcher and non-destructive MangoWM, Niri, Hyprland, Umbriel, Sway and River (classic) config emitters for Mandara Shell"
+version = "0.36.2"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde.workspace = true
+toml = { workspace = true, features = ["display"] }
+toml_edit.workspace = true
+notify.workspace = true
+dirs.workspace = true
+async-channel.workspace = true
+anyhow.workspace = true
+mandara-theme.workspace = true
+mandara-i18n.workspace = true
+tracing.workspace = true
+# The config doctor reads Umbriel's JSON report and keeps its state as JSON.
+serde_json.workspace = true
+smallvec.workspace = true
+# Retire legacy Niri output nodes and retain native shortcut source spans.
+kdl = { workspace = true, features = ["span"] }
+roxmltree.workspace = true
+ron.workspace = true
+full_moon.workspace = true
+rustix.workspace = true
+
+# MangoWM resolves bind keys to keycodes; conflict checks must too.
+xkbcommon = { workspace = true }
+
+tempfile.workspace = true
+
+[lints]
+workspace = true

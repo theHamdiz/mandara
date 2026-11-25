@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <title>Desktop info</title>
+  <defs>
+    <linearGradient id="desktop-info-tile" x1="64" y1="40" x2="448" y2="496" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2B2160"/><stop offset="1" stop-color="#15113A"/>
+    </linearGradient>
+    <radialGradient id="desktop-info-light" cx="0" cy="0" r="1" gradientTransform="translate(98 48) rotate(45) scale(440 354)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".22"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="desktop-info-rim" x1="76" y1="28" x2="446" y2="482" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".72"/><stop offset=".5" stop-color="#FFFFFF" stop-opacity=".08"/><stop offset="1" stop-color="#FFFFFF" stop-opacity=".24"/>
+    </linearGradient>
+    <clipPath id="desktop-info-tile-clip"><rect x="16" y="16" width="480" height="480" rx="108"/></clipPath>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#desktop-info-tile)"/>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#desktop-info-light)"/>
+  <g clip-path="url(#desktop-info-tile-clip)">
+    <path d="M-28 324C126 476 349 518 544 274v238H-28z" fill="#FFFFFF" opacity=".045"/>
+  </g>
+  <rect x="19" y="19" width="474" height="474" rx="105" stroke="url(#desktop-info-rim)" stroke-width="2"/>
+  <g id="desktop-info-glyph" stroke-width="28" stroke-linecap="round" stroke-linejoin="round">
+    <rect id="desktop-info-card" x="104" y="142" width="304" height="228" rx="32" stroke="#FF8A6B"/>
+    <g id="desktop-info-lines" stroke="#F6B65A">
+      <path d="M150 202h74"/>
+      <path d="M150 256h60"/>
+      <path d="M150 310h82"/>
+    </g>
+    <g id="desktop-info-gauge" stroke-width="24">
+      <circle cx="326" cy="256" r="42" stroke="#FF8A6B" opacity=".35"/>
+      <path d="M326 214a42 42 0 1 1-42 42" stroke="#F6B65A"/>
+    </g>
+  </g>
+</svg>

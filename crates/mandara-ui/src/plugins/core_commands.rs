@@ -1,0 +1,1098 @@
+//! Shell-level commands: panels, sidebar, themes, layout, config, plugins.
+
+use mandara_config::{BarLayout, ThemeMode};
+use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, Output, PluginRegistry};
+use mandara_theme::{SchemeVariant, ThemeSource, catalog};
+use serde_json::json;
+
+use crate::state::{config, flush_config, reload_config_from_disk, shell, update_config};
+
+mod app_themes;
+mod studio_looks;
+
+/// `mandara msg studio <section>`: every slug of the launcher's Studio
+/// entries (`crate::overlays::STUDIO_SECTIONS`, checked by a test).
+pub const STUDIO_SECTION_ARG: &str = mandara_i18n::tk("a section (home, themes, wallpaper, desktop, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, ai-shell-agent, general, profiles, performance, maintenance, about), bars/<bar|sidebars|panels|edges>, desktop/<widgets|cards|context-menu>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>");
+
+/// Lets the `restart` reply reach the client before the process exits.
+const RESTART_FLUSH: std::time::Duration = std::time::Duration::from_millis(150);
+/// Exit code asking the supervisor to restart the shell.
+const SUPERVISOR_RESTART_CODE: i32 = 75;
+/// Wallpaper seed colors extracted for `theme seeds` / `theme wallpaper`.
+const SEED_COUNT: usize = 4;
+/// Seed proportions are reported to three decimals.
+const PROPORTION_SCALE: f32 = 1000.0;
+
+/// Model files and downloads share the existing blocking-work executor.
+fn model_job(work: impl FnOnce()->Result<serde_json::Value,String>+Send+'static)->mandara_plugins::Output {
+    let (tx,rx)=async_channel::bounded(1);
+    mandara_services::runtime::spawn("model-files",async move {
+        let result=mandara_services::runtime::unblock(work).await.map(|value|value.to_string());
+        let _=tx.send(result).await;
+    });
+    rx.into()
+}
+
+fn open_close_toggle() -> ArgSpec {
+    ArgSpec::required("action", ArgKind::Enum, mandara_i18n::tk("what to do")).choices(&["open", "close", "toggle"])
+}
+
+/// Writes `new` at JSON pointer `ptr`. Missing keys are created only inside
+/// free-form tables (`/plugins/settings/...`); elsewhere the path must exist.
+fn set_pointer(root: &mut serde_json::Value, ptr: &str, new: serde_json::Value) -> Result<(), String> {
+    if let Some(slot) = root.pointer_mut(ptr) {
+        *slot = new;
+        return Ok(());
+    }
+    if !ptr.starts_with("/plugins/settings/") {
+        return Err(format!("no setting at {ptr}"));
+    }
+    let mut node = root;
+    let parts: Vec<String> = ptr.trim_start_matches('/').split('/').map(|p| p.replace("~1", "/").replace("~0", "~")).collect();
+    for (i, part) in parts.iter().enumerate() {
+        let map = node.as_object_mut().ok_or_else(|| format!("{ptr}: not a table"))?;
+        if i + 1 == parts.len() {
+            map.insert(part.clone(), new);
+            return Ok(());
+        }
+        node = map.entry(part.clone()).or_insert_with(|| serde_json::Value::Object(Default::default()));
+    }
+    Err(format!("no setting at {ptr}"))
+}
+
+/// The bar's panel, its pin and the floating panels (`panel …` replies).
+fn panel_state(cx: &gpui::App) -> serde_json::Value {
+    let s = shell(cx).read(cx);
+    json!({ "panel": s.panel, "pinned": s.panel_pinned, "floating": crate::floating::live_ids(cx) })
+}
+
+/// `on` / `off` / `toggle` applied to `current`.
+fn switch(arg: Option<&str>, current: bool) -> Result<bool, String> {
+    match arg.unwrap_or("toggle") {
+        "on" => Ok(true),
+        "off" => Ok(false),
+        "toggle" => Ok(!current),
+        other => Err(mandara_i18n::tf("Expected on, off or toggle, not {value}", &[("value", &other)])),
+    }
+}
+
+/// `left` (`false`) or `right` (`true`).
+fn side_arg(arg: &str) -> Result<bool, String> {
+    match arg {
+        "left" => Ok(false),
+        "right" => Ok(true),
+        other => Err(mandara_i18n::tf("Expected left or right, not {value}", &[("value", &other)])),
+    }
+}
+
+/// What `side-bars …` replies: the switches and each side's state.
+fn side_bars_state(cfg: &mandara_config::ShellConfig) -> serde_json::Value {
+    let side = |right: bool| {
+        let s = cfg.side_bars.side(right);
+        json!({ "enabled": s.enabled, "shown": cfg.side_bar_on(right), "pinned": s.pinned, "top": s.top, "middle": s.middle, "bottom": s.bottom })
+    };
+    json!({ "enabled": cfg.side_bars.enabled, "joined": cfg.side_bars.joined, "joins_bar": cfg.side_bars_join(), "left": side(false), "right": side(true) })
+}
+
+/// `side-bars …` / `side-bar …`: the side bars of plugin chips.
+fn side_bar_commands(r: &mut PluginRegistry) {
+    let core = "core";
+    let state_arg = || {
+        ArgSpec::optional("state", ArgKind::Enum, mandara_i18n::tk("on, off or toggle (default)")).choices(&["on", "off", "toggle"])
+    };
+    let side = || {
+        ArgSpec::required("side", ArgKind::Enum, mandara_i18n::tk("which side bar")).choices(&["left", "right"])
+    };
+    r.command(
+        core,
+        CommandSpec::new("side-bars", mandara_i18n::tk("Turn the left and right side bars of plugin chips on or off (they replace the widget sidebar on their edges)"), |a, cx| {
+            let next = switch(a.get(0), config(cx).read(cx).get().side_bars.enabled)?;
+            update_config(cx, |c| c.side_bars.enabled = next);
+            Ok(side_bars_state(&config(cx).read(cx).snapshot()))
+        })
+        .arg(state_arg())
+        .example("side-bars on"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("side-bars status", mandara_i18n::tk("The side bars' switches, pins and plugins"), |_, cx| Ok(side_bars_state(&config(cx).read(cx).snapshot()))).example("side-bars status"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("side-bars join", mandara_i18n::tk("Join the top bar and the side bars into one frame, or let them float apart"), |a, cx| {
+            let next = switch(a.get(0), config(cx).read(cx).get().side_bars.joined)?;
+            update_config(cx, |c| c.side_bars.joined = next);
+            Ok(side_bars_state(&config(cx).read(cx).snapshot()))
+        })
+        .arg(state_arg())
+        .example("side-bars join off"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("side-bar pin", mandara_i18n::tk("Pin a side bar (it stays and windows tile beside it) or let it slide away until the pointer touches its edge"), |a, cx| {
+            let right = side_arg(a.str(0)?)?;
+            let next = switch(a.get(1), config(cx).read(cx).get().side_bars.side(right).pinned)?;
+            update_config(cx, |c| c.side_bars.side_mut(right).pinned = next);
+            Ok(side_bars_state(&config(cx).read(cx).snapshot()))
+        })
+        .arg(side())
+        .arg(state_arg())
+        .example("side-bar pin right off"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("side-bar show", mandara_i18n::tk("Show or hide one side bar"), |a, cx| {
+            let right = side_arg(a.str(0)?)?;
+            let next = switch(a.get(1), config(cx).read(cx).get().side_bars.side(right).enabled)?;
+            update_config(cx, |c| c.side_bars.side_mut(right).enabled = next);
+            Ok(side_bars_state(&config(cx).read(cx).snapshot()))
+        })
+        .arg(side())
+        .arg(state_arg())
+        .example("side-bar show left off"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("side-bar style", mandara_i18n::tk("Give one side bar a bar style's item look (shapes, colour and inset), or none for the shared side bar look"), |a, cx| {
+            use mandara_config::bar_styles::{self, BarStyle};
+            let right = side_arg(a.str(0)?)?;
+            let style = match a.str(1)? {
+                "none" => None,
+                other => Some(BarStyle::from_side_id(other).ok_or_else(|| format!("unknown side bar style {other:?}"))?),
+            };
+            update_config(cx, |c| match style {
+                Some(style) => style.apply_to_side(c, right),
+                None => bar_styles::clear_side(c, right),
+            });
+            let cfg = config(cx).read(cx).snapshot();
+            let items = cfg.side_bars.items(right, &cfg.bar);
+            Ok(json!({ "side": if right { "right" } else { "left" }, "style": cfg.side_bars.side(right).style, "chips": items.chips, "item_shape": items.item_shape, "icon_shape": items.icon_shape, "icon_fill": items.icon_fill, "chip_size": items.chip_size }))
+        })
+        .arg(side())
+        .arg(ArgSpec::required("style", ArgKind::Enum, mandara_i18n::tk("bar style")).choices(&["expressive", "tile-dock", "rail", "segmented", "none"]))
+        .example("side-bar style right tile-dock"),
+    );
+}
+
+/// Register shell controls and delegate long model operations to background work.
+pub fn register(r: &mut PluginRegistry) {
+    studio_looks::register(r);
+    app_themes::register(r);
+    crate::agent_commands::register(r);
+    let core = "core";
+    // Debug builds only: proves a panicking plugin command is isolated.
+    #[cfg(debug_assertions)]
+    r.command(core, CommandSpec::new("debug panic", mandara_i18n::tk("Panic inside a command (debug builds; tests fault isolation)"), |_, _| -> Result<serde_json::Value, String> {
+        panic!("deliberate test panic")
+    }));
+    r.command(
+        core,
+        CommandSpec::new("restart", mandara_i18n::tk("Restart the shell process (config and plugins reload from scratch)"), |_, cx| {
+            flush_config(cx)?;
+            crate::games::flush_all(cx);
+            // Let the reply flush, then hand over: under the supervisor exit
+            // with its restart code; standalone, re-exec in place.
+            cx.spawn(async move |cx| {
+                cx.background_executor().timer(RESTART_FLUSH).await;
+                // Settings can still change while the reply is being sent.
+                if let Err(err) = cx.update(flush_config) {
+                    tracing::error!("restart cancelled: {err}");
+                    return;
+                }
+                if std::env::var_os("MANDARA_SUPERVISED").is_some() {
+                    std::process::exit(SUPERVISOR_RESTART_CODE);
+                }
+                use std::os::unix::process::CommandExt as _;
+                let err = std::process::Command::new(mandara_config::paths::self_exe()).arg("run").exec();
+                tracing::error!("restart failed: {err}");
+            })
+            .detach();
+            Ok(json!({ "restarting": true }))
+        })
+        .example("restart"),
+    );
+    r.command(core, CommandSpec::new("ping", mandara_i18n::tk("Check that the shell is running"), |_, _| Ok(json!("pong"))).example("ping"));
+    r.command(
+        core,
+        CommandSpec::new("shell state", mandara_i18n::tk("What is open: panel, sidebar, launcher, power menu, wallpaper picker; whether the launcher opens on hover"), |_, cx| {
+            let desktop_editor_ready = crate::desktop_text::input_ready(cx);
+            let s = shell(cx).read(cx);
+            let cfg = config(cx).read(cx).snapshot();
+            Ok(json!({
+                "panel": s.panel,
+                "panel_pinned": s.panel_pinned,
+                "floating_panels": crate::floating::live_ids(cx),
+                "sidebar": s.sidebar_visible(),
+                "sidebar_pinned": cfg.sidebar.pinned(),
+                "sidebar_mode": cfg.sidebar.mode,
+                "launcher": s.launcher_open,
+                "session_menu": s.session_open,
+                "wallpaper_picker": s.wallpaper_open,
+                "dock": cfg.dock_enabled(),
+                "launcher_on_hover": cfg.launcher_hover_enabled(),
+                "desktop_editor_ready": desktop_editor_ready,
+            }))
+        })
+        .example("shell state"),
+    );
+
+    r.command(
+        core,
+        CommandSpec::new(
+            "panel",
+            mandara_i18n::tk("Open, close or toggle a plugin's panel. A floating panel is brought to the front by open and closed by toggle or close <plugin>; close without a plugin closes the bar's panel, pinned or not"),
+            |a, cx| {
+                let action = a.str(0)?.to_string();
+                let id = a.get(1).map(str::to_string);
+                let shell = shell(cx);
+                match (action.as_str(), id) {
+                    ("close", Some(id)) if crate::floating::is_floating(&id, cx) => {
+                        crate::floating::close(&id, cx);
+                    }
+                    ("close", Some(id)) => shell.update(cx, |s, cx| {
+                        if s.panel.as_deref() == Some(id.as_str()) {
+                            s.set_panel(None, cx);
+                        }
+                    }),
+                    ("close", None) => shell.update(cx, |s, cx| s.set_panel(None, cx)),
+                    ("open", Some(id)) => shell.update(cx, |s, cx| s.set_panel(Some(id), cx)),
+                    ("toggle", Some(id)) => shell.update(cx, |s, cx| s.toggle_panel(&id, cx)),
+                    _ => return Err("usage: panel <open|toggle> <plugin-id> | panel close [plugin-id]".into()),
+                }
+                Ok(panel_state(cx))
+            },
+        )
+        .arg(open_close_toggle())
+        .arg(ArgSpec::optional("plugin", ArgKind::String, mandara_i18n::tk("plugin id, e.g. clock, media, network")))
+        .example("panel toggle media")
+        .example("panel close")
+        .example("panel close weather"),
+    );
+    r.command(core, CommandSpec::new_output("panel capture", mandara_i18n::tk("Copy panel image"), |args, cx| Ok(crate::floating::capture(args.str(0)?, cx)?.into()),
+        ).arg(ArgSpec::required("plugin", ArgKind::String, mandara_i18n::tk("plugin id, e.g. clock, media, network"))).example("panel capture clock"));
+    r.command(
+        core,
+        CommandSpec::new(
+            "panel pin",
+            mandara_i18n::tk("Pin a plugin's panel open in the bar: outside clicks, focus changes and the launcher leave it open (its chip, Esc or panel close still close it). A floating panel docks back pinned"),
+            |a, cx| {
+                let id = a.str(0)?.to_string();
+                if id == crate::plugins::main_menu::ID {
+                    return Err("the main menu opens from the bar only".into());
+                }
+                if crate::floating::is_floating(&id, cx) {
+                    crate::floating::dock(&id, true, cx)?;
+                } else {
+                    shell(cx).update(cx, |s, cx| s.pin_panel(&id, cx));
+                }
+                Ok(panel_state(cx))
+            },
+        )
+        .arg(ArgSpec::required("plugin", ArgKind::String, mandara_i18n::tk("plugin id, e.g. clock, media, network")))
+        .example("panel pin media"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("panel unpin", mandara_i18n::tk("Unpin a plugin's panel: it stays open until the next outside click"), |a, cx| {
+            let id = a.str(0)?.to_string();
+            let was = shell(cx).update(cx, |s, cx| s.unpin_panel(&id, cx));
+            let mut state = panel_state(cx);
+            state["unpinned"] = json!(was);
+            Ok(state)
+        })
+        .arg(ArgSpec::required("plugin", ArgKind::String, mandara_i18n::tk("plugin id, e.g. clock, media, network")))
+        .example("panel unpin media"),
+    );
+    r.command(
+        core,
+        CommandSpec::new(
+            "panel float",
+            mandara_i18n::tk("Pop a plugin's panel out of the bar into a floating card you can drag anywhere on the output its panel is open on (else the focused one): at x y when given (logical px from the output's top-left), else where it last floated there. A floating card moves to x y"),
+            |a, cx| {
+                let id = a.str(0)?.to_string();
+                let at = match (a.get(1), a.get(2)) {
+                    (Some(_), Some(_)) => Some((a.number(1)? as f32, a.number(2)? as f32)),
+                    (None, None) => None,
+                    _ => return Err("usage: panel float <plugin-id> [x y]".into()),
+                };
+                crate::floating::float(&id, None, at, cx)
+            },
+        )
+        .arg(ArgSpec::required("plugin", ArgKind::String, mandara_i18n::tk("plugin id, e.g. clock, media, network")))
+        .arg(ArgSpec::optional("x", ArgKind::Number, mandara_i18n::tk("left edge, logical px from the output's left")))
+        .arg(ArgSpec::optional("y", ArgKind::Number, mandara_i18n::tk("top edge, logical px from the output's top")))
+        .example("panel float media")
+        .example("panel float weather 80 120"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("panel dock", mandara_i18n::tk("Send a floating panel back into the bar (it opens there)"), |a, cx| {
+            let id = a.str(0)?.to_string();
+            crate::floating::dock(&id, false, cx)?;
+            Ok(panel_state(cx))
+        })
+        .arg(ArgSpec::required("plugin", ArgKind::String, mandara_i18n::tk("plugin id, e.g. clock, media, network")))
+        .example("panel dock media"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("panel floating", mandara_i18n::tk("The floating panels with their output, position and size, and every remembered position"), |_, cx| Ok(crate::floating::list(cx)))
+            .example("panel floating"),
+    );
+
+    r.command(
+        core,
+        CommandSpec::new("sidebar", mandara_i18n::tk("Open, close or toggle the left sidebar"), |a, cx| {
+            let shell = shell(cx);
+            let open = match a.str(0)? {
+                "open" => true,
+                "close" => false,
+                _ => !shell.read(cx).sidebar_visible(),
+            };
+            shell.update(cx, |s, cx| s.set_sidebar(open, cx));
+            Ok(json!({ "sidebar": open }))
+        })
+        .arg(open_close_toggle())
+        .example("sidebar toggle"),
+    );
+
+    r.command(
+        core,
+        CommandSpec::new("sidebar pin", mandara_i18n::tk("Pin, unpin or toggle-pin the sidebar (pinned pushes windows aside)"), |a, cx| {
+            let pinned = config(cx).read(cx).get().sidebar.pinned();
+            let next = match a.str(0)? {
+                "on" => true,
+                "off" => false,
+                _ => !pinned,
+            };
+            update_config(cx, |c| c.sidebar.set_pinned(next));
+            Ok(json!({ "pinned": next }))
+        })
+        .arg(ArgSpec::required("state", ArgKind::Enum, mandara_i18n::tk("pin state")).choices(&["on", "off", "toggle"]))
+        .example("sidebar pin toggle"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("theme set", mandara_i18n::tk("Switch to a theme preset (OKLCH crossfade)"), |a, cx| {
+            let id = a.rest(0);
+            let theme = catalog::find(&id).ok_or_else(|| format!("unknown theme {id:?}; see `theme list`"))?;
+            let preset = theme.id.clone();
+            // An explicit theme stops following the wallpaper's colors
+            // (else the wallpaper sync switches straight back).
+            update_config(cx, |c| {
+                c.theme.source = ThemeSource::Preset { preset };
+                c.wallpaper.match_colors = false;
+            });
+            Ok(json!({ "theme": theme.id, "name": theme.name }))
+        })
+        .arg(ArgSpec::required("theme", ArgKind::String, mandara_i18n::tk("theme id or name (see `theme list`)")))
+        .example("theme set montaza-twilight"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("theme next", mandara_i18n::tk("Cycle to the next preset"), |_, cx| {
+            let next = match &config(cx).read(cx).get().theme.source {
+                ThemeSource::Preset { preset } => catalog::next_id(preset),
+                _ => catalog::DEFAULT_THEME.to_string(),
+            };
+            update_config(cx, |c| {
+                c.theme.source = ThemeSource::Preset { preset: next.clone() };
+                c.wallpaper.match_colors = false;
+            });
+            Ok(json!({ "theme": next }))
+        }),
+    );
+    r.command(
+        core,
+        CommandSpec::new("theme list", mandara_i18n::tk("List themes (built-in and ~/.config/mandara/themes)"), |_, cx| {
+            let current = match &config(cx).read(cx).get().theme.source {
+                ThemeSource::Preset { preset } => Some(preset.clone()),
+                _ => None,
+            };
+            Ok(json!(catalog::all()
+                .iter()
+                .map(|t| {
+                    let report = catalog::ContrastReport::of(&t.palette(true));
+                    json!({
+                        "id": t.id,
+                        "name": t.name,
+                        "description": t.description,
+                        "signature": t.signature,
+                        "origin": t.origin,
+                        "light_variant": if t.has_mode(false) { "authored" } else { "derived" },
+                        "contrast_ok": report.passes(),
+                        "active": current.as_deref() == Some(t.id.as_str()),
+                    })
+                })
+                .collect::<Vec<_>>()))
+        }),
+    );
+    r.command(
+        core,
+        CommandSpec::new_output("theme seeds", mandara_i18n::tk("Material You seed colors extracted from an image (default: the wallpaper)"), |a, cx| {
+            let path = match a.get(0) {
+                Some(_) => mandara_config::paths::expand_tilde(&a.rest(0)),
+                None => config(cx).read(cx).get().wallpaper.path.clone().ok_or("no wallpaper set; pass an image path")?,
+            };
+            let (tx, rx) = async_channel::bounded(1);
+            std::thread::spawn(move || {
+                let result = mandara_theme::material::extract_seeds(&path, SEED_COUNT)
+                    .map(|seeds| {
+                        serde_json::to_string(&seeds.iter().map(|s| json!({
+                            "color": s.color.to_hex(),
+                            "proportion": (s.proportion * PROPORTION_SCALE).round() / PROPORTION_SCALE,
+                            "hue": s.hue.round(),
+                            "chroma": s.chroma.round(),
+                        })).collect::<Vec<_>>()).unwrap_or_default()
+                    })
+                    .map_err(|e| e.to_string());
+                let _ = tx.send_blocking(result);
+            });
+            Ok(mandara_plugins::Output::Pending(rx))
+        })
+        .arg(ArgSpec::optional("path", ArgKind::String, mandara_i18n::tk("image file")))
+        .example("theme seeds"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("theme wallpaper", mandara_i18n::tk("Use Material You colors from the wallpaper (optionally choosing style and seed)"), |a, cx| {
+            let variant: SchemeVariant = match a.get(0) {
+                Some(v) => serde_json::from_value(json!(v)).map_err(|_| format!("unknown style {v:?}"))?,
+                None => SchemeVariant::default(),
+            };
+            let seed = a.get(1).map(|s| s.parse::<usize>().map_err(|_| "seed must be 0-3")).transpose()?.unwrap_or(0).min(SEED_COUNT - 1);
+            let path = config(cx).read(cx).get().wallpaper.path.clone().ok_or("no wallpaper set")?;
+            update_config(cx, |c| {
+                if let ThemeSource::Preset { preset } = &c.theme.source {
+                    c.theme.last_preset = Some(preset.clone());
+                }
+                c.wallpaper.match_colors = true;
+                c.theme.source = ThemeSource::Wallpaper { path, variant, seed };
+            });
+            Ok(json!({ "variant": variant, "seed": seed }))
+        })
+        .arg(ArgSpec::optional("style", ArgKind::Enum, mandara_i18n::tk("scheme style")).choices(&["tonal-spot", "vibrant", "expressive", "fidelity", "fruit-salad", "monochrome"]))
+        .arg(ArgSpec::optional("seed", ArgKind::Integer, mandara_i18n::tk("which extracted color leads, 0-3 (see `theme seeds`)")))
+        .example("theme wallpaper vibrant 1"),
+    );
+    r.command(
+        core,
+        CommandSpec::new_output("theme export", mandara_i18n::tk("Write the current palette to Ghostty, GTK, Qt, Zed, Fuzzel and btop theme files"), |_, cx| {
+            let palette = mandara_core::theme_entity(cx).read(cx).target().clone();
+            let task = crate::state::export_app_themes_report(palette, cx);
+            let (tx, rx) = async_channel::bounded(1);
+            cx.spawn(async move |_| {
+                let report = task.await;
+                let _ = tx.send(serde_json::to_string(&report).map_err(|error| error.to_string())).await;
+            })
+            .detach();
+            Ok(mandara_plugins::Output::Pending(rx))
+        })
+        .example("theme export"),
+    );
+    r.command(
+        core,
+        CommandSpec::new_output("fonts sync", mandara_i18n::tk("Apply or restore Mandara's system font sync (typography.sync) now"), |_, cx| {
+            let cfg = config(cx).read(cx).get().clone();
+            let (tx, rx) = async_channel::bounded(1);
+            let _ = std::thread::Builder::new().name("mandara-fonts-sync-cmd".into()).spawn(move || {
+                // Same ordered worker as automatic sync — never races the ownership record.
+                let result = crate::font_sync::reconcile_wait(cfg.clone()).map(|report| {
+                    let env = mandara_services::font_sync::ApplyEnv::current();
+                    json!({
+                        "enabled": cfg.typography.sync.enabled,
+                        "active": mandara_services::font_sync::active(&env),
+                        "changed": report.changed,
+                        "kept": report.kept,
+                    })
+                    .to_string()
+                });
+                let _ = tx.send_blocking(result);
+            });
+            Ok(mandara_plugins::Output::Pending(rx))
+        })
+        .example("fonts sync"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("theme current", mandara_i18n::tk("Describe the active theme"), |_, cx| {
+            let cfg = config(cx).read(cx).snapshot();
+            let theme = mandara_core::theme_entity(cx);
+            let palette = theme.read(cx).target().clone();
+            Ok(json!({
+                "name": palette.name,
+                "mode": cfg.theme.mode,
+                "source": cfg.theme.source,
+                "primary": palette.primary.to_hex(),
+                "surface": palette.surface_base.to_hex(),
+            }))
+        }),
+    );
+    r.command(
+        core,
+        CommandSpec::new("theme mode", mandara_i18n::tk("Switch between light and dark appearance"), |a, cx| {
+            let current = config(cx).read(cx).get().theme.mode;
+            let mode = match a.str(0)? {
+                "light" => ThemeMode::Light,
+                "dark" => ThemeMode::Dark,
+                _ => current.toggled(),
+            };
+            update_config(cx, |c| c.theme.mode = mode);
+            Ok(json!({ "mode": mode }))
+        })
+        .arg(ArgSpec::required("mode", ArgKind::Enum, mandara_i18n::tk("appearance")).choices(&["light", "dark", "toggle"]))
+        .example("theme mode toggle"),
+    );
+
+    r.command(
+        core,
+        CommandSpec::new("bar layout", mandara_i18n::tk("Set the bar layout"), |a, cx| {
+            let current = config(cx).read(cx).get().bar.layout;
+            let layout = match a.str(0)? {
+                "edge-frame" => BarLayout::MinimalEdge,
+                "glass-pills" => BarLayout::FloatingPills,
+                "island" => BarLayout::ContiguousIsland,
+                "hairline" => BarLayout::Hairline,
+                "micro" => BarLayout::Micro,
+                "notch" => BarLayout::Notch,
+                _ => current.next(),
+            };
+            update_config(cx, |c| c.bar.layout = layout);
+            Ok(json!({ "layout": layout, "name": layout.display_name() }))
+        })
+        .arg(ArgSpec::required("layout", ArgKind::Enum, mandara_i18n::tk("layout")).choices(&["edge-frame", "glass-pills", "island", "hairline", "micro", "notch", "next"]))
+        .example("bar layout hairline"),
+    );
+
+    r.command(
+        core,
+        CommandSpec::new("bar style", mandara_i18n::tk("Give the bar a style preset's look (your items stay), or none for the plain bar"), |a, cx| {
+            use mandara_config::bar_styles::{self, BarStyle};
+            let id = a.str(0)?;
+            let style = match id {
+                "none" => None,
+                other => Some(BarStyle::from_id(other).ok_or_else(|| format!("unknown bar style {other:?}"))?),
+            };
+            update_config(cx, |c| match style {
+                Some(style) => style.apply(c),
+                None => bar_styles::clear(c),
+            });
+            let cfg = config(cx).read(cx).get().bar.clone();
+            Ok(json!({ "style": cfg.style, "layout": cfg.layout, "position": cfg.position, "item_shape": cfg.item_shape, "icon_shape": cfg.icon_shape }))
+        })
+        .arg(ArgSpec::required("style", ArgKind::Enum, mandara_i18n::tk("bar style")).choices(&["expressive", "tile-dock", "rail", "segmented", "system-monitor", "stanley-bridge", "pharos-beam", "raml-tram", "taskbar", "none"]))
+        .example("bar style expressive"),
+    );
+
+    r.command(
+        core,
+        CommandSpec::new("bar position", mandara_i18n::tk("Put the bar on a screen edge"), |a, cx| {
+            let position = match a.str(0)? {
+                "top" => mandara_config::BarPosition::Top,
+                "bottom" => mandara_config::BarPosition::Bottom,
+                "left" => mandara_config::BarPosition::Left,
+                "right" => mandara_config::BarPosition::Right,
+                other => return Err(format!("unknown edge {other:?}")),
+            };
+            update_config(cx, |c| c.bar.position = position);
+            Ok(json!({ "position": position }))
+        })
+        .arg(ArgSpec::required("edge", ArgKind::Enum, mandara_i18n::tk("screen edge")).choices(&["top", "bottom", "left", "right"]))
+        .example("bar position left"),
+    );
+
+    side_bar_commands(r);
+
+    // `bar hide|show|toggle`: until the shell restarts (not saved);
+    // touching the bar's edge still peeks it out, as with auto-hide.
+    for (path, summary, want) in [
+        ("bar hide", mandara_i18n::tk("Put the bar away and free its space until bar show (touching its edge peeks it out)"), Some(true)),
+        ("bar show", mandara_i18n::tk("Bring back a bar put away with bar hide"), Some(false)),
+        ("bar toggle", mandara_i18n::tk("Put the bar away or bring it back"), None),
+    ] {
+        r.command(
+            core,
+            CommandSpec::new(path, summary, move |_, cx| {
+                let hidden = want.unwrap_or_else(|| !crate::bar::autohide::hidden_by_command());
+                crate::bar::autohide::set_hidden_by_command(hidden);
+                shell(cx).update(cx, |_, cx| cx.notify());
+                let side = config(cx).read(cx).get().bar.position.is_vertical();
+                Ok(json!({ "hidden": hidden && !side, "side_bar_stays": side }))
+            }),
+        );
+    }
+
+    r.command(
+        core,
+        CommandSpec::new("look list", mandara_i18n::tk("List the one-click looks: the built-in ones and yours"), |_, cx| {
+            let active = config(cx).read(cx).get().looks.active.clone();
+            let mut looks: Vec<_> = mandara_config::looks::LOOKS.iter().map(|l| json!({ "id": l.id, "name": l.name, "builtin": true, "active": l.id == active })).collect();
+            looks.extend(mandara_config::user_looks::list().iter().map(|l| json!({ "id": l.id, "name": l.name, "builtin": false, "parent": l.parent, "author": l.author, "active": l.id == active })));
+            Ok(json!({ "looks": looks, "active": active }))
+        }),
+    );
+    r.command(
+        core,
+        CommandSpec::new("look apply", mandara_i18n::tk("Apply a look, built-in or yours (your setup is saved first so it can be restored)"), |a, cx| {
+            let id = a.str(0)?.to_string();
+            let wallpaper_colors = a.get(1) == Some("wallpaper-colors");
+            let cfg = config(cx).read(cx).snapshot();
+            let opts = mandara_config::looks::LookOptions { wallpaper_colors };
+            let next = match mandara_config::looks::find(&id) {
+                Some(look) => look.apply(&cfg, opts),
+                None => mandara_config::user_looks::find(&id).ok_or_else(|| format!("no look {id:?}"))?.apply(&cfg, opts).map_err(|e| format!("{e:#}"))?,
+            };
+            if let Some(before) = mandara_config::looks::before_snapshot(&cfg, &chrono::Local::now().format("%Y-%m-%d %H:%M").to_string()) {
+                mandara_config::profiles::save(&before).map_err(|e| format!("saving your setup: {e:#}"))?;
+            }
+            update_config(cx, move |c| *c = next);
+            Ok(json!({ "applied": id, "restore_profile": mandara_config::looks::BEFORE_PROFILE }))
+        })
+        .arg(ArgSpec::required("look", ArgKind::String, mandara_i18n::tk("look id (see look list)")))
+        .arg(ArgSpec::optional("colors", ArgKind::Enum, mandara_i18n::tk("palette source")).choices(&["own", "wallpaper-colors"]))
+        .example("look apply night-frame"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("look save", mandara_i18n::tk("Save what you changed on the active look as a new look of your own"), |a, cx| {
+            let cfg = config(cx).read(cx).snapshot();
+            let name = a.rest(0);
+            let saved = save_current_look(&cfg, Some(name.as_str()).filter(|n| !n.trim().is_empty())).map_err(|e| format!("{e:#}"))?;
+            let print = mandara_config::user_looks::owned_print(&cfg);
+            let id = saved.id.clone();
+            update_config(cx, move |c| {
+                c.looks.active = id;
+                c.looks.print = print;
+            });
+            Ok(json!({ "saved": saved.id, "name": saved.name, "parent": saved.parent }))
+        })
+        .arg(ArgSpec::optional("name", ArgKind::String, mandara_i18n::tk("its name (default: the parent's name · Custom)")))
+        .example("look save My evening"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("look rename", mandara_i18n::tk("Rename one of your looks"), |a, _| {
+            let look = mandara_config::user_looks::rename_in(&mandara_config::user_looks::looks_dir(), a.str(0)?, &a.rest(1)).map_err(|e| format!("{e:#}"))?;
+            Ok(json!({ "id": look.id, "name": look.name }))
+        })
+        .arg(ArgSpec::required("look", ArgKind::String, mandara_i18n::tk("look id (see look list)")))
+        .arg(ArgSpec::required("name", ArgKind::String, mandara_i18n::tk("the new name")))
+        .example("look rename corniche-dusk-custom Evening"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("look duplicate", mandara_i18n::tk("Copy one of your looks under a new name"), |a, _| {
+            let look = mandara_config::user_looks::duplicate_in(&mandara_config::user_looks::looks_dir(), a.str(0)?).map_err(|e| format!("{e:#}"))?;
+            Ok(json!({ "id": look.id, "name": look.name }))
+        })
+        .arg(ArgSpec::required("look", ArgKind::String, mandara_i18n::tk("look id (see look list)"))),
+    );
+    r.command(
+        core,
+        CommandSpec::new("look delete", mandara_i18n::tk("Delete one of your looks (built-in looks can't be deleted)"), |a, cx| {
+            let id = a.str(0)?.to_string();
+            if mandara_config::looks::find(&id).is_some() {
+                return Err(format!("{id} is a built-in look"));
+            }
+            mandara_config::user_looks::delete(&id).map_err(|e| format!("{e:#}"))?;
+            // Deleting the active look leaves your setup as it is.
+            if config(cx).read(cx).get().looks.active == id {
+                update_config(cx, |c| c.looks.active.clear());
+            }
+            Ok(json!({ "deleted": id }))
+        })
+        .arg(ArgSpec::required("look", ArgKind::String, mandara_i18n::tk("look id (see look list)"))),
+    );
+    r.command(
+        core,
+        CommandSpec::new("look export", mandara_i18n::tk("Write a look (built-in or yours) to a small portable file"), |a, _| {
+            let id = a.str(0)?;
+            let text = mandara_config::user_looks::export_text_in(&mandara_config::user_looks::looks_dir(), id, &chrono::Local::now().format("%Y-%m-%d").to_string()).map_err(|e| format!("{e:#}"))?;
+            let path = match a.get(1) {
+                Some(p) => mandara_config::paths::expand_tilde(p),
+                None => look_export_path(id),
+            };
+            if path.exists() {
+                return Err(format!("{} already exists", path.display()));
+            }
+            mandara_config::write_atomic(&path, text.as_bytes()).map_err(|e| format!("{e:#}"))?;
+            Ok(json!({ "exported": id, "file": path }))
+        })
+        .arg(ArgSpec::required("look", ArgKind::String, mandara_i18n::tk("look id (see look list)")))
+        .arg(ArgSpec::optional("file", ArgKind::String, mandara_i18n::tk("where to write it (default: your Downloads folder)")))
+        .example("look export phosphor ~/phosphor.mandara-look.toml"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("look import", mandara_i18n::tk("Add a look from a file (checked strictly; nothing in it is run)"), |a, _| {
+            let path = mandara_config::paths::expand_tilde(a.str(0)?);
+            let text = read_look_file(&path)?;
+            let look = mandara_config::user_looks::import_in(&mandara_config::user_looks::looks_dir(), &text).map_err(|e| format!("{e:#}"))?;
+            Ok(json!({ "imported": look.id, "name": look.name, "parent": look.parent }))
+        })
+        .arg(ArgSpec::required("file", ArgKind::String, mandara_i18n::tk("a .mandara-look.toml file")))
+        .example("look import ~/Downloads/phosphor.mandara-look.toml"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("look restore", mandara_i18n::tk("Return to your setup from before the first look"), |_, cx| {
+            let before = mandara_config::profiles::find(mandara_config::looks::BEFORE_PROFILE).ok_or("no saved setup to restore")?;
+            let cfg = config(cx).read(cx).snapshot();
+            let next = mandara_config::looks::restore(&cfg, &before).map_err(|e| format!("{e:#}"))?;
+            update_config(cx, move |c| *c = next);
+            Ok(json!({ "restored": true }))
+        }),
+    );
+
+    r.command(
+        core,
+        CommandSpec::new("motion presets", mandara_i18n::tk("List the motion presets, how each feels and which one is in use"), |_, cx| {
+            let current = config(cx).read(cx).get().motion.preset();
+            let presets: Vec<_> = mandara_config::motion::Preset::ALL
+                .iter()
+                .map(|p| json!({ "id": p.id(), "name": mandara_i18n::tr(p.name()), "feel": mandara_i18n::tr(p.feel()), "active": current == Some(*p) }))
+                .collect();
+            Ok(json!({ "presets": presets, "active": current.map_or("custom", |p| p.id()) }))
+        }),
+    );
+    r.command(
+        core,
+        CommandSpec::new("motion preset", mandara_i18n::tk("Apply a motion preset: its spring and choreography (accessibility and surface speeds stay yours)"), |a, cx| {
+            let id = a.str(0)?;
+            let preset = mandara_config::motion::Preset::from_id(id).ok_or_else(|| format!("no motion preset {id:?} (see motion presets)"))?;
+            update_config(cx, move |c| preset.apply_to(c));
+            Ok(json!({ "applied": preset.id() }))
+        })
+        .arg(ArgSpec::required("preset", ArgKind::Enum, mandara_i18n::tk("motion preset id")).choices(&mandara_config::motion::Preset::IDS))
+        .example("motion preset tide"),
+    );
+
+    r.command(
+        core,
+        CommandSpec::new_output("config reload",mandara_i18n::tk("Re-read config.toml from disk"), |_, cx| {
+            let task = reload_config_from_disk(cx);
+                let (sender, receiver) = async_channel::bounded(1);
+                cx.spawn(async move |_| {
+                    let _ = sender
+                        .send(
+                            task.await
+                                .map(|changed| json!({ "changed": changed }).to_string()),
+                        )
+                        .await;
+                })
+                .detach();
+                Ok(Output::Pending(receiver))
+        }),
+    );
+    r.command(
+        core,
+        CommandSpec::new("config show", mandara_i18n::tk("Print the live configuration"), |_, cx| Ok(serde_json::to_value(&*config(cx).read(cx).snapshot()).unwrap_or_default()),
+        ),
+    );
+
+    r.command(
+        core,
+        CommandSpec::new("config get", mandara_i18n::tk("Read a setting by JSON pointer (whole config when omitted)"), |a, cx| {
+            let value = serde_json::to_value(&*config(cx).read(cx).snapshot()).map_err(|e| e.to_string())?;
+            match a.get(0) {
+                None | Some("") | Some("/") => Ok(value),
+                Some(ptr) => value.pointer(ptr).cloned().ok_or_else(|| format!("no setting at {ptr}")),
+            }
+        })
+        .arg(ArgSpec::optional("pointer", ArgKind::String, mandara_i18n::tk("JSON pointer, e.g. /bar/height")))
+        .example("config get /theme/mode"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("config set", mandara_i18n::tk("Change one setting live (value is JSON; bare words are strings)"), |a, cx| {
+            let ptr = a.str(0)?.to_string();
+            let raw = a.rest(1);
+            let new: serde_json::Value = serde_json::from_str(&raw).unwrap_or(serde_json::Value::String(raw));
+            let mut value = serde_json::to_value(&*config(cx).read(cx).snapshot()).map_err(|e| e.to_string())?;
+            set_pointer(&mut value, &ptr, new.clone())?;
+            let next: mandara_config::ShellConfig = serde_json::from_value(value).map_err(|e| format!("invalid value for {ptr}: {e}"))?;
+                next.integrations
+                    .app_themes
+                    .validate()
+                    .map_err(|error| error.to_string())?;
+                update_config(cx, |c| *c = next);
+            Ok(json!({ "path": ptr, "value": new }))
+        })
+        .arg(ArgSpec::required("pointer", ArgKind::String, mandara_i18n::tk("JSON pointer, e.g. /bar/height")))
+        .arg(ArgSpec::required("value", ArgKind::String, mandara_i18n::tk("JSON value")))
+        .example("config set /bar/height 30")
+        .example("config set /theme/mode light"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("config apply", mandara_i18n::tk("Replace the live configuration with a full JSON document (used by Studio)"), |a, cx| {
+            let next: mandara_config::ShellConfig = serde_json::from_str(&a.rest(0)).map_err(|e| format!("invalid config: {e}"))?;
+                next.integrations
+                    .app_themes
+                    .validate()
+                    .map_err(|error| error.to_string())?;
+                update_config(cx, |c| *c = next);
+            Ok(json!({ "applied": true }))
+        })
+        .arg(ArgSpec::required("json", ArgKind::String, mandara_i18n::tk("the whole config as JSON"),
+        )),
+    );
+    r.command(
+        core,
+        CommandSpec::new(
+            "config patch",
+            mandara_i18n::tk("Apply preference edits without replacing unrelated settings"),
+            |a, cx| {
+                let patch: mandara_config::patch::ConfigPatch = serde_json::from_str(&a.rest(0))
+                    .map_err(|e| format!("invalid preference edits: {e}"))?;
+                let next = patch
+                    .apply(&config(cx).read(cx).snapshot())
+                    .map_err(|e| e.to_string())?;
+                update_config(cx, |c| *c = next);
+                Ok(json!({ "applied": true }))
+            },
+        )
+        .arg(ArgSpec::required(
+            "json",
+            ArgKind::String,
+            mandara_i18n::tk("JSON value"),
+        )),
+    );
+    r.command(core, CommandSpec::new_output("models list", mandara_i18n::tk("Downloadable models (OCR, wallpaper depth) and whether they're installed"), |_, _| Ok(model_job(||Ok(json!(mandara_services::models::status()))))));
+    r.command(
+        core,
+        CommandSpec::new_output("models download", mandara_i18n::tk("Download a model by id, or all of them"), |a, _| {
+            let which = a.get(0).unwrap_or("all").to_string();
+            let models: Vec<&'static mandara_services::models::Model> = match which.as_str() {
+                // "all" is every model a feature needs up front; on-demand
+                // ones (the depth model) come with their feature.
+                "all" => mandara_services::models::MODELS.iter().filter(|m| !m.on_demand).collect(),
+                id => vec![mandara_services::models::find(id).ok_or_else(|| format!("unknown model {id:?}"))?],
+            };
+            Ok(model_job(move || {
+                models.iter().try_for_each(|m|m.download(&|_,_|{}))?;
+                Ok(json!(format!("installed: {}",models.iter().map(|m|m.id).collect::<Vec<_>>().join(", "))))
+            }))
+        })
+        .arg(ArgSpec::optional("id", ArgKind::String, mandara_i18n::tk("model id from `models list` (default: all)")))
+        .example("models download ocr-arabic"),
+    );
+    r.command(
+        core,
+        CommandSpec::new_output("models remove", mandara_i18n::tk("Delete a downloaded model"), |a, _| {
+            let id = a.get(0).ok_or("expected a model id")?;
+            let m = mandara_services::models::find(id).ok_or_else(|| format!("unknown model {id:?}"))?;
+            Ok(model_job(move || {m.remove()?;Ok(json!({"removed":m.id}))}))
+        })
+        .arg(ArgSpec::required("id", ArgKind::String, mandara_i18n::tk("model id"))),
+    );
+    r.command(
+        core,
+        CommandSpec::new("info", mandara_i18n::tk("Shell process facts: pid, version, compositor"), |_, cx| {
+            let compositor = crate::hub::hub(cx).read(cx).compositor.as_ref().map(|c| format!("{:?}", c.kind()));
+            let build = mandara_core::build_info(cx);
+            Ok(json!({ "pid": std::process::id(), "version": build.version, "build": build.long, "components": build.components.iter().cloned().collect::<std::collections::BTreeMap<_, _>>(), "compositor": compositor }))
+        })
+        .example("info"),
+    );
+
+    r.command(
+        "core",
+        CommandSpec::new("plugins run", mandara_i18n::tk("Run a command a third-party plugin offers (its [[commands]]), for shortcuts, hooks and agents"), |a, cx| {
+            let plugin = a.str(0)?.to_string();
+            let mut words = Vec::new();
+            let mut i = 1;
+            while let Some(w) = a.get(i) {
+                words.push(w.to_string());
+                i += 1;
+            }
+            crate::plugins::external::run_command(&plugin, &words, cx)?;
+            Ok(json!({ "plugin": plugin, "command": words }))
+        })
+        .arg(ArgSpec::required("plugin", ArgKind::String, mandara_i18n::tk("plugin id")))
+        .arg(ArgSpec::required("command", ArgKind::String, mandara_i18n::tk("its command, then any words for it")))
+        .example("plugins run moon-phase remind"),
+    );
+    r.command(
+        "core",
+        CommandSpec::new("plugins commands", mandara_i18n::tk("The commands switched-on third-party plugins offer"), |_, cx| {
+            Ok(json!(crate::plugins::external::plugin_commands(cx).into_iter().map(|(plugin, c)| json!({ "plugin": plugin, "command": c.name, "summary": c.summary })).collect::<Vec<_>>()))
+        })
+        .example("plugins commands"),
+    );
+    r.command(
+        "core",
+        CommandSpec::new("plugins launch", mandara_i18n::tk("Choose a third-party plugin's launcher result (what Enter on it does)"), |a, cx| {
+            let (plugin, provider, hit) = (a.str(0)?.to_string(), a.str(1)?.to_string(), a.str(2)?.to_string());
+            crate::plugins::external::launch(&plugin, &provider, &hit, cx)?;
+            Ok(json!({ "plugin": plugin, "provider": provider, "hit": hit }))
+        })
+        .arg(ArgSpec::required("plugin", ArgKind::String, mandara_i18n::tk("plugin id")))
+        .arg(ArgSpec::required("provider", ArgKind::String, mandara_i18n::tk("its [[launcher]] id")))
+        .arg(ArgSpec::required("hit", ArgKind::String, mandara_i18n::tk("the result's id")))
+        .example("plugins launch moon-phase moon next-full"),
+    );
+    r.command(
+        core,
+        CommandSpec::new_output("plugins live", mandara_i18n::tk("Run an approved plugin live-wallpaper request from Studio"), |args, cx| {
+            crate::plugins::external::relay_live_wallpaper(args.str(0)?, cx)
+        })
+        .arg(ArgSpec::required("request", ArgKind::String, mandara_i18n::tk("Live wallpaper request as JSON"))),
+    );
+    r.command(
+        core,
+        CommandSpec::new("plugins reload", mandara_i18n::tk("Hot-reload plugins from the plugin folders (also happens automatically)"), |_, cx| {
+            crate::plugins::external::sync(cx);
+            Ok(json!({"queued": true}))
+        },
+        ),
+    );
+    r.command(
+        core,
+        CommandSpec::new("plugins list", mandara_i18n::tk("List plugins with origin and enablement"), |_, cx| {
+            let registry = cx.global::<PluginRegistry>();
+            let cfg = config(cx).read(cx).snapshot();
+            let mut list: Vec<_> = registry
+                .manifests()
+                .map(|m| {
+                    let mut entry = json!({
+                        "id": m.id,
+                        "name": m.name,
+                        "description": m.description,
+                        "origin": m.origin,
+                        "enabled": registry.is_enabled(&m.id, &cfg.plugins),
+                        "removed": cfg.plugins.is_removed(&m.id),
+                        "essential": m.origin == mandara_plugins::PluginOrigin::Builtin && mandara_plugins::lifecycle::essential_reason(&m.id).is_some(),
+                    });
+                    // Third-party runtime state: running / failed / disabled
+                    // (with the error), or "not-loaded" until first shown.
+                    if matches!(m.origin, mandara_plugins::PluginOrigin::ThirdParty { .. }) {
+                        entry["runtime"] = crate::plugins::external::load_state(&m.id).map(|s| json!(s)).unwrap_or_else(|| json!({ "state": "not-loaded" }));
+                    }
+                    entry
+                })
+                .collect();
+            let third_party = mandara_plugins::discover_third_party(&mandara_config::paths::config_dir().join("plugins"));
+            list.extend(third_party.into_iter().map(|m| json!({
+                "id": m.id,
+                "name": m.name,
+                "description": m.description,
+                "origin": m.origin,
+                "enabled": cfg.plugins.enabled.contains(&m.id),
+                "note": "third-party runtime (WASM/WIT) loads these from the plugin directory",
+            })));
+            Ok(json!(list))
+        }),
+    );
+    r.command(
+        core,
+        CommandSpec::new_output("plugins vet", mandara_i18n::tk("Run the marketplace's compliance check on a plugin folder: ok, or broken / malicious / placeholder with the reason"), |a, cx| {
+            let dir = std::path::PathBuf::from(a.rest(0));
+            let reserved = mandara_plugins::vet::builtin_ids(cx.global::<PluginRegistry>());
+            // Off the UI thread: it compiles and runs the component.
+            let (tx, rx) = async_channel::bounded(1);
+            std::thread::spawn(move || {
+                let verdict = mandara_plugins::vet::vet(&dir, &reserved.iter().map(String::as_str).collect::<Vec<_>>(), None);
+                let _ = tx.send_blocking(Ok(mandara_plugins::vet::verdict_json(&verdict).to_string()));
+            });
+            Ok(rx.into())
+        })
+        .arg(ArgSpec::required("dir", ArgKind::String, mandara_i18n::tk("the plugin folder (plugin.toml and plugin.wasm)")))
+        .example("plugins vet ~/.local/share/mandara/plugins-dev/my-plugin"),
+    );
+    use crate::plugins::lifecycle::Action;
+    for (path, summary, action) in [
+        ("plugins enable", mandara_i18n::tk("Turn a plugin on (a removed Mandara plugin is restored)"), Action::Enable),
+        ("plugins disable", mandara_i18n::tk("Turn a plugin off; it stops everything it runs"), Action::Disable),
+        ("plugins remove", mandara_i18n::tk("Remove a Mandara plugin: off, out of the bar and sidebar, listed under Removed"), Action::Remove),
+        ("plugins restore", mandara_i18n::tk("Bring back a removed Mandara plugin where it was"), Action::Restore),
+    ] {
+        r.command(
+            core,
+            CommandSpec::new(path, summary, move |a, cx| {
+                let id = a.str(0)?.to_string();
+                crate::plugins::lifecycle::apply(&id, action, cx)?;
+                let plugins = &config(cx).read(cx).get().plugins;
+                let enabled = cx.global::<PluginRegistry>().is_enabled(&id, plugins) || (cx.global::<PluginRegistry>().get(&id).is_none() && plugins.enabled.contains(&id));
+                Ok(json!({ "plugin": id, "enabled": enabled, "removed": plugins.is_removed(&id) }))
+            })
+            .arg(ArgSpec::required("plugin", ArgKind::String, mandara_i18n::tk("plugin id"))),
+        );
+    }
+
+    r.command(
+        core,
+        CommandSpec::new("studio", mandara_i18n::tk("Open Mandara Studio, optionally on a section"), |a, cx| {
+            // Words after the section (`--demo`) go to `mandara studio` too.
+            let words = a.rest(0);
+            let section = a.get(0).map(str::to_string);
+            crate::state::open_studio_at((!words.trim().is_empty()).then_some(words), cx);
+            Ok(json!({ "opened": section.unwrap_or_else(|| "home".into()) }))
+        })
+        .arg(ArgSpec::optional("section", ArgKind::String, STUDIO_SECTION_ARG))
+        .example("studio themes"),
+    );
+
+    r.command(core, CommandSpec::new("quit", mandara_i18n::tk("Quit Mandara Shell"), |_, cx| {
+        mandara_core::shell_lifetime::ShellLifetime::quit(cx);
+        Ok(json!("bye"))
+    }));
+}
+
+/// Where `look export` writes by default: the Downloads folder (or home),
+/// `<id>.mandara-look.toml`, never over an existing file.
+pub fn look_export_path(id: &str) -> std::path::PathBuf {
+    let dir = dirs::download_dir().filter(|d| d.is_dir()).unwrap_or_else(|| mandara_config::paths::expand_tilde("~"));
+    let mut path = dir.join(format!("{id}{}", mandara_config::user_looks::EXPORT_SUFFIX));
+    let mut n = 2;
+    while path.exists() {
+        path = dir.join(format!("{id}-{n}{}", mandara_config::user_looks::EXPORT_SUFFIX));
+        n += 1;
+    }
+    path
+}
+
+/// A look file's text, refusing anything too large before reading it.
+pub fn read_look_file(path: &std::path::Path) -> Result<String, String> {
+    let meta = std::fs::metadata(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    if !meta.is_file() || meta.len() > mandara_config::user_looks::MAX_FILE_BYTES as u64 {
+        return Err(format!("{} is not a look file", path.display()));
+    }
+    std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// Saves what `cfg` changes on its active look as a new look of yours
+/// (named `name`, or after the parent).
+pub fn save_current_look(cfg: &mandara_config::ShellConfig, name: Option<&str>) -> anyhow::Result<mandara_config::user_looks::UserLook> {
+    use mandara_config::user_looks::{self as ul, UserLook};
+    let active = ul::find(&cfg.looks.active);
+    let parent = match &active {
+        Some(l) => l.parent(),
+        None => mandara_config::looks::find(&cfg.looks.active),
+    }
+    .ok_or_else(|| anyhow::anyhow!("apply a look first: a look of yours starts from one"))?;
+    let existing = ul::list();
+    let names: Vec<String> = existing.iter().map(|l| l.name.clone()).collect();
+    let mut look = UserLook::child(parent, ul::delta_over(parent, cfg), &names, &chrono::Local::now().format("%Y-%m-%d").to_string());
+    look.wallpaper_colors = cfg.looks.wallpaper_colors;
+    if let Some(name) = name {
+        look.name = name.trim().chars().take(ul::MAX_NAME_CHARS).collect();
+    }
+    let ids: Vec<String> = existing.iter().map(|l| l.id.clone()).collect();
+    look.id = ul::unique_id(&look.name, &ids);
+    ul::save(&look)?;
+    Ok(look)
+}
+
+#[cfg(test)]
+mod model_job_tests {
+    use super::*;
+    #[test]
+    fn file_jobs_run_off_the_calling_thread_and_propagate_errors() {
+        let caller=std::thread::current().id();
+        let mandara_plugins::Output::Pending(reply)=model_job(move || {assert_ne!(caller,std::thread::current().id());Ok(json!({"installed":true}))}) else {panic!("file work must be pending")};
+        assert_eq!(reply.recv_blocking().unwrap().unwrap(),r#"{"installed":true}"#);
+        let mandara_plugins::Output::Pending(reply)=model_job(||Err("disk failure".into())) else {panic!("file work must be pending")};
+        assert_eq!(reply.recv_blocking().unwrap(),Err("disk failure".into()));
+    }
+}

@@ -1,0 +1,1 @@
+16:26:43.894 [[31mERR[0m] [[34mconfig[0m] @FIXTURES@/umbriel/syntax.toml:1:9: Error while parsing table header: expected ']', saw '\n'

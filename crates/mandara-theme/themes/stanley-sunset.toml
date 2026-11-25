@@ -1,0 +1,22 @@
+id = "stanley-sunset"
+name = "Stanley Sunset"
+description = "Evening over Stanley Bridge: coral, apricot and lavender over a plum sea."
+signature = true
+
+[dark]
+surface = "#1a111f"
+surface_variant = "#2a1c32"
+on_surface = "#fbedf4"
+primary = "#ff8c8f"
+secondary = "#ffba6e"
+tertiary = "#c69eff"
+error = "#ff6f6f"
+
+[light]
+surface = "#fff6f6"
+surface_variant = "#f7e5e9"
+on_surface = "#2b151f"
+primary = "#b33845"
+secondary = "#9e5800"
+tertiary = "#6e43c2"
+error = "#b3261e"

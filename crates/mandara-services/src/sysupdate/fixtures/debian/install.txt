@@ -1,0 +1,530 @@
+Reading package lists...
+Building dependency tree...
+Reading state information...
+Calculating upgrade...
+The following packages will be upgraded:
+  apt base-files bash bsdutils debian-archive-keyring dpkg e2fsprogs
+  gcc-12-base gpgv init-system-helpers libapt-pkg6.0 libblkid1 libc-bin libc6
+  libcap2 libcom-err2 libext2fs2 libgcc-s1 libgcrypt20 libgnutls30 liblzma5
+  libmount1 libpam-modules libpam-modules-bin libpam-runtime libpam0g
+  libpcre2-8-0 libseccomp2 libsmartcols1 libss2 libstdc++6 libsystemd0
+  libtasn1-6 libudev1 libuuid1 login logsave mount passwd perl-base sed tar
+  tzdata usr-is-merged util-linux util-linux-extra
+debconf: delaying package configuration, since apt-utils is not installed
+46 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.
+Need to get 0 B/21.6 MB of archives.
+After this operation, 70.7 kB of additional disk space will be used.
+pmstatus:dpkg-exec:0.0000:Running dpkg
+Preparing to unpack .../base-files_12.4+deb12u15_amd64.deb ...
+pmstatus:base-files:0.0000:Preparing base-files (amd64)
+pmstatus:base-files:0.5405:Unpacking base-files (amd64)
+Unpacking base-files (12.4+deb12u15) over (12.4+deb12u4) ...
+pmstatus:base-files:1.0811:Installing base-files (amd64)
+pmstatus:dpkg-exec:1.0811:Running dpkg
+Setting up base-files (12.4+deb12u15) ...
+pmstatus:base-files:1.0811:Preparing to configure base-files (amd64)
+Installing new version of config file /etc/debian_version ...
+pmstatus:base-files:1.6216:Configuring base-files (amd64)
+pmstatus:base-files:2.1622:Installed base-files (amd64)
+pmstatus:dpkg-exec:2.1622:Running dpkg
+Preparing to unpack .../bash_5.2.15-2+b13_amd64.deb ...
+pmstatus:bash:2.1622:Preparing bash (amd64)
+pmstatus:bash:2.7027:Unpacking bash (amd64)
+Unpacking bash (5.2.15-2+b13) over (5.2.15-2+b2) ...
+pmstatus:bash:3.2432:Installing bash (amd64)
+pmstatus:dpkg-exec:3.2432:Running dpkg
+Setting up bash (5.2.15-2+b13) ...
+pmstatus:bash:3.2432:Preparing to configure bash (amd64)
+pmstatus:bash:3.7838:Configuring bash (amd64)
+update-alternatives: using /usr/share/man/man7/bash-builtins.7.gz to provide /usr/share/man/man7/builtins.7.gz (builtins.7.gz) in auto mode
+pmstatus:bash:4.3243:Installed bash (amd64)
+pmstatus:dpkg-exec:4.3243:Running dpkg
+Preparing to unpack .../bsdutils_1%3a2.38.1-5+deb12u3_amd64.deb ...
+pmstatus:bsdutils:4.3243:Preparing bsdutils (amd64)
+pmstatus:bsdutils:4.8649:Unpacking bsdutils (amd64)
+Unpacking bsdutils (1:2.38.1-5+deb12u3) over (1:2.38.1-5+b1) ...
+pmstatus:bsdutils:5.4054:Installing bsdutils (amd64)
+pmstatus:dpkg-exec:5.4054:Running dpkg
+Setting up bsdutils (1:2.38.1-5+deb12u3) ...
+pmstatus:bsdutils:5.4054:Preparing to configure bsdutils (amd64)
+pmstatus:bsdutils:5.9459:Configuring bsdutils (amd64)
+pmstatus:bsdutils:6.4865:Installed bsdutils (amd64)
+pmstatus:dpkg-exec:6.4865:Running dpkg
+Preparing to unpack .../gcc-12-base_12.2.0-14+deb12u1_amd64.deb ...
+pmstatus:gcc-12-base:6.4865:Preparing gcc-12-base (amd64)
+pmstatus:gcc-12-base:7.0270:Unpacking gcc-12-base (amd64)
+Unpacking gcc-12-base:amd64 (12.2.0-14+deb12u1) over (12.2.0-14) ...
+pmstatus:gcc-12-base:7.5676:Installing gcc-12-base (amd64)
+pmstatus:dpkg-exec:7.5676:Running dpkg
+Setting up gcc-12-base:amd64 (12.2.0-14+deb12u1) ...
+pmstatus:gcc-12-base:7.5676:Preparing to configure gcc-12-base (amd64)
+pmstatus:gcc-12-base:8.1081:Configuring gcc-12-base (amd64)
+pmstatus:gcc-12-base:8.6486:Installed gcc-12-base (amd64)
+pmstatus:dpkg-exec:8.6486:Running dpkg
+Preparing to unpack .../libgcc-s1_12.2.0-14+deb12u1_amd64.deb ...
+pmstatus:libgcc-s1:8.6486:Preparing libgcc-s1 (amd64)
+pmstatus:libgcc-s1:9.1892:Unpacking libgcc-s1 (amd64)
+Unpacking libgcc-s1:amd64 (12.2.0-14+deb12u1) over (12.2.0-14) ...
+pmstatus:libgcc-s1:9.7297:Installing libgcc-s1 (amd64)
+pmstatus:dpkg-exec:9.7297:Running dpkg
+Setting up libgcc-s1:amd64 (12.2.0-14+deb12u1) ...
+pmstatus:libgcc-s1:9.7297:Preparing to configure libgcc-s1 (amd64)
+pmstatus:libgcc-s1:10.2703:Configuring libgcc-s1 (amd64)
+pmstatus:libgcc-s1:10.8108:Installed libgcc-s1 (amd64)
+pmstatus:dpkg-exec:10.8108:Running dpkg
+Preparing to unpack .../libstdc++6_12.2.0-14+deb12u1_amd64.deb ...
+pmstatus:libstdc++6:10.8108:Preparing libstdc++6 (amd64)
+pmstatus:libstdc++6:11.3514:Unpacking libstdc++6 (amd64)
+Unpacking libstdc++6:amd64 (12.2.0-14+deb12u1) over (12.2.0-14) ...
+pmstatus:libstdc++6:11.8919:Installing libstdc++6 (amd64)
+pmstatus:dpkg-exec:11.8919:Running dpkg
+Setting up libstdc++6:amd64 (12.2.0-14+deb12u1) ...
+pmstatus:libstdc++6:11.8919:Preparing to configure libstdc++6 (amd64)
+pmstatus:libstdc++6:12.4324:Configuring libstdc++6 (amd64)
+pmstatus:libstdc++6:12.9730:Installed libstdc++6 (amd64)
+pmstatus:dpkg-exec:12.9730:Running dpkg
+Preparing to unpack .../libc6_2.36-9+deb12u14_amd64.deb ...
+pmstatus:libc6:12.9730:Preparing libc6 (amd64)
+pmstatus:libc6:13.5135:Unpacking libc6 (amd64)
+Unpacking libc6:amd64 (2.36-9+deb12u14) over (2.36-9+deb12u3) ...
+pmstatus:libc6:14.0541:Installing libc6 (amd64)
+pmstatus:dpkg-exec:14.0541:Running dpkg
+Setting up libc6:amd64 (2.36-9+deb12u14) ...
+pmstatus:libc6:14.0541:Preparing to configure libc6 (amd64)
+pmstatus:libc6:14.5946:Configuring libc6 (amd64)
+pmstatus:libc6:15.1351:Installed libc6 (amd64)
+pmstatus:dpkg-exec:15.1351:Running dpkg
+Preparing to unpack .../libgcrypt20_1.10.1-3+deb12u1_amd64.deb ...
+pmstatus:libgcrypt20:15.1351:Preparing libgcrypt20 (amd64)
+pmstatus:libgcrypt20:15.6757:Unpacking libgcrypt20 (amd64)
+Unpacking libgcrypt20:amd64 (1.10.1-3+deb12u1) over (1.10.1-3) ...
+pmstatus:libgcrypt20:16.2162:Installing libgcrypt20 (amd64)
+pmstatus:dpkg-exec:16.2162:Running dpkg
+Setting up libgcrypt20:amd64 (1.10.1-3+deb12u1) ...
+pmstatus:libgcrypt20:16.2162:Preparing to configure libgcrypt20 (amd64)
+pmstatus:libgcrypt20:16.7568:Configuring libgcrypt20 (amd64)
+pmstatus:libgcrypt20:17.2973:Installed libgcrypt20 (amd64)
+pmstatus:dpkg-exec:17.2973:Running dpkg
+Preparing to unpack .../liblzma5_5.4.1-1+deb12u2_amd64.deb ...
+pmstatus:liblzma5:17.2973:Preparing liblzma5 (amd64)
+pmstatus:liblzma5:17.8378:Unpacking liblzma5 (amd64)
+Unpacking liblzma5:amd64 (5.4.1-1+deb12u2) over (5.4.1-0.2) ...
+pmstatus:liblzma5:18.3784:Installing liblzma5 (amd64)
+pmstatus:dpkg-exec:18.3784:Running dpkg
+Setting up liblzma5:amd64 (5.4.1-1+deb12u2) ...
+pmstatus:liblzma5:18.3784:Preparing to configure liblzma5 (amd64)
+pmstatus:liblzma5:18.9189:Configuring liblzma5 (amd64)
+pmstatus:liblzma5:19.4595:Installed liblzma5 (amd64)
+pmstatus:dpkg-exec:19.4595:Running dpkg
+Preparing to unpack .../libcap2_1%3a2.66-4+deb12u3+b1_amd64.deb ...
+pmstatus:libcap2:19.4595:Preparing libcap2 (amd64)
+pmstatus:libcap2:20.0000:Unpacking libcap2 (amd64)
+Unpacking libcap2:amd64 (1:2.66-4+deb12u3+b1) over (1:2.66-4) ...
+pmstatus:libcap2:20.5405:Installing libcap2 (amd64)
+pmstatus:dpkg-exec:20.5405:Running dpkg
+Setting up libcap2:amd64 (1:2.66-4+deb12u3+b1) ...
+pmstatus:libcap2:20.5405:Preparing to configure libcap2 (amd64)
+pmstatus:libcap2:21.0811:Configuring libcap2 (amd64)
+pmstatus:libcap2:21.6216:Installed libcap2 (amd64)
+pmstatus:dpkg-exec:21.6216:Running dpkg
+Preparing to unpack .../libsystemd0_252.39-1~deb12u2_amd64.deb ...
+pmstatus:libsystemd0:21.6216:Preparing libsystemd0 (amd64)
+pmstatus:libsystemd0:22.1622:Unpacking libsystemd0 (amd64)
+Unpacking libsystemd0:amd64 (252.39-1~deb12u2) over (252.19-1~deb12u1) ...
+pmstatus:libsystemd0:22.7027:Installing libsystemd0 (amd64)
+pmstatus:dpkg-exec:22.7027:Running dpkg
+Setting up libsystemd0:amd64 (252.39-1~deb12u2) ...
+pmstatus:libsystemd0:22.7027:Preparing to configure libsystemd0 (amd64)
+pmstatus:libsystemd0:23.2432:Configuring libsystemd0 (amd64)
+pmstatus:libsystemd0:23.7838:Installed libsystemd0 (amd64)
+pmstatus:dpkg-exec:23.7838:Running dpkg
+Preparing to unpack .../libudev1_252.39-1~deb12u2_amd64.deb ...
+pmstatus:libudev1:23.7838:Preparing libudev1 (amd64)
+pmstatus:libudev1:24.3243:Unpacking libudev1 (amd64)
+Unpacking libudev1:amd64 (252.39-1~deb12u2) over (252.19-1~deb12u1) ...
+pmstatus:libudev1:24.8649:Installing libudev1 (amd64)
+pmstatus:dpkg-exec:24.8649:Running dpkg
+Setting up libudev1:amd64 (252.39-1~deb12u2) ...
+pmstatus:libudev1:24.8649:Preparing to configure libudev1 (amd64)
+pmstatus:libudev1:25.4054:Configuring libudev1 (amd64)
+pmstatus:libudev1:25.9459:Installed libudev1 (amd64)
+pmstatus:dpkg-exec:25.9459:Running dpkg
+Preparing to unpack .../libapt-pkg6.0_2.6.2_amd64.deb ...
+pmstatus:libapt-pkg6.0:25.9459:Preparing libapt-pkg6.0 (amd64)
+pmstatus:libapt-pkg6.0:26.4865:Unpacking libapt-pkg6.0 (amd64)
+Unpacking libapt-pkg6.0:amd64 (2.6.2) over (2.6.1) ...
+pmstatus:libapt-pkg6.0:27.0270:Installing libapt-pkg6.0 (amd64)
+pmstatus:dpkg-exec:27.0270:Running dpkg
+Setting up libapt-pkg6.0:amd64 (2.6.2) ...
+pmstatus:libapt-pkg6.0:27.0270:Preparing to configure libapt-pkg6.0 (amd64)
+pmstatus:libapt-pkg6.0:27.5676:Configuring libapt-pkg6.0 (amd64)
+pmstatus:libapt-pkg6.0:28.1081:Installed libapt-pkg6.0 (amd64)
+pmstatus:dpkg-exec:28.1081:Running dpkg
+Preparing to unpack .../tar_1.34+dfsg-1.2+deb12u1_amd64.deb ...
+pmstatus:tar:28.1081:Preparing tar (amd64)
+pmstatus:tar:28.6486:Unpacking tar (amd64)
+Unpacking tar (1.34+dfsg-1.2+deb12u1) over (1.34+dfsg-1.2) ...
+pmstatus:tar:29.1892:Installing tar (amd64)
+pmstatus:dpkg-exec:29.1892:Running dpkg
+Setting up tar (1.34+dfsg-1.2+deb12u1) ...
+pmstatus:tar:29.1892:Preparing to configure tar (amd64)
+pmstatus:tar:29.7297:Configuring tar (amd64)
+pmstatus:tar:30.2703:Installed tar (amd64)
+pmstatus:dpkg-exec:30.2703:Running dpkg
+Preparing to unpack .../dpkg_1.21.23_amd64.deb ...
+pmstatus:dpkg:30.2703:Preparing dpkg (amd64)
+pmstatus:dpkg:30.8108:Unpacking dpkg (amd64)
+Unpacking dpkg (1.21.23) over (1.21.22) ...
+pmstatus:dpkg:31.3514:Installing dpkg (amd64)
+pmstatus:dpkg-exec:31.3514:Running dpkg
+Setting up dpkg (1.21.23) ...
+pmstatus:dpkg:31.3514:Preparing to configure dpkg (amd64)
+pmstatus:dpkg:31.8919:Configuring dpkg (amd64)
+pmstatus:dpkg:32.4324:Installed dpkg (amd64)
+pmstatus:dpkg-exec:32.4324:Running dpkg
+Preparing to unpack .../login_1%3a4.13+dfsg1-1+deb12u2_amd64.deb ...
+pmstatus:login:32.4324:Preparing login (amd64)
+pmstatus:login:32.9730:Unpacking login (amd64)
+Unpacking login (1:4.13+dfsg1-1+deb12u2) over (1:4.13+dfsg1-1+b1) ...
+pmstatus:login:33.5135:Installing login (amd64)
+pmstatus:dpkg-exec:33.5135:Running dpkg
+Setting up login (1:4.13+dfsg1-1+deb12u2) ...
+pmstatus:login:33.5135:Preparing to configure login (amd64)
+pmstatus:login:34.0541:Configuring login (amd64)
+pmstatus:login:34.5946:Installed login (amd64)
+pmstatus:dpkg-exec:34.5946:Running dpkg
+Preparing to unpack .../perl-base_5.36.0-7+deb12u4_amd64.deb ...
+pmstatus:perl-base:34.5946:Preparing perl-base (amd64)
+pmstatus:perl-base:35.1351:Unpacking perl-base (amd64)
+Unpacking perl-base (5.36.0-7+deb12u4) over (5.36.0-7+deb12u1) ...
+pmstatus:perl-base:35.6757:Installing perl-base (amd64)
+pmstatus:dpkg-exec:35.6757:Running dpkg
+Setting up perl-base (5.36.0-7+deb12u4) ...
+pmstatus:perl-base:35.6757:Preparing to configure perl-base (amd64)
+pmstatus:perl-base:36.2162:Configuring perl-base (amd64)
+pmstatus:perl-base:36.7568:Installed perl-base (amd64)
+pmstatus:dpkg-exec:36.7568:Running dpkg
+Preparing to unpack .../sed_4.9-1+deb12u1_amd64.deb ...
+pmstatus:sed:36.7568:Preparing sed (amd64)
+pmstatus:sed:37.2973:Unpacking sed (amd64)
+Unpacking sed (4.9-1+deb12u1) over (4.9-1) ...
+pmstatus:sed:37.8378:Installing sed (amd64)
+pmstatus:dpkg-exec:37.8378:Running dpkg
+Setting up sed (4.9-1+deb12u1) ...
+pmstatus:sed:37.8378:Preparing to configure sed (amd64)
+pmstatus:sed:38.3784:Configuring sed (amd64)
+pmstatus:sed:38.9189:Installed sed (amd64)
+pmstatus:dpkg-exec:38.9189:Running dpkg
+Preparing to unpack .../libsmartcols1_2.38.1-5+deb12u3_amd64.deb ...
+pmstatus:libsmartcols1:38.9189:Preparing libsmartcols1 (amd64)
+pmstatus:libsmartcols1:39.4595:Unpacking libsmartcols1 (amd64)
+Unpacking libsmartcols1:amd64 (2.38.1-5+deb12u3) over (2.38.1-5+b1) ...
+pmstatus:libsmartcols1:40.0000:Installing libsmartcols1 (amd64)
+pmstatus:dpkg-exec:40.0000:Running dpkg
+Setting up libsmartcols1:amd64 (2.38.1-5+deb12u3) ...
+pmstatus:libsmartcols1:40.0000:Preparing to configure libsmartcols1 (amd64)
+pmstatus:libsmartcols1:40.5405:Configuring libsmartcols1 (amd64)
+pmstatus:libsmartcols1:41.0811:Installed libsmartcols1 (amd64)
+pmstatus:dpkg-exec:41.0811:Running dpkg
+Preparing to unpack .../util-linux-extra_2.38.1-5+deb12u3_amd64.deb ...
+pmstatus:util-linux-extra:41.0811:Preparing util-linux-extra (amd64)
+pmstatus:util-linux-extra:41.6216:Unpacking util-linux-extra (amd64)
+Unpacking util-linux-extra (2.38.1-5+deb12u3) over (2.38.1-5+b1) ...
+pmstatus:util-linux-extra:42.1622:Installing util-linux-extra (amd64)
+pmstatus:dpkg-exec:42.1622:Running dpkg
+Setting up util-linux-extra (2.38.1-5+deb12u3) ...
+pmstatus:util-linux-extra:42.1622:Preparing to configure util-linux-extra (amd64)
+pmstatus:util-linux-extra:42.7027:Configuring util-linux-extra (amd64)
+pmstatus:util-linux-extra:43.2432:Installed util-linux-extra (amd64)
+pmstatus:dpkg-exec:43.2432:Running dpkg
+Preparing to unpack .../util-linux_2.38.1-5+deb12u3_amd64.deb ...
+pmstatus:util-linux:43.2432:Preparing util-linux (amd64)
+pmstatus:util-linux:43.7838:Unpacking util-linux (amd64)
+Unpacking util-linux (2.38.1-5+deb12u3) over (2.38.1-5+b1) ...
+pmstatus:util-linux:44.3243:Installing util-linux (amd64)
+pmstatus:dpkg-exec:44.3243:Running dpkg
+Setting up util-linux (2.38.1-5+deb12u3) ...
+pmstatus:util-linux:44.3243:Preparing to configure util-linux (amd64)
+pmstatus:util-linux:44.8649:Configuring util-linux (amd64)
+pmstatus:util-linux:45.4054:Installed util-linux (amd64)
+pmstatus:dpkg-exec:45.4054:Running dpkg
+Preparing to unpack .../gpgv_2.2.40-1.1+deb12u2_amd64.deb ...
+pmstatus:gpgv:45.4054:Preparing gpgv (amd64)
+pmstatus:gpgv:45.9459:Unpacking gpgv (amd64)
+Unpacking gpgv (2.2.40-1.1+deb12u2) over (2.2.40-1.1) ...
+pmstatus:gpgv:46.4865:Installing gpgv (amd64)
+pmstatus:dpkg-exec:46.4865:Running dpkg
+Setting up gpgv (2.2.40-1.1+deb12u2) ...
+pmstatus:gpgv:46.4865:Preparing to configure gpgv (amd64)
+pmstatus:gpgv:47.0270:Configuring gpgv (amd64)
+pmstatus:gpgv:47.5676:Installed gpgv (amd64)
+pmstatus:dpkg-exec:47.5676:Running dpkg
+Preparing to unpack .../debian-archive-keyring_2023.3+deb12u2_all.deb ...
+pmstatus:debian-archive-keyring:47.5676:Preparing debian-archive-keyring (amd64)
+pmstatus:debian-archive-keyring:48.1081:Unpacking debian-archive-keyring (amd64)
+Unpacking debian-archive-keyring (2023.3+deb12u2) over (2023.3+deb12u1) ...
+pmstatus:debian-archive-keyring:48.6487:Installing debian-archive-keyring (amd64)
+pmstatus:dpkg-exec:48.6487:Running dpkg
+Setting up debian-archive-keyring (2023.3+deb12u2) ...
+pmstatus:debian-archive-keyring:48.6487:Preparing to configure debian-archive-keyring (amd64)
+pmstatus:debian-archive-keyring:49.1892:Configuring debian-archive-keyring (amd64)
+Removing obsolete conffile /etc/apt/trusted.gpg.d/debian-archive-buster-stable.asc ...
+Removing obsolete conffile /etc/apt/trusted.gpg.d/debian-archive-buster-security-automatic.asc ...
+Removing obsolete conffile /etc/apt/trusted.gpg.d/debian-archive-buster-automatic.asc ...
+pmstatus:debian-archive-keyring:49.7297:Installed debian-archive-keyring (amd64)
+pmstatus:dpkg-exec:49.7297:Running dpkg
+Preparing to unpack .../libtasn1-6_4.19.0-2+deb12u1_amd64.deb ...
+pmstatus:libtasn1-6:49.7297:Preparing libtasn1-6 (amd64)
+pmstatus:libtasn1-6:50.2703:Unpacking libtasn1-6 (amd64)
+Unpacking libtasn1-6:amd64 (4.19.0-2+deb12u1) over (4.19.0-2) ...
+pmstatus:libtasn1-6:50.8108:Installing libtasn1-6 (amd64)
+pmstatus:dpkg-exec:50.8108:Running dpkg
+Setting up libtasn1-6:amd64 (4.19.0-2+deb12u1) ...
+pmstatus:libtasn1-6:50.8108:Preparing to configure libtasn1-6 (amd64)
+pmstatus:libtasn1-6:51.3513:Configuring libtasn1-6 (amd64)
+pmstatus:libtasn1-6:51.8919:Installed libtasn1-6 (amd64)
+pmstatus:dpkg-exec:51.8919:Running dpkg
+Preparing to unpack .../libgnutls30_3.7.9-2+deb12u7_amd64.deb ...
+pmstatus:libgnutls30:51.8919:Preparing libgnutls30 (amd64)
+pmstatus:libgnutls30:52.4324:Unpacking libgnutls30 (amd64)
+Unpacking libgnutls30:amd64 (3.7.9-2+deb12u7) over (3.7.9-2+deb12u1) ...
+pmstatus:libgnutls30:52.9730:Installing libgnutls30 (amd64)
+pmstatus:dpkg-exec:52.9730:Running dpkg
+Setting up libgnutls30:amd64 (3.7.9-2+deb12u7) ...
+pmstatus:libgnutls30:52.9730:Preparing to configure libgnutls30 (amd64)
+pmstatus:libgnutls30:53.5135:Configuring libgnutls30 (amd64)
+pmstatus:libgnutls30:54.0541:Installed libgnutls30 (amd64)
+pmstatus:dpkg-exec:54.0541:Running dpkg
+Preparing to unpack .../libseccomp2_2.5.4-1+deb12u1_amd64.deb ...
+Unpacking libseccomp2:amd64 (2.5.4-1+deb12u1) over (2.5.4-1+b3) ...
+pmstatus:libseccomp2:54.0541:Preparing libseccomp2 (amd64)
+pmstatus:libseccomp2:54.5946:Unpacking libseccomp2 (amd64)
+pmstatus:libseccomp2:55.1351:Installing libseccomp2 (amd64)
+pmstatus:dpkg-exec:55.1351:Running dpkg
+Setting up libseccomp2:amd64 (2.5.4-1+deb12u1) ...
+pmstatus:libseccomp2:55.1351:Preparing to configure libseccomp2 (amd64)
+pmstatus:libseccomp2:55.6757:Configuring libseccomp2 (amd64)
+pmstatus:libseccomp2:56.2162:Installed libseccomp2 (amd64)
+pmstatus:dpkg-exec:56.2162:Running dpkg
+Preparing to unpack .../archives/apt_2.6.2_amd64.deb ...
+pmstatus:apt:56.2162:Preparing apt (amd64)
+pmstatus:apt:56.7568:Unpacking apt (amd64)
+Unpacking apt (2.6.2) over (2.6.1) ...
+pmstatus:apt:57.2973:Installing apt (amd64)
+pmstatus:dpkg-exec:57.2973:Running dpkg
+Setting up apt (2.6.2) ...
+pmstatus:apt:57.2973:Preparing to configure apt (amd64)
+pmstatus:apt:57.8378:Configuring apt (amd64)
+pmstatus:apt:58.3784:Installed apt (amd64)
+pmstatus:dpkg-exec:58.3784:Running dpkg
+Preparing to unpack .../usr-is-merged_37~deb12u1_all.deb ...
+pmstatus:usr-is-merged:58.3784:Preparing usr-is-merged (amd64)
+pmstatus:usr-is-merged:58.9189:Unpacking usr-is-merged (amd64)
+Unpacking usr-is-merged (37~deb12u1) over (35) ...
+pmstatus:usr-is-merged:59.4595:Installing usr-is-merged (amd64)
+pmstatus:dpkg-exec:59.4595:Running dpkg
+Setting up usr-is-merged (37~deb12u1) ...
+pmstatus:usr-is-merged:59.4595:Preparing to configure usr-is-merged (amd64)
+pmstatus:usr-is-merged:60.0000:Configuring usr-is-merged (amd64)
+removed '/lib32'
+rmdir: removing directory, '/usr/lib32'
+removed '/libx32'
+rmdir: removing directory, '/usr/libx32'
+pmstatus:usr-is-merged:60.5405:Installed usr-is-merged (amd64)
+pmstatus:dpkg-exec:60.5405:Running dpkg
+Preparing to unpack .../init-system-helpers_1.65.2+deb12u1_all.deb ...
+pmstatus:init-system-helpers:60.5405:Preparing init-system-helpers (amd64)
+pmstatus:init-system-helpers:61.0811:Unpacking init-system-helpers (amd64)
+Unpacking init-system-helpers (1.65.2+deb12u1) over (1.65.2) ...
+pmstatus:init-system-helpers:61.6216:Installing init-system-helpers (amd64)
+pmstatus:dpkg-exec:61.6216:Running dpkg
+Setting up init-system-helpers (1.65.2+deb12u1) ...
+pmstatus:init-system-helpers:61.6216:Preparing to configure init-system-helpers (amd64)
+pmstatus:init-system-helpers:62.1622:Configuring init-system-helpers (amd64)
+pmstatus:init-system-helpers:62.7027:Installed init-system-helpers (amd64)
+pmstatus:dpkg-exec:62.7027:Running dpkg
+Preparing to unpack .../libc-bin_2.36-9+deb12u14_amd64.deb ...
+pmstatus:libc-bin:62.7027:Preparing libc-bin (amd64)
+pmstatus:libc-bin:63.2432:Unpacking libc-bin (amd64)
+Unpacking libc-bin (2.36-9+deb12u14) over (2.36-9+deb12u3) ...
+pmstatus:libc-bin:63.7838:Installing libc-bin (amd64)
+pmstatus:dpkg-exec:63.7838:Running dpkg
+Setting up libc-bin (2.36-9+deb12u14) ...
+pmstatus:libc-bin:63.7838:Preparing to configure libc-bin (amd64)
+pmstatus:libc-bin:64.3243:Configuring libc-bin (amd64)
+pmstatus:libc-bin:64.8649:Installed libc-bin (amd64)
+pmstatus:dpkg-exec:64.8649:Running dpkg
+Preparing to unpack .../libpam0g_1.5.2-6+deb12u2_amd64.deb ...
+pmstatus:libpam0g:64.8649:Preparing libpam0g (amd64)
+pmstatus:libpam0g:64.7059:Unpacking libpam0g (amd64)
+Unpacking libpam0g:amd64 (1.5.2-6+deb12u2) over (1.5.2-6+deb12u1) ...
+pmstatus:libpam0g:65.2406:Installing libpam0g (amd64)
+pmstatus:dpkg-exec:65.2406:Running dpkg
+Setting up libpam0g:amd64 (1.5.2-6+deb12u2) ...
+pmstatus:libpam0g:65.2406:Preparing to configure libpam0g (amd64)
+pmstatus:libpam0g:65.7754:Configuring libpam0g (amd64)
+pmstatus:libpam0g:66.3102:Installed libpam0g (amd64)
+pmstatus:dpkg-exec:66.3102:Running dpkg
+Preparing to unpack .../libpam-modules-bin_1.5.2-6+deb12u2_amd64.deb ...
+pmstatus:libpam-modules-bin:66.3102:Preparing libpam-modules-bin (amd64)
+pmstatus:libpam-modules-bin:66.8449:Unpacking libpam-modules-bin (amd64)
+Unpacking libpam-modules-bin (1.5.2-6+deb12u2) over (1.5.2-6+deb12u1) ...
+pmstatus:libpam-modules-bin:67.3797:Installing libpam-modules-bin (amd64)
+pmstatus:dpkg-exec:67.3797:Running dpkg
+Setting up libpam-modules-bin (1.5.2-6+deb12u2) ...
+pmstatus:libpam-modules-bin:67.3797:Preparing to configure libpam-modules-bin (amd64)
+pmstatus:libpam-modules-bin:67.9144:Configuring libpam-modules-bin (amd64)
+pmstatus:libpam-modules-bin:68.4492:Installed libpam-modules-bin (amd64)
+pmstatus:dpkg-exec:68.4492:Running dpkg
+Preparing to unpack .../libpam-modules_1.5.2-6+deb12u2_amd64.deb ...
+pmstatus:libpam-modules:68.4492:Preparing libpam-modules (amd64)
+pmstatus:libpam-modules:68.9840:Unpacking libpam-modules (amd64)
+Unpacking libpam-modules:amd64 (1.5.2-6+deb12u2) over (1.5.2-6+deb12u1) ...
+pmstatus:libpam-modules:69.5187:Installing libpam-modules (amd64)
+pmstatus:dpkg-exec:69.5187:Running dpkg
+Setting up libpam-modules:amd64 (1.5.2-6+deb12u2) ...
+pmstatus:libpam-modules:69.5187:Preparing to configure libpam-modules (amd64)
+pmstatus:libpam-modules:70.0535:Configuring libpam-modules (amd64)
+pmstatus:libpam-modules:70.5882:Installed libpam-modules (amd64)
+pmstatus:dpkg-exec:70.5882:Running dpkg
+Preparing to unpack .../logsave_1.47.0-2+b2_amd64.deb ...
+pmstatus:logsave:70.5882:Preparing logsave (amd64)
+pmstatus:logsave:71.1230:Unpacking logsave (amd64)
+Unpacking logsave (1.47.0-2+b2) over (1.47.0-2) ...
+pmstatus:logsave:71.6578:Installing logsave (amd64)
+Preparing to unpack .../libext2fs2_1.47.0-2+b2_amd64.deb ...
+pmstatus:libext2fs2:71.6578:Preparing libext2fs2 (amd64)
+pmstatus:libext2fs2:72.1925:Unpacking libext2fs2 (amd64)
+Unpacking libext2fs2:amd64 (1.47.0-2+b2) over (1.47.0-2) ...
+pmstatus:libext2fs2:72.7273:Installing libext2fs2 (amd64)
+pmstatus:dpkg-exec:72.7273:Running dpkg
+Setting up libext2fs2:amd64 (1.47.0-2+b2) ...
+pmstatus:libext2fs2:72.7273:Preparing to configure libext2fs2 (amd64)
+pmstatus:libext2fs2:73.2620:Configuring libext2fs2 (amd64)
+pmstatus:libext2fs2:73.7968:Installed libext2fs2 (amd64)
+pmstatus:dpkg-exec:73.7968:Running dpkg
+Preparing to unpack .../e2fsprogs_1.47.0-2+b2_amd64.deb ...
+pmstatus:e2fsprogs:73.7968:Preparing e2fsprogs (amd64)
+pmstatus:e2fsprogs:74.3316:Unpacking e2fsprogs (amd64)
+Unpacking e2fsprogs (1.47.0-2+b2) over (1.47.0-2) ...
+pmstatus:e2fsprogs:74.8663:Installing e2fsprogs (amd64)
+Preparing to unpack .../mount_2.38.1-5+deb12u3_amd64.deb ...
+pmstatus:mount:74.8663:Preparing mount (amd64)
+pmstatus:mount:75.4011:Unpacking mount (amd64)
+Unpacking mount (2.38.1-5+deb12u3) over (2.38.1-5+b1) ...
+pmstatus:mount:75.9358:Installing mount (amd64)
+Preparing to unpack .../libpam-runtime_1.5.2-6+deb12u2_all.deb ...
+pmstatus:libpam-runtime:75.9358:Preparing libpam-runtime (amd64)
+pmstatus:libpam-runtime:76.4706:Unpacking libpam-runtime (amd64)
+Unpacking libpam-runtime (1.5.2-6+deb12u2) over (1.5.2-6+deb12u1) ...
+pmstatus:libpam-runtime:77.0053:Installing libpam-runtime (amd64)
+pmstatus:dpkg-exec:77.0053:Running dpkg
+Setting up libpam-runtime (1.5.2-6+deb12u2) ...
+pmstatus:libpam-runtime:77.0053:Preparing to configure libpam-runtime (amd64)
+pmstatus:libpam-runtime:77.5401:Configuring libpam-runtime (amd64)
+pmstatus:libpam-runtime:78.0749:Installed libpam-runtime (amd64)
+pmstatus:dpkg-exec:78.0749:Running dpkg
+Preparing to unpack .../passwd_1%3a4.13+dfsg1-1+deb12u2_amd64.deb ...
+pmstatus:passwd:78.0749:Preparing passwd (amd64)
+pmstatus:passwd:78.6096:Unpacking passwd (amd64)
+Unpacking passwd (1:4.13+dfsg1-1+deb12u2) over (1:4.13+dfsg1-1+b1) ...
+pmstatus:passwd:79.1444:Installing passwd (amd64)
+pmstatus:dpkg-exec:79.1444:Running dpkg
+Setting up passwd (1:4.13+dfsg1-1+deb12u2) ...
+pmstatus:passwd:79.1444:Preparing to configure passwd (amd64)
+pmstatus:passwd:79.6791:Configuring passwd (amd64)
+pmstatus:passwd:80.2139:Installed passwd (amd64)
+pmstatus:dpkg-exec:80.2139:Running dpkg
+Preparing to unpack .../libblkid1_2.38.1-5+deb12u3_amd64.deb ...
+pmstatus:libblkid1:80.2139:Preparing libblkid1 (amd64)
+pmstatus:libblkid1:80.7487:Unpacking libblkid1 (amd64)
+Unpacking libblkid1:amd64 (2.38.1-5+deb12u3) over (2.38.1-5+b1) ...
+pmstatus:libblkid1:81.2834:Installing libblkid1 (amd64)
+pmstatus:dpkg-exec:81.2834:Running dpkg
+Setting up libblkid1:amd64 (2.38.1-5+deb12u3) ...
+pmstatus:libblkid1:81.2834:Preparing to configure libblkid1 (amd64)
+pmstatus:libblkid1:81.8182:Configuring libblkid1 (amd64)
+pmstatus:libblkid1:82.3529:Installed libblkid1 (amd64)
+pmstatus:dpkg-exec:82.3529:Running dpkg
+Preparing to unpack .../libmount1_2.38.1-5+deb12u3_amd64.deb ...
+pmstatus:libmount1:82.3529:Preparing libmount1 (amd64)
+pmstatus:libmount1:82.8877:Unpacking libmount1 (amd64)
+Unpacking libmount1:amd64 (2.38.1-5+deb12u3) over (2.38.1-5+b1) ...
+pmstatus:libmount1:83.4225:Installing libmount1 (amd64)
+pmstatus:dpkg-exec:83.4225:Running dpkg
+Setting up libmount1:amd64 (2.38.1-5+deb12u3) ...
+pmstatus:libmount1:83.4225:Preparing to configure libmount1 (amd64)
+pmstatus:libmount1:83.9572:Configuring libmount1 (amd64)
+pmstatus:libmount1:84.4920:Installed libmount1 (amd64)
+pmstatus:dpkg-exec:84.4920:Running dpkg
+Preparing to unpack .../libpcre2-8-0_10.42-1+deb12u2_amd64.deb ...
+pmstatus:libpcre2-8-0:84.4920:Preparing libpcre2-8-0 (amd64)
+pmstatus:libpcre2-8-0:85.0267:Unpacking libpcre2-8-0 (amd64)
+Unpacking libpcre2-8-0:amd64 (10.42-1+deb12u2) over (10.42-1) ...
+pmstatus:libpcre2-8-0:85.5615:Installing libpcre2-8-0 (amd64)
+pmstatus:dpkg-exec:85.5615:Running dpkg
+Setting up libpcre2-8-0:amd64 (10.42-1+deb12u2) ...
+pmstatus:libpcre2-8-0:85.5615:Preparing to configure libpcre2-8-0 (amd64)
+pmstatus:libpcre2-8-0:86.0963:Configuring libpcre2-8-0 (amd64)
+pmstatus:libpcre2-8-0:86.6310:Installed libpcre2-8-0 (amd64)
+pmstatus:dpkg-exec:86.6310:Running dpkg
+Preparing to unpack .../libuuid1_2.38.1-5+deb12u3_amd64.deb ...
+pmstatus:libuuid1:86.6310:Preparing libuuid1 (amd64)
+pmstatus:libuuid1:87.1658:Unpacking libuuid1 (amd64)
+Unpacking libuuid1:amd64 (2.38.1-5+deb12u3) over (2.38.1-5+b1) ...
+pmstatus:libuuid1:87.7005:Installing libuuid1 (amd64)
+pmstatus:dpkg-exec:87.7005:Running dpkg
+Setting up libuuid1:amd64 (2.38.1-5+deb12u3) ...
+pmstatus:libuuid1:87.7005:Preparing to configure libuuid1 (amd64)
+pmstatus:libuuid1:88.2353:Configuring libuuid1 (amd64)
+pmstatus:libuuid1:88.7701:Installed libuuid1 (amd64)
+pmstatus:dpkg-exec:88.7701:Running dpkg
+Preparing to unpack .../tzdata_2026f-0+deb12u1_all.deb ...
+pmstatus:tzdata:88.7701:Preparing tzdata (amd64)
+pmstatus:tzdata:89.3048:Unpacking tzdata (amd64)
+Unpacking tzdata (2026f-0+deb12u1) over (2023c-5+deb12u1) ...
+pmstatus:tzdata:89.8396:Installing tzdata (amd64)
+Preparing to unpack .../libcom-err2_1.47.0-2+b2_amd64.deb ...
+pmstatus:libcom-err2:89.8396:Preparing libcom-err2 (amd64)
+pmstatus:libcom-err2:90.3743:Unpacking libcom-err2 (amd64)
+Unpacking libcom-err2:amd64 (1.47.0-2+b2) over (1.47.0-2) ...
+pmstatus:libcom-err2:90.9091:Installing libcom-err2 (amd64)
+Preparing to unpack .../libss2_1.47.0-2+b2_amd64.deb ...
+pmstatus:libss2:90.9091:Preparing libss2 (amd64)
+pmstatus:libss2:91.4438:Unpacking libss2 (amd64)
+Unpacking libss2:amd64 (1.47.0-2+b2) over (1.47.0-2) ...
+pmstatus:libss2:91.9786:Installing libss2 (amd64)
+pmstatus:dpkg-exec:91.9786:Running dpkg
+Setting up libcom-err2:amd64 (1.47.0-2+b2) ...
+pmstatus:libcom-err2:91.9786:Preparing to configure libcom-err2 (amd64)
+pmstatus:libcom-err2:92.5134:Configuring libcom-err2 (amd64)
+pmstatus:libcom-err2:93.0481:Installed libcom-err2 (amd64)
+Setting up tzdata (2026f-0+deb12u1) ...
+pmstatus:tzdata:93.0481:Preparing to configure tzdata (amd64)
+pmstatus:tzdata:93.5829:Configuring tzdata (amd64)
+Current default time zone: 'Etc/UTC'
+Local time is now:      Mon Nov  9 10:41:39 UTC 2026.
+Universal Time is now:  Mon Nov  9 10:41:39 UTC 2026.
+Run 'dpkg-reconfigure tzdata' if you wish to change it.
+pmstatus:tzdata:94.1176:Installed tzdata (amd64)
+Setting up libss2:amd64 (1.47.0-2+b2) ...
+pmstatus:libss2:94.1176:Preparing to configure libss2 (amd64)
+pmstatus:libss2:94.6524:Configuring libss2 (amd64)
+pmstatus:libss2:95.1872:Installed libss2 (amd64)
+Setting up logsave (1.47.0-2+b2) ...
+pmstatus:logsave:95.1872:Preparing to configure logsave (amd64)
+pmstatus:logsave:95.7219:Configuring logsave (amd64)
+pmstatus:logsave:96.2567:Installed logsave (amd64)
+Setting up mount (2.38.1-5+deb12u3) ...
+pmstatus:mount:96.2567:Preparing to configure mount (amd64)
+pmstatus:mount:96.7914:Configuring mount (amd64)
+pmstatus:mount:97.3262:Installed mount (amd64)
+Setting up e2fsprogs (1.47.0-2+b2) ...
+pmstatus:e2fsprogs:97.3262:Preparing to configure e2fsprogs (amd64)
+pmstatus:e2fsprogs:97.8610:Configuring e2fsprogs (amd64)
+pmstatus:e2fsprogs:98.3957:Installed e2fsprogs (amd64)
+Processing triggers for libc-bin (2.36-9+deb12u14) ...
+pmstatus:libc-bin:98.3957:Running post-installation trigger libc-bin (amd64)
+pmstatus:libc-bin:98.9305:Configuring libc-bin (amd64)
+pmstatus:libc-bin:99.4652:Installed libc-bin (amd64)
+Processing triggers for debianutils (5.7-0.5~deb12u1) ...

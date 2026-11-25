@@ -1,0 +1,11 @@
+Retrieving repository 'openSUSE-Tumbleweed-Update' metadata [...
+Looking for gpg keys in repository openSUSE-Tumbleweed-Update.
+  gpgkey=https://download.opensuse.org/update/tumbleweed/repodata/repomd.xml.key
+................done]
+Building repository 'openSUSE-Tumbleweed-Update' cache [....done]
+Retrieving repository 'openSUSE-Tumbleweed-Oss' metadata [....
+Looking for gpg keys in repository openSUSE-Tumbleweed-Oss.
+  gpgkey=https://download.opensuse.org/tumbleweed/repo/oss/repodata/repomd.xml.key
+................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................done]
+Building repository 'openSUSE-Tumbleweed-Oss' cache [....done]
+All repositories have been refreshed.

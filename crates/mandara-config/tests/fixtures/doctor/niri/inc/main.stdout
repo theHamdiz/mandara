@@ -1,0 +1,27 @@
+error parsing
+    Diagnostic severity: error
+    Caused by: error parsing KDL
+
+Error: failed to parse included config
+    Diagnostic severity: error
+
+Begin snippet for main.kdl starting at line 1, column 1
+
+snippet line 1: include "child.kdl"
+    label at line 1, columns 1 to 7: node starts here
+Error: error parsing KDL
+    Diagnostic severity: error
+
+
+Error: unexpected node `bogus`
+    Diagnostic severity: error
+
+Begin snippet for child.kdl starting at line 2, column 1
+
+snippet line 2:     keyboard {
+snippet line 3:         bogus 1
+    label starting at line 3, column 9: unexpected node
+snippet line 4:     }
+    label ending at line 4, column 0: unexpected node
+snippet line 5: }
+

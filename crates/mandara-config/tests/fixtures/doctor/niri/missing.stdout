@@ -1,0 +1,12 @@
+error parsing
+    Diagnostic severity: error
+    Caused by: error parsing KDL
+
+Error: failed to read included config from "@FIXTURES@/niri/nothere.kdl": No such file or directory (os error 2)
+    Diagnostic severity: error
+
+Begin snippet for missing.kdl starting at line 1, column 1
+
+snippet line 1: include "nothere.kdl"
+    label at line 1, columns 1 to 7: node starts here
+

@@ -1,0 +1,469 @@
+//! The theme catalog: token-based themes authored as a handful of seed
+//! colors per appearance (dark / light pair) in TOML, expanded into the full
+//! [`MandaraPalette`] with contrast guarantees.
+//!
+//! Built-in themes are embedded at compile time; user themes are read from
+//! `~/.config/mandara/themes/*.toml` (same format; a user theme with a
+//! built-in's id overrides it).
+//!
+//! ```toml
+//! id = "my-theme"
+//! name = "My Theme"
+//! [dark]
+//! surface = "#0a1520"
+//! on_surface = "#e4f0f4"
+//! primary = "#5fe0d4"
+//! secondary = "#e9c98b"
+//! tertiary = "#86b6ff"
+//! [light]   # optional — derived from dark when absent
+//! ```
+
+use std::path::PathBuf;
+use std::sync::OnceLock;
+
+use serde::{Deserialize, Serialize};
+
+use crate::color::Color;
+use crate::palette::{MandaraPalette, accent_gradient_end_for, comment_safe_name, glow_for};
+
+/// Seed colors for one appearance. Only `surface`, `on_surface` and
+/// `primary` are required; everything else is derived when absent.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Seeds {
+    pub surface: Color,
+    #[serde(default)]
+    pub surface_dim: Option<Color>,
+    #[serde(default)]
+    pub surface_variant: Option<Color>,
+    pub on_surface: Color,
+    #[serde(default)]
+    pub on_surface_variant: Option<Color>,
+    #[serde(default)]
+    pub outline: Option<Color>,
+    pub primary: Color,
+    #[serde(default)]
+    pub on_primary: Option<Color>,
+    #[serde(default)]
+    pub secondary: Option<Color>,
+    #[serde(default)]
+    pub tertiary: Option<Color>,
+    #[serde(default)]
+    pub error: Option<Color>,
+    #[serde(default)]
+    pub success: Option<Color>,
+    #[serde(default)]
+    pub warning: Option<Color>,
+    /// Glass tint opacity (`0..=1`).
+    #[serde(default)]
+    pub glass_alpha: Option<f32>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum ThemeOrigin {
+    Builtin,
+    User { path: PathBuf },
+}
+
+/// One theme: metadata plus a dark/light seed pair.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ThemeDef {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    /// One of Mandara's Alexandrian signature themes.
+    #[serde(default)]
+    pub signature: bool,
+    /// Pure-black surfaces in dark mode.
+    #[serde(default)]
+    pub oled: bool,
+    #[serde(default)]
+    pub dark: Option<Seeds>,
+    #[serde(default)]
+    pub light: Option<Seeds>,
+    #[serde(skip, default = "builtin_origin")]
+    pub origin: ThemeOrigin,
+}
+
+fn builtin_origin() -> ThemeOrigin {
+    ThemeOrigin::Builtin
+}
+
+/// Default theme id.
+pub const DEFAULT_THEME: &str = "mandara-corniche";
+
+const BUILTIN_SOURCES: &[&str] = &[
+    include_str!("../themes/mandara-corniche.toml"),
+    include_str!("../themes/montaza-twilight.toml"),
+    include_str!("../themes/mandara-obsidian.toml"),
+    include_str!("../themes/qaitbay-citadel.toml"),
+    include_str!("../themes/pharos-night.toml"),
+    include_str!("../themes/stanley-sunset.toml"),
+    include_str!("../themes/catppuccin.toml"),
+    include_str!("../themes/rose-pine.toml"),
+    include_str!("../themes/kanagawa.toml"),
+    include_str!("../themes/tokyo-night.toml"),
+    include_str!("../themes/nord.toml"),
+    include_str!("../themes/gruvbox.toml"),
+    include_str!("../themes/eldritch.toml"),
+    include_str!("../themes/vesper.toml"),
+    include_str!("../themes/night-citrine.toml"),
+];
+
+/// Built-in themes in display order.
+pub fn builtin() -> &'static [ThemeDef] {
+    static THEMES: OnceLock<Vec<ThemeDef>> = OnceLock::new();
+    THEMES.get_or_init(|| {
+        BUILTIN_SOURCES
+            .iter()
+            .map(|src| toml::from_str::<ThemeDef>(src).unwrap_or_else(|e| panic!("built-in theme is invalid: {e}")))
+            .collect()
+    })
+}
+
+/// `~/.config/mandara/themes`.
+pub fn user_theme_dir() -> PathBuf {
+    dirs::config_dir().unwrap_or_else(|| PathBuf::from("/tmp")).join("mandara/themes")
+}
+
+/// The user theme files that were listed, with what changed-detection needs:
+/// a file added, removed, replaced or edited changes this list.
+type UserFiles = Vec<(PathBuf, Option<std::time::SystemTime>, u64)>;
+
+fn user_files() -> UserFiles {
+    let Ok(entries) = std::fs::read_dir(user_theme_dir()) else { return Vec::new() };
+    let mut files: UserFiles = entries
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "toml"))
+        .map(|path| {
+            let meta = std::fs::metadata(&path).ok();
+            (path, meta.as_ref().and_then(|m| m.modified().ok()), meta.map_or(0, |m| m.len()))
+        })
+        .collect();
+    files.sort();
+    files
+}
+
+/// Built-in plus user themes, in order. Parsed again only when the user's
+/// theme folder changed: callers look themes up per list entry, per frame
+/// and per keypress, and each used to read and parse every user file.
+fn catalog() -> std::sync::Arc<Vec<ThemeDef>> {
+    static CACHE: std::sync::Mutex<Option<(UserFiles, std::sync::Arc<Vec<ThemeDef>>)>> = std::sync::Mutex::new(None);
+    let files = user_files();
+    let mut cache = CACHE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some((listed, themes)) = cache.as_ref()
+        && *listed == files
+    {
+        return themes.clone();
+    }
+    let mut themes: Vec<ThemeDef> = builtin().to_vec();
+    for (path, ..) in &files {
+        match std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|t| toml::from_str::<ThemeDef>(&t).map_err(|e| e.to_string())) {
+            Ok(mut def) if def.dark.is_some() || def.light.is_some() => {
+                def.origin = ThemeOrigin::User { path: path.clone() };
+                themes.retain(|t| t.id != def.id);
+                themes.push(def);
+            }
+            Ok(_) => tracing::warn!("{}: theme has neither [dark] nor [light]", path.display()),
+            Err(err) => tracing::warn!("{}: invalid theme: {err}", path.display()),
+        }
+    }
+    let themes = std::sync::Arc::new(themes);
+    *cache = Some((files, themes.clone()));
+    themes
+}
+
+/// Built-in plus user themes (user ids override built-ins).
+pub fn all() -> Vec<ThemeDef> {
+    catalog().to_vec()
+}
+
+/// Looks a theme up by id (case-insensitive; spaces/underscores ≈ dashes).
+pub fn find(id: &str) -> Option<ThemeDef> {
+    catalog().iter().find(|t| t.answers_to(id)).cloned()
+}
+
+/// The id after `id` in catalog order (wrapping).
+pub fn next_id(id: &str) -> String {
+    let themes = catalog();
+    let i = themes.iter().position(|t| t.id == id).map(|i| i + 1).unwrap_or(0);
+    themes[i % themes.len()].id.clone()
+}
+
+/// Pushes `fg` away from `bg` in lightness until it reaches `min` contrast.
+///
+/// Tries the direction suggested by the background first (lighter text on
+/// dark surfaces), then the opposite direction when that cannot meet `min`
+/// (backgrounds just under the 0.2 luminance threshold cannot reach AA with
+/// white alone). Returns the best attempt when neither direction succeeds.
+pub fn ensure_contrast(fg: Color, bg: Color, min: f32) -> Color {
+    // The background never changes: gamut-map it once, not per step.
+    let bg_luminance = bg.relative_luminance();
+    if fg.contrast_with_luminance(bg_luminance) >= min {
+        return fg;
+    }
+    let prefer_lighter = bg_luminance < 0.2;
+    let walk = |start: Color, lighter: bool| {
+        let mut c = start;
+        let mut best = start;
+        let mut best_ratio = start.contrast_with_luminance(bg_luminance);
+        for _ in 0..60 {
+            c = c.lighten(if lighter { 0.015 } else { -0.015 });
+            let ratio = c.contrast_with_luminance(bg_luminance);
+            if ratio > best_ratio {
+                best = c;
+                best_ratio = ratio;
+            }
+            if ratio >= min {
+                return (c, ratio);
+            }
+        }
+        (best, best_ratio)
+    };
+    let (first, first_ratio) = walk(fg, prefer_lighter);
+    if first_ratio >= min {
+        return first;
+    }
+    let (second, second_ratio) = walk(fg, !prefer_lighter);
+    if second_ratio >= first_ratio { second } else { first }
+}
+
+/// Derives light seeds from dark ones (for dark-only themes).
+fn derive_light(d: &Seeds) -> Seeds {
+    let hue = d.surface.hue();
+    let chroma = d.surface.chroma().min(0.02);
+    let accent = |c: Color| c.with_lightness(0.5).scale_chroma(0.9);
+    Seeds {
+        surface: Color::oklch(0.975, chroma * 0.6, hue),
+        surface_dim: Some(Color::oklch(0.91, chroma * 0.8, hue)),
+        surface_variant: Some(Color::oklch(0.935, chroma, hue)),
+        on_surface: Color::oklch(0.22, chroma.max(0.01), hue),
+        on_surface_variant: Some(Color::oklch(0.42, chroma.max(0.015), hue)),
+        outline: Some(Color::oklch(0.62, chroma.max(0.015), hue)),
+        primary: accent(d.primary),
+        on_primary: None,
+        secondary: d.secondary.map(accent),
+        tertiary: d.tertiary.map(accent),
+        error: d.error.map(accent),
+        success: d.success.map(accent),
+        warning: d.warning.map(|c| c.with_lightness(0.55)),
+        glass_alpha: None,
+    }
+}
+
+/// `s` as [`find`] compares it: ASCII case folded, spaces and underscores
+/// as dashes, `é` as `e`.
+fn folded(s: &str) -> impl Iterator<Item = char> + '_ {
+    s.chars().map(|c| match c {
+        ' ' | '_' => '-',
+        'é' => 'e',
+        c => c.to_ascii_lowercase(),
+    })
+}
+
+impl ThemeDef {
+    /// Whether `id` (a configured preset, perhaps typed by hand as
+    /// `Rosé Pine` or `tokyo_night`) names this theme, by id or by name,
+    /// as [`find`] resolves it. It compares in place, without allocating.
+    pub fn answers_to(&self, id: &str) -> bool {
+        let id = id.trim();
+        folded(id).eq(self.id.chars()) || folded(id).eq(folded(&self.name))
+    }
+
+    /// Whether the theme provides (rather than derives) this appearance.
+    pub fn has_mode(&self, dark: bool) -> bool {
+        if dark { self.dark.is_some() } else { self.light.is_some() }
+    }
+
+    /// The expanded palette for an appearance.
+    pub fn palette(&self, dark: bool) -> MandaraPalette {
+        let seeds = match (dark, &self.dark, &self.light) {
+            (true, Some(d), _) => d.clone(),
+            (false, _, Some(l)) => l.clone(),
+            (false, Some(d), None) => derive_light(d),
+            (true, None, Some(l)) => l.clone(),
+            (_, None, None) => unreachable!("validated on load"),
+        };
+        // A light-only theme asked for dark yields its light palette: that is
+        // not a dark palette, so OLED black must not apply to it.
+        let is_dark = dark && self.dark.is_some();
+        expand(&seeds, is_dark, &self.name, self.oled && is_dark)
+    }
+}
+
+/// Expands seeds into every Mandara token, enforcing contrast.
+pub fn expand(s: &Seeds, dark: bool, name: &str, oled: bool) -> MandaraPalette {
+    let surface = s.surface;
+    let step = if dark { 1.0 } else { -1.0 };
+    let surface_dim = s.surface_dim.unwrap_or(if oled { surface } else { surface.lighten(-0.025 * step) });
+    let variant = s.surface_variant.unwrap_or(surface.lighten(0.06 * step));
+    let container_low = surface.mix(variant, 0.5);
+    let container_high = variant.lighten(0.035 * step);
+    let on_surface = ensure_contrast(s.on_surface, surface, 7.0);
+    let on_surface_variant = ensure_contrast(s.on_surface_variant.unwrap_or(on_surface.mix(surface, 0.3)), variant, 4.5);
+    let outline = ensure_contrast(s.outline.unwrap_or(on_surface.mix(surface, 0.6)), surface, 3.0);
+    let primary = ensure_contrast(s.primary, surface, 3.0);
+    let on_primary = ensure_contrast(
+        s.on_primary.unwrap_or_else(|| primary.best_on(Color::oklch(0.99, 0.01, primary.hue()), Color::oklch(0.17, 0.03, primary.hue()))),
+        primary,
+        4.5,
+    );
+    let secondary = ensure_contrast(s.secondary.unwrap_or(primary.rotate_hue(-40.0)), surface, 3.0);
+    let tertiary = ensure_contrast(s.tertiary.unwrap_or(primary.rotate_hue(60.0)), surface, 3.0);
+    let harmonized = |c: Color| ensure_contrast(c.harmonize_toward(primary).gamut_mapped(), surface, 3.0);
+    let status = |l: f32, c: f32, h: f32| harmonized(Color::oklch(if dark { l } else { l - 0.2 }, c, h));
+    let glass_alpha = s.glass_alpha.unwrap_or(if dark { 0.66 } else { 0.74 });
+    MandaraPalette {
+        // User theme files choose this text; it is printed into app themes.
+        name: comment_safe_name(name).into(),
+        is_dark: dark,
+        surface_dim,
+        surface_base: surface,
+        surface_container_low: container_low,
+        surface_container: variant,
+        surface_container_high: container_high,
+        surface_glass_tint: surface.with_alpha(glass_alpha),
+        specular_rim_light: if dark {
+            Color::oklcha(0.97, (primary.chroma() * 0.12).min(0.02), primary.hue(), 0.34)
+        } else {
+            Color::oklcha(1.0, 0.0, 0.0, 0.85)
+        },
+        specular_rim_shadow: if dark { Color::oklcha(0.04, surface.chroma() * 0.5, surface.hue(), 0.5) } else { outline.with_alpha(0.18) },
+        on_surface,
+        on_surface_variant,
+        outline,
+        primary,
+        on_primary,
+        primary_container: surface.mix(primary, if dark { 0.3 } else { 0.18 }),
+        primary_glow: glow_for(primary, dark),
+        secondary,
+        tertiary,
+        accent_gradient_start: primary,
+        accent_gradient_end: accent_gradient_end_for(primary),
+        urgent_coral: s.error.map(harmonized).unwrap_or_else(|| status(0.72, 0.16, 28.0)),
+        success_emerald: s.success.map(harmonized).unwrap_or_else(|| status(0.76, 0.15, 158.0)),
+        warning_amber: s.warning.map(harmonized).unwrap_or_else(|| status(0.83, 0.15, 78.0)),
+    }
+}
+
+/// WCAG contrast report for a palette (DMS-style `wcag.json` equivalent).
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct ContrastReport {
+    pub body: f32,
+    pub body_variant: f32,
+    pub on_primary: f32,
+    pub outline: f32,
+    pub accents_min: f32,
+}
+
+impl ContrastReport {
+    pub fn of(p: &MandaraPalette) -> Self {
+        Self {
+            body: p.on_surface.contrast_ratio(p.surface_base),
+            body_variant: p.on_surface_variant.contrast_ratio(p.surface_container),
+            on_primary: p.on_primary.contrast_ratio(p.primary),
+            outline: p.outline.contrast_ratio(p.surface_base),
+            accents_min: [p.primary, p.secondary, p.tertiary]
+                .iter()
+                .map(|c| c.contrast_ratio(p.surface_base))
+                .fold(f32::INFINITY, f32::min),
+        }
+    }
+
+    pub fn passes(&self) -> bool {
+        self.body >= 7.0 && self.body_variant >= 4.5 && self.on_primary >= 4.5 && self.outline >= 3.0 && self.accents_min >= 3.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const LIGHT_ONLY: &str = "id = \"day\"\nname = \"Day */\\nINJECTED\"\noled = true\n[light]\nsurface = \"#fafafa\"\non_surface = \"#101010\"\nprimary = \"#2060c0\"\n";
+
+    #[test]
+    fn a_light_only_theme_asked_for_dark_is_light_and_not_oled() {
+        let theme: ThemeDef = toml::from_str(LIGHT_ONLY).unwrap();
+        for dark in [true, false] {
+            let p = theme.palette(dark);
+            assert!(!p.is_dark, "its only palette is light");
+            assert_eq!(p.surface_dim, theme.palette(false).surface_dim, "dark={dark}: OLED black is for dark palettes");
+            assert_ne!(p.surface_dim, p.surface_base);
+        }
+    }
+
+    #[test]
+    fn theme_names_are_safe_to_print_into_generated_files() {
+        let theme: ThemeDef = toml::from_str(LIGHT_ONLY).unwrap();
+        let name = theme.palette(false).name;
+        assert!(!name.contains('\n') && !name.contains("*/"), "{name:?}");
+    }
+
+    #[test]
+    fn every_builtin_parses_with_both_modes() {
+        let themes = builtin();
+        assert!(themes.len() >= 14);
+        assert_eq!(themes[0].id, DEFAULT_THEME);
+        for t in themes {
+            assert!(t.dark.is_some(), "{} needs a dark variant", t.id);
+            for dark in [true, false] {
+                let p = t.palette(dark);
+                assert_eq!(p.is_dark, dark, "{}", t.id);
+            }
+        }
+    }
+
+    #[test]
+    fn every_builtin_meets_contrast_guarantees() {
+        for t in builtin() {
+            for dark in [true, false] {
+                let r = ContrastReport::of(&t.palette(dark));
+                assert!(r.passes(), "{} ({}) fails contrast: {r:?}", t.id, if dark { "dark" } else { "light" });
+            }
+        }
+    }
+
+    #[test]
+    fn signature_themes_and_derived_light() {
+        let signature: Vec<_> = builtin().iter().filter(|t| t.signature).map(|t| t.id.as_str()).collect();
+        assert!(signature.contains(&"mandara-corniche") && signature.contains(&"pharos-night"));
+        let obsidian = find("mandara-obsidian").unwrap();
+        assert_eq!(obsidian.palette(true).surface_dim.to_hex(), "#000000", "OLED black");
+        let vesper = find("Vesper").unwrap();
+        assert!(!vesper.has_mode(false));
+        let light = vesper.palette(false);
+        assert!(!light.is_dark && light.surface_base.lightness() > 0.9);
+    }
+
+    #[test]
+    fn lookup_and_cycling() {
+        assert_eq!(find("Rosé Pine").unwrap().id, "rose-pine");
+        assert_eq!(find("tokyo_night").unwrap().id, "tokyo-night");
+        assert_eq!(find("  Tokyo Night ").unwrap().id, "tokyo-night");
+        assert_eq!(find("ROSE-PINE").unwrap().id, "rose-pine");
+        assert!(find("nope").is_none());
+        let rose = builtin().iter().find(|t| t.id == "rose-pine").unwrap();
+        assert!(rose.answers_to("Rosé Pine") && rose.answers_to("rose_pine") && rose.answers_to("rose-pine"));
+        assert!(!rose.answers_to("rose") && !rose.answers_to("rose-pine-dawn") && !rose.answers_to(""));
+        assert_ne!(next_id(DEFAULT_THEME), DEFAULT_THEME);
+    }
+
+    #[test]
+    fn contrast_enforcement_moves_away_from_background() {
+        let bg = Color::hex("#101010");
+        let fixed = ensure_contrast(Color::hex("#202020"), bg, 4.5);
+        assert!(fixed.contrast_ratio(bg) >= 4.5);
+        let light_bg = Color::hex("#f8f8f8");
+        assert!(ensure_contrast(Color::hex("#e0e0e0"), light_bg, 4.5).contrast_ratio(light_bg) >= 4.5);
+        // Mid-luminance grey where white alone misses AA (~4.29) but black
+        // reaches it (~4.89), so the helper must try the darker direction.
+        let mid = Color::hex("#7a7a7a");
+        let near = Color::hex("#808080");
+        assert!(Color::hex("#ffffff").contrast_ratio(mid) < 4.5);
+        assert!(Color::hex("#000000").contrast_ratio(mid) >= 4.5);
+        let fixed_mid = ensure_contrast(near, mid, 4.5);
+        assert!(fixed_mid.contrast_ratio(mid) >= 4.5, "ratio {} (bg lum {})", fixed_mid.contrast_ratio(mid), mid.relative_luminance());
+    }
+}

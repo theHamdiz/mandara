@@ -1,0 +1,5 @@
+
+
+======== Config parsing result:
+
+@FIXTURES@/hyprland/lua/syntax.lua:4: '}' expected (to close '{' at line 2) near 'gaps_out'

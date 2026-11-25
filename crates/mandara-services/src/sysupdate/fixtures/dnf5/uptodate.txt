@@ -1,0 +1,6 @@
+Updating and loading repositories:
+ Fedora 45 - x86_64 - Updates           100% |  22.8 KiB/s |   8.8 KiB |  00m00s
+ Fedora 45 openh264 (From Cisco) - x86_ 100% |   2.6 KiB/s | 986.0   B |  00m00s
+ Fedora 45 - x86_64                     100% |  39.3 KiB/s |  14.4 KiB |  00m00s
+Repositories loaded.
+Nothing to do.

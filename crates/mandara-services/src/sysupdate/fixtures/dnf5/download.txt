@@ -1,0 +1,72 @@
+Updating and loading repositories:
+ Fedora 45 openh264 (From Cisco) - x86_ 100% | 683.0   B/s |   5.3 KiB |  00m08s
+ Fedora 45 - x86_64 - Updates           100% | 184.6 KiB/s |   4.0 MiB |  00m22s
+>>> Downloading successful, but checksum doesn't match. Calculated: 04f1862bac03b03be258c870a7fa7f9f984bc56b009baef02f3955422b7359e75042ccf3ef826ac902499547c3bbec94d3dc8edac3c42305e621cac00b15cf0b(sha512) 04f1862bac03b03be258c870a7fa7f9f984bc56b009baef02f3955422b7359e75042ccf3ef826ac902499547c3bbec94d3dc8edac3c42305e621cac00b15cf0b(sha512) 04f1862bac03b03be258c870a7fa7f9f984bc56b009baef02f3955422b7359e75042ccf3ef826ac902499547c3bbec94d3dc8edac3c42305e621cac00b15cf0b(sha512) 04f1862bac03b03be258c870a7fa7f9f984bc56b009baef02f3955422b7359e75042ccf3ef826ac902499547c3bbec94d3dc8edac3c42305e621cac00b15cf0b(sha512)  Expected: ada3768d821fc247751534aec788deeb777f814085b0863698a17c19a280c4cfcbc1dbbe4740fc8893afd06f67456155721981154453d1f652b13764391becb6(sha512) d58544049d080115176e83e3b3f183913e1666a0b9025482d37f406cac1a80de72c703356a45615c6b96adcc2aaf4005bea0be27cbd5cf443d16cfaf6ea78ae8(sha512) 544e71ecdc536c060f30906916832268d7bad98962ee0e093029ccde0a1cbcf2dca0670781c8dea18739d476eb04b4ffd7f3b947dc419dc2ab37c1cbcf5e79dd(sha512) cb4e6c6d00ee77aa7abc9efc9eb51bc4aae80209e99d16b261c28245caa1f44bab9df6ef403a4bf3cbd7e19453067c19d0730760045cd15205daa86b77c08d01(sha512)  - http://megaplusredirection.tedata.net/VDSL-Redirection_100.html
+>>> repodata/1871409a8b10199a82c94670b625988b679a8fe239409d300af05b5aa8a06386-updateinfo.xml.zck's zchunk header doesn't match - http://megaplusredirection.tedata.net/VDSL-Redirection_100.html
+>>> repodata/e58fdf2d4eb5840a1e562cc8c4928e32e7d00175a2b9c3237027f0e71d1af0fd-primary.xml.zck's zchunk header doesn't match - http://megaplusredirection.tedata.net/VDSL-Redirection_100.html
+>>> Downloading successful, but checksum doesn't match. Calculated: feb0f04f7aabb0ba35ee1ba38c0fcd0c2c80ea0c77a18361f8b539092413a1df(sha256)  Expected: 3456082c0a97bd86e2804369527d4d0d475a109e54109c7ec776bbb1db4ec623(sha256)  - http://megaplusredirection.tedata.net/VDSL-Redirection_100.html
+ Fedora 45 - x86_64                     100% | 276.3 KiB/s |  45.5 MiB |  02m49s
+>>> Downloading successful, but checksum doesn't match. Calculated: 04f1862bac03b03be258c870a7fa7f9f984bc56b009baef02f3955422b7359e75042ccf3ef826ac902499547c3bbec94d3dc8edac3c42305e621cac00b15cf0b(sha512)  Expected: 5b947c99a8ff2783f187aaa044064907106813e4bc5d49dd9b059d8915d792cff4e208e278c8ace75131bf290c2a3b8479fc269661bdba0baf097349a7eb8b4e(sha512)  - http://megaplusredirection.tedata.net/VDSL-Redirection_100.html
+>>> repodata/1fcc329246083632b7a3d818d45f2976241aef2e18f9c02631708f527e0a15f7-primary.xml.zck's zchunk header doesn't match - http://megaplusredirection.tedata.net/VDSL-Redirection_100.html
+>>> Downloading successful, but checksum doesn't match. Calculated: feb0f04f7aabb0ba35ee1ba38c0fcd0c2c80ea0c77a18361f8b539092413a1df(sha256)  Expected: 33b08445a1beb3712913d91fa00042d3a60b678be68f8e68cc2587bbb6b35d06(sha256)  - http://megaplusredirection.tedata.net/VDSL-Redirection_100.html
+Repositories loaded.
+Package                          Arch   Version          Repository                            Size
+Upgrading:
+ curl                            x86_64 0:8.21.0-9.fc45  updates                          487.9 KiB
+   replacing curl                x86_64 0:8.21.0-8.fc45  b704409885364945b3d86ac354cb16b4 487.9 KiB
+ dnf5                            x86_64 0:5.4.7.0-1.fc45 updates                            3.7 MiB
+   replacing dnf5                x86_64 0:5.4.6.0-3.fc45 f18332a422324da9b45596b39ceaf28a   3.4 MiB
+ dnf5-plugins                    x86_64 0:5.4.7.0-1.fc45 updates                            1.8 MiB
+   replacing dnf5-plugins        x86_64 0:5.4.6.0-3.fc45 f18332a422324da9b45596b39ceaf28a   1.6 MiB
+ elfutils-libelf                 x86_64 0:0.197-1.fc45   updates                            1.6 MiB
+   replacing elfutils-libelf     x86_64 0:0.196-1.fc45   f18332a422324da9b45596b39ceaf28a   1.4 MiB
+ elfutils-libs                   x86_64 0:0.197-1.fc45   updates                          719.5 KiB
+   replacing elfutils-libs       x86_64 0:0.196-1.fc45   f18332a422324da9b45596b39ceaf28a 719.6 KiB
+ libcurl                         x86_64 0:8.21.0-9.fc45  updates                            1.1 MiB
+   replacing libcurl             x86_64 0:8.21.0-8.fc45  b704409885364945b3d86ac354cb16b4   1.1 MiB
+ libdnf5                         x86_64 0:5.4.7.0-1.fc45 updates                            5.0 MiB
+   replacing libdnf5             x86_64 0:5.4.6.0-3.fc45 f18332a422324da9b45596b39ceaf28a   4.8 MiB
+ libdnf5-cli                     x86_64 0:5.4.7.0-1.fc45 updates                            1.1 MiB
+   replacing libdnf5-cli         x86_64 0:5.4.6.0-3.fc45 f18332a422324da9b45596b39ceaf28a   1.1 MiB
+ librepo                         x86_64 0:1.22.0-1.fc45  updates                          257.0 KiB
+   replacing librepo             x86_64 0:1.21.2-2.fc45  f18332a422324da9b45596b39ceaf28a 253.2 KiB
+ openldap                        x86_64 0:2.6.16-1.fc45  updates                          683.9 KiB
+   replacing openldap            x86_64 0:2.6.15-1.fc45  b704409885364945b3d86ac354cb16b4 683.4 KiB
+ pcre2                           x86_64 0:10.49-1.fc45   updates                          726.6 KiB
+   replacing pcre2               x86_64 0:10.47-1.fc45.2 f18332a422324da9b45596b39ceaf28a 718.5 KiB
+ pcre2-syntax                    noarch 0:10.49-1.fc45   updates                          292.5 KiB
+   replacing pcre2-syntax        noarch 0:10.47-1.fc45.2 f18332a422324da9b45596b39ceaf28a 281.9 KiB
+ tpm2-tss                        x86_64 0:4.2.1-1.fc45   updates                            1.7 MiB
+   replacing tpm2-tss            x86_64 0:4.2.0-1.fc45   f18332a422324da9b45596b39ceaf28a   1.7 MiB
+ tzdata                          noarch 0:2026f-1.fc45   updates                            1.3 MiB
+   replacing tzdata              noarch 0:2026e-1.fc45   b704409885364945b3d86ac354cb16b4   1.3 MiB
+Installing weak dependencies:
+ libdnf5-plugin-expired-pgp-keys x86_64 0:5.4.7.0-1.fc45 updates                           94.6 KiB
+Transaction Summary:
+ Installing:         1 package
+ Upgrading:         14 packages
+ Replacing:         14 packages
+Total size of inbound packages is 7 MiB. Need to download 7 MiB.
+After this operation, 1 MiB extra will be used (install 20 MiB, remove 19 MiB).
+The operation will only download packages for the transaction.
+[ 1/15] libcurl-0:8.21.0-9.fc45.x86_64  100% | 320.9 KiB/s | 482.6 KiB |  00m02s
+>>> Interrupted by header callback: Inconsistent server data, reported file Content-Length: 8674, repository metadata states file length: 494166 (please report to repository maintainer) - http://megaplusredirection.tedata.net/VDSL-Redirection_100.html
+[ 2/15] dnf5-0:5.4.7.0-1.fc45.x86_64    100% | 721.5 KiB/s |   1.1 MiB |  00m02s
+[ 3/15] libdnf5-plugin-expired-pgp-keys 100% |  17.3 KiB/s |  68.0 KiB |  00m04s
+>>> Interrupted by header callback: Inconsistent server data, reported file Content-Length: 8674, repository metadata states file length: 69622 (please report to repository maintainer) - http://megaplusredirection.tedata.net/VDSL-Redirection_100.html
+[ 4/15] curl-0:8.21.0-9.fc45.x86_64     100% |  25.1 KiB/s | 244.3 KiB |  00m10s
+>>> Interrupted by header callback: Inconsistent server data, reported file Content-Length: 8674, repository metadata states file length: 250204 (please report to repository maintainer) - http://megaplusredirection.tedata.net/VDSL-Redirection_100.html
+[ 5/15] libdnf5-cli-0:5.4.7.0-1.fc45.x8 100% |  35.5 KiB/s | 381.5 KiB |  00m11s
+[ 6/15] dnf5-plugins-0:5.4.7.0-1.fc45.x 100% |  68.6 KiB/s | 617.0 KiB |  00m09s
+[ 7/15] elfutils-libelf-0:0.197-1.fc45. 100% |  64.9 KiB/s | 265.9 KiB |  00m04s
+[ 8/15] librepo-0:1.22.0-1.fc45.x86_64  100% |  34.2 KiB/s | 104.1 KiB |  00m03s
+[ 9/15] libdnf5-0:5.4.7.0-1.fc45.x86_64 100% |  76.0 KiB/s |   1.5 MiB |  00m20s
+[10/15] elfutils-libs-0:0.197-1.fc45.x8 100% |  68.9 KiB/s | 285.6 KiB |  00m04s
+[11/15] openldap-0:2.6.16-1.fc45.x86_64 100% | 134.8 KiB/s | 273.4 KiB |  00m02s
+[12/15] pcre2-0:10.49-1.fc45.x86_64     100% |  81.9 KiB/s | 280.0 KiB |  00m03s
+[13/15] pcre2-syntax-0:10.49-1.fc45.noa 100% |  46.9 KiB/s | 168.2 KiB |  00m04s
+[14/15] tpm2-tss-0:4.2.1-1.fc45.x86_64  100% | 111.2 KiB/s | 458.6 KiB |  00m04s
+[15/15] tzdata-0:2026f-1.fc45.noarch    100% | 224.5 KiB/s | 713.8 KiB |  00m03s
+--------------------------------------------------------------------------------
+[15/15] Total                           100% | 221.6 KiB/s |   6.8 MiB |  00m31s
+Complete!

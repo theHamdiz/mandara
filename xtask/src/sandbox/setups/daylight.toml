@@ -1,0 +1,85 @@
+# README setup "Daylight": light theme, a minimal island bar, the month,
+# a to-do list, the focus timer and a quote over a pastel sky.
+# `cargo xtask sandbox up --config xtask/src/sandbox/setups/daylight.toml --size 2880x1620 --scale 2`,
+# the wallpaper once:
+#   sandbox msg wallgen generate mesh --palette rose-pine --seed 0x27 --size 2880x1620 --format png --no-apply --light
+# Wait for `sandbox msg wallgen status` to report no running job before restarting.
+#   sandbox shell restart   (the shell loads the wallpaper, which didn't exist yet when it started)
+# then `sandbox msg theme mode light`.
+
+[appearance]
+icon_theme = "Papirus"
+
+[bar]
+layout = "contiguous-island"
+
+[desktop.widgets]
+migrated = true
+
+[[desktop.widgets.items]]
+id = "day-quote"
+kind = "quote"
+width = 640.0
+
+[desktop.widgets.items.place]
+anchor = "top"
+x = 0.0
+y = 0.1
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "day-month"
+kind = "date"
+layout = "month"
+
+[desktop.widgets.items.look]
+plate = "glass"
+
+[desktop.widgets.items.place]
+anchor = "right"
+x = -0.07
+y = 0.02
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "day-todo"
+kind = "todo"
+rows = 5
+width = 360.0
+
+[desktop.widgets.items.look]
+plate = "solid"
+plate_shape = "squircle"
+plate_opacity = 0.9
+shadow = "soft"
+
+[desktop.widgets.items.place]
+anchor = "left"
+x = 0.07
+y = 0.04
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "day-timer"
+kind = "pomodoro"
+size = 260.0
+
+[desktop.widgets.items.place]
+anchor = "center"
+x = 0.0
+y = 0.06
+depth = "front"
+
+[dock]
+pinned = ["org.mandara.demo.files", "org.mandara.demo.browser", "org.mandara.demo.terminal", "org.mandara.demo.music", "org.mandara.demo.photos"]
+
+[plugins]
+defaults_version = 1
+enabled = ["dock", "todo", "pomodoro", "desktop-productivity", "desktop-calendar", "desktop-clocks", "wallpaper-generator"]
+
+[wallpaper]
+path = "/home/demo/Pictures/Wallpapers/Generated/mesh-000027-2880x1620.png"
+
+[wallpaper.variants]
+light = "/home/demo/Pictures/Wallpapers/Generated/mesh-000027-2880x1620.png"
+dark = "/home/demo/Pictures/Wallpapers/lagoon.png"

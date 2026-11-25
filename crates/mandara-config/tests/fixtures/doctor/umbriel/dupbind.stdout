@@ -1,0 +1,1 @@
+{"diagnostics":[{"column":1,"file":"@FIXTURES@/umbriel/dupbind.toml","line":3,"message":"duplicate keybind Mod+q","severity":"warning"}],"path":"@FIXTURES@/umbriel/dupbind.toml","valid":false}

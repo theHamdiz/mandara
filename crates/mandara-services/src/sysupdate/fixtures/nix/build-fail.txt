@@ -1,0 +1,26 @@
+@nix {"action":"msg","level":4,"msg":"evaluating file '«nix-internal»/derivation-internal.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '/tmp/d.nix'"}
+@nix {"action":"start","fields":["/nix/store/z8cacwsxrwk209py5qdzn0xv0kb95h8x-mandara-fail","https://cache.nixos.org"],"id":730144440321,"level":4,"parent":0,"text":"querying info about '/nix/store/z8cacwsxrwk209py5qdzn0xv0kb95h8x-mandara-fail' on 'https://cache.nixos.org'","type":109}
+@nix {"action":"stop","id":730144440321}
+@nix {"action":"stop","id":730144440322}
+@nix {"action":"stop","id":730144440320}
+@nix {"action":"msg","level":3,"msg":"this derivation will be built:"}
+@nix {"action":"msg","level":3,"msg":"  /nix/store/5xxvjmhsmklbpd1x50vxyiwm02rfr00m-mandara-fail.drv"}
+@nix {"action":"start","id":730144440323,"level":0,"parent":0,"text":"","type":102}
+@nix {"action":"start","id":730144440324,"level":0,"parent":0,"text":"","type":104}
+@nix {"action":"start","id":730144440325,"level":0,"parent":0,"text":"","type":103}
+@nix {"action":"result","fields":[0,0,0,0],"id":730144440324,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":730144440325,"type":105}
+@nix {"action":"result","fields":[0,1,0,0],"id":730144440324,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":730144440325,"type":105}
+@nix {"action":"start","fields":["/nix/store/5xxvjmhsmklbpd1x50vxyiwm02rfr00m-mandara-fail.drv","",1,1],"id":730144440326,"level":3,"parent":0,"text":"building '/nix/store/5xxvjmhsmklbpd1x50vxyiwm02rfr00m-mandara-fail.drv'","type":105}
+@nix {"action":"result","fields":[0,1,1,0],"id":730144440324,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":730144440325,"type":105}
+@nix {"action":"result","fields":["about to fail"],"id":730144440326,"type":101}
+@nix {"action":"result","fields":[0,1,0,1],"id":730144440324,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":730144440325,"type":105}
+@nix {"action":"stop","id":730144440326}
+@nix {"action":"stop","id":730144440325}
+@nix {"action":"stop","id":730144440324}
+@nix {"action":"stop","id":730144440323}
+@nix {"action":"msg","column":null,"file":null,"level":0,"line":null,"msg":"\u001b[31;1merror:\u001b[0m Cannot build '\u001b[35;1m/nix/store/5xxvjmhsmklbpd1x50vxyiwm02rfr00m-mandara-fail.drv\u001b[0m'.\n       Reason: \u001b[31;1mbuilder failed with exit code 3\u001b[0m.\n       Output paths:\n         \u001b[35;1m/nix/store/z8cacwsxrwk209py5qdzn0xv0kb95h8x-mandara-fail\u001b[0m","raw_msg":"Cannot build '\u001b[35;1m/nix/store/5xxvjmhsmklbpd1x50vxyiwm02rfr00m-mandara-fail.drv\u001b[0m'.\nReason: \u001b[31;1mbuilder failed with exit code 3\u001b[0m.\nOutput paths:\n  \u001b[35;1m/nix/store/z8cacwsxrwk209py5qdzn0xv0kb95h8x-mandara-fail\u001b[0m"}

@@ -1,0 +1,47 @@
+@@ASKPASS@@ [sudo] password for builder: 
+:: [1mSearching AUR for updates...[0m
+:: 1 package to upgrade/install.
+1  aur/cbonsai  0.1-1 -> 1.4.2-1 [506d15h]
+==> Packages to exclude: (eg: "1 2 3", "1-3", "^4" or repo name)
+ -> Excluding packages may cause partial upgrades and break systems
+==> None
+AUR Explicit (1): cbonsai-1.4.2-1
+:: [1mPKGBUILD up to date, skipping download: cbonsai[0m
+  1 cbonsai                                  (Installed) (Build Files Exist)
+==> Packages to cleanBuild?
+==> [N]one [A]ll [Ab]ort [I]nstalled [No]tInstalled or (1 2 3, 1-3, ^4)
+==> None
+  1 cbonsai                                  (Installed) (Build Files Exist)
+==> Diffs to show?
+==> [N]one [A]ll [Ab]ort [I]nstalled [No]tInstalled or (1 2 3, 1-3, ^4)
+==> None
+==> Making package: cbonsai 1.4.2-1 (Tue Nov 10 00:42:33 2026)
+==> Retrieving sources...
+  -> Found cbonsai-v1.4.2.zip
+==> WARNING: Skipping verification of source file PGP signatures.
+==> Validating source files with sha256sums...
+    cbonsai-v1.4.2.zip ... Passed
+:: [1m(1/1) Parsing SRCINFO: cbonsai[0m
+==> Making package: cbonsai 1.4.2-1 (Tue Nov 10 00:42:33 2026)
+==> Checking runtime dependencies...
+==> Checking buildtime dependencies...
+==> Retrieving sources...
+  -> Found cbonsai-v1.4.2.zip
+==> Validating source files with sha256sums...
+    cbonsai-v1.4.2.zip ... Passed
+==> Removing existing $srcdir/ directory...
+==> Extracting sources...
+  -> Extracting cbonsai-v1.4.2.zip with bsdtar
+==> Sources are ready.
+==> Making package: cbonsai 1.4.2-1 (Tue Nov 10 00:42:34 2026)
+==> Checking runtime dependencies...
+==> Checking buildtime dependencies...
+==> WARNING: Using existing $srcdir/ tree
+==> Entering fakeroot environment...
+==> Starting package()...
+/home/builder/.cache/yay/cbonsai/PKGBUILD: line 19: make: command not found
+==> ERROR: A failure occurred in package().
+    Aborting...
+ -> error making: cbonsai-exit status 4
+ -> Failed to install the following packages. Manual intervention is required:
+cbonsai - exit status 4

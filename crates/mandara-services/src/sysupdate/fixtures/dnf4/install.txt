@@ -1,0 +1,216 @@
+Last metadata expiration check: 0:01:12 ago on Mon Nov  9 10:40:44 2026.
+Dependencies resolved.
+================================================================================
+ Package                        Arch      Version              Repository  Size
+================================================================================
+Upgrading:
+ audit-libs                     x86_64    4.0.3-1.fc40         updates    129 k
+ dnf                            noarch    4.23.0-1.fc40.1      updates    471 k
+ dnf-data                       noarch    4.23.0-1.fc40.1      updates     39 k
+ elfutils-default-yama-scope    noarch    0.192-9.fc40         updates     12 k
+ elfutils-libelf                x86_64    0.192-9.fc40         updates    208 k
+ elfutils-libs                  x86_64    0.192-9.fc40         updates    264 k
+ expat                          x86_64    2.7.1-1.fc40         updates    116 k
+ glib2                          x86_64    2.80.5-1.fc40        updates    3.0 M
+ glibc                          x86_64    2.39-38.fc40         updates    2.2 M
+ glibc-common                   x86_64    2.39-38.fc40         updates    357 k
+ glibc-minimal-langpack         x86_64    2.39-38.fc40         updates     72 k
+ gnutls                         x86_64    3.8.9-1.fc40         updates    1.1 M
+ krb5-libs                      x86_64    1.21.3-3.fc40        updates    758 k
+ libdnf                         x86_64    0.74.0-1.fc40        updates    702 k
+ libidn2                        x86_64    2.3.8-1.fc40         updates    175 k
+ libsolv                        x86_64    0.7.32-4.fc40        updates    444 k
+ libtasn1                       x86_64    4.20.0-1.fc40        updates     74 k
+ libxcrypt                      x86_64    4.4.38-7.fc40        updates    128 k
+ libxml2                        x86_64    2.12.10-1.fc40       updates    687 k
+ libzstd                        x86_64    1.5.7-1.fc40         updates    315 k
+ openldap                       x86_64    2.6.9-1.fc40         updates    255 k
+ openssl-libs                   x86_64    1:3.2.4-1.fc40       updates    2.3 M
+ publicsuffix-list-dafsa        noarch    20250116-1.fc40      updates     59 k
+ python3                        x86_64    3.12.10-2.fc40       updates     28 k
+ python3-dnf                    noarch    4.23.0-1.fc40.1      updates    625 k
+ python3-hawkey                 x86_64    0.74.0-1.fc40        updates    104 k
+ python3-libdnf                 x86_64    0.74.0-1.fc40        updates    847 k
+ python3-libs                   x86_64    3.12.10-2.fc40       updates    9.1 M
+ rpm-sequoia                    x86_64    1.7.0-5.fc40         updates    912 k
+ sqlite-libs                    x86_64    3.45.1-3.fc40        updates    735 k
+ systemd-libs                   x86_64    255.18-1.fc40        updates    704 k
+ tzdata                         noarch    2025b-1.fc40         updates    714 k
+ vim-data                       noarch    2:9.1.1275-1.fc40    updates     18 k
+ vim-minimal                    x86_64    2:9.1.1275-1.fc40    updates    831 k
+ xz                             x86_64    1:5.8.1-2.fc40       updates    572 k
+ xz-libs                        x86_64    1:5.8.1-2.fc40       updates    113 k
+ yum                            noarch    4.23.0-1.fc40.1      updates     37 k
+ zstd                           x86_64    1.5.7-1.fc40         updates    489 k
+Transaction Summary
+================================================================================
+Upgrade  38 Packages
+Total size: 29 M
+Downloading Packages:
+[SKIPPED] audit-libs-4.0.3-1.fc40.x86_64.rpm: Already downloaded               
+[SKIPPED] dnf-4.23.0-1.fc40.1.noarch.rpm: Already downloaded                   
+[SKIPPED] dnf-data-4.23.0-1.fc40.1.noarch.rpm: Already downloaded              
+[SKIPPED] elfutils-default-yama-scope-0.192-9.fc40.noarch.rpm: Already downloaded
+[SKIPPED] elfutils-libelf-0.192-9.fc40.x86_64.rpm: Already downloaded          
+[SKIPPED] elfutils-libs-0.192-9.fc40.x86_64.rpm: Already downloaded            
+[SKIPPED] expat-2.7.1-1.fc40.x86_64.rpm: Already downloaded                    
+[SKIPPED] glib2-2.80.5-1.fc40.x86_64.rpm: Already downloaded                   
+[SKIPPED] glibc-2.39-38.fc40.x86_64.rpm: Already downloaded                    
+[SKIPPED] glibc-common-2.39-38.fc40.x86_64.rpm: Already downloaded             
+[SKIPPED] glibc-minimal-langpack-2.39-38.fc40.x86_64.rpm: Already downloaded   
+[SKIPPED] gnutls-3.8.9-1.fc40.x86_64.rpm: Already downloaded                   
+[SKIPPED] krb5-libs-1.21.3-3.fc40.x86_64.rpm: Already downloaded               
+[SKIPPED] libdnf-0.74.0-1.fc40.x86_64.rpm: Already downloaded                  
+[SKIPPED] libidn2-2.3.8-1.fc40.x86_64.rpm: Already downloaded                  
+[SKIPPED] libsolv-0.7.32-4.fc40.x86_64.rpm: Already downloaded                 
+[SKIPPED] libtasn1-4.20.0-1.fc40.x86_64.rpm: Already downloaded                
+[SKIPPED] libxcrypt-4.4.38-7.fc40.x86_64.rpm: Already downloaded               
+[SKIPPED] libxml2-2.12.10-1.fc40.x86_64.rpm: Already downloaded                
+[SKIPPED] libzstd-1.5.7-1.fc40.x86_64.rpm: Already downloaded                  
+[SKIPPED] openldap-2.6.9-1.fc40.x86_64.rpm: Already downloaded                 
+[SKIPPED] openssl-libs-3.2.4-1.fc40.x86_64.rpm: Already downloaded             
+[SKIPPED] publicsuffix-list-dafsa-20250116-1.fc40.noarch.rpm: Already downloaded
+[SKIPPED] python3-3.12.10-2.fc40.x86_64.rpm: Already downloaded                
+[SKIPPED] python3-dnf-4.23.0-1.fc40.1.noarch.rpm: Already downloaded           
+[SKIPPED] python3-hawkey-0.74.0-1.fc40.x86_64.rpm: Already downloaded          
+[SKIPPED] python3-libdnf-0.74.0-1.fc40.x86_64.rpm: Already downloaded          
+[SKIPPED] python3-libs-3.12.10-2.fc40.x86_64.rpm: Already downloaded           
+[SKIPPED] rpm-sequoia-1.7.0-5.fc40.x86_64.rpm: Already downloaded              
+[SKIPPED] sqlite-libs-3.45.1-3.fc40.x86_64.rpm: Already downloaded             
+[SKIPPED] systemd-libs-255.18-1.fc40.x86_64.rpm: Already downloaded            
+[SKIPPED] tzdata-2025b-1.fc40.noarch.rpm: Already downloaded                   
+[SKIPPED] vim-data-9.1.1275-1.fc40.noarch.rpm: Already downloaded              
+[SKIPPED] vim-minimal-9.1.1275-1.fc40.x86_64.rpm: Already downloaded           
+[SKIPPED] xz-5.8.1-2.fc40.x86_64.rpm: Already downloaded                       
+[SKIPPED] xz-libs-5.8.1-2.fc40.x86_64.rpm: Already downloaded                  
+[SKIPPED] yum-4.23.0-1.fc40.1.noarch.rpm: Already downloaded                   
+[SKIPPED] zstd-1.5.7-1.fc40.x86_64.rpm: Already downloaded                     
+Running transaction check
+Transaction check succeeded.
+Running transaction test
+Transaction test succeeded.
+Running transaction
+  Preparing        :                                                        1/1 
+  Upgrading        : tzdata-2025b-1.fc40.noarch                            1/76 
+  Upgrading        : glibc-common-2.39-38.fc40.x86_64                      2/76 
+  Upgrading        : glibc-minimal-langpack-2.39-38.fc40.x86_64            3/76 
+  Running scriptlet: glibc-2.39-38.fc40.x86_64                             4/76 
+  Upgrading        : glibc-2.39-38.fc40.x86_64                             4/76 
+  Running scriptlet: glibc-2.39-38.fc40.x86_64                             4/76 
+  Upgrading        : xz-libs-1:5.8.1-2.fc40.x86_64                         5/76 
+  Upgrading        : libzstd-1.5.7-1.fc40.x86_64                           6/76 
+  Upgrading        : openssl-libs-1:3.2.4-1.fc40.x86_64                    7/76 
+  Upgrading        : sqlite-libs-3.45.1-3.fc40.x86_64                      8/76 
+  Upgrading        : elfutils-libelf-0.192-9.fc40.x86_64                   9/76 
+  Upgrading        : libxml2-2.12.10-1.fc40.x86_64                        10/76 
+  Upgrading        : libsolv-0.7.32-4.fc40.x86_64                         11/76 
+  Upgrading        : expat-2.7.1-1.fc40.x86_64                            12/76 
+  Upgrading        : libidn2-2.3.8-1.fc40.x86_64                          13/76 
+  Upgrading        : libtasn1-4.20.0-1.fc40.x86_64                        14/76 
+  Upgrading        : gnutls-3.8.9-1.fc40.x86_64                           15/76 
+  Upgrading        : glib2-2.80.5-1.fc40.x86_64                           16/76 
+  Upgrading        : libdnf-0.74.0-1.fc40.x86_64                          17/76 
+  Upgrading        : libxcrypt-4.4.38-7.fc40.x86_64                       18/76 
+  Upgrading        : python3-3.12.10-2.fc40.x86_64                        19/76 
+  Upgrading        : python3-libs-3.12.10-2.fc40.x86_64                   20/76 
+  Upgrading        : python3-libdnf-0.74.0-1.fc40.x86_64                  21/76 
+  Upgrading        : python3-hawkey-0.74.0-1.fc40.x86_64                  22/76 
+  Upgrading        : vim-data-2:9.1.1275-1.fc40.noarch                    23/76 
+  Upgrading        : elfutils-default-yama-scope-0.192-9.fc40.noarch      24/76 
+  Running scriptlet: elfutils-default-yama-scope-0.192-9.fc40.noarch      24/76 
+  Upgrading        : dnf-data-4.23.0-1.fc40.1.noarch                      25/76 
+  Upgrading        : python3-dnf-4.23.0-1.fc40.1.noarch                   26/76 
+  Upgrading        : dnf-4.23.0-1.fc40.1.noarch                           27/76 
+  Running scriptlet: dnf-4.23.0-1.fc40.1.noarch                           27/76 
+  Upgrading        : yum-4.23.0-1.fc40.1.noarch                           28/76 
+  Upgrading        : elfutils-libs-0.192-9.fc40.x86_64                    29/76 
+  Upgrading        : vim-minimal-2:9.1.1275-1.fc40.x86_64                 30/76 
+  Upgrading        : krb5-libs-1.21.3-3.fc40.x86_64                       31/76 
+  Upgrading        : openldap-2.6.9-1.fc40.x86_64                         32/76 
+  Upgrading        : rpm-sequoia-1.7.0-5.fc40.x86_64                      33/76 
+  Upgrading        : systemd-libs-255.18-1.fc40.x86_64                    34/76 
+  Upgrading        : xz-1:5.8.1-2.fc40.x86_64                             35/76 
+  Upgrading        : zstd-1.5.7-1.fc40.x86_64                             36/76 
+  Upgrading        : audit-libs-4.0.3-1.fc40.x86_64                       37/76 
+  Upgrading        : publicsuffix-list-dafsa-20250116-1.fc40.noarch       38/76 
+  Cleanup          : systemd-libs-255.16-1.fc40.x86_64                    39/76 
+  Cleanup          : elfutils-libs-0.192-7.fc40.x86_64                    40/76 
+  Cleanup          : krb5-libs-1.21.3-2.fc40.x86_64                       41/76 
+  Cleanup          : rpm-sequoia-1.7.0-3.fc40.x86_64                      42/76 
+  Cleanup          : xz-1:5.4.6-3.fc40.x86_64                             43/76 
+  Cleanup          : zstd-1.5.6-1.fc40.x86_64                             44/76 
+  Cleanup          : vim-minimal-2:9.1.1000-1.fc40.x86_64                 45/76 
+  Cleanup          : openldap-2.6.8-1.fc40.x86_64                         46/76 
+  Cleanup          : elfutils-libelf-0.192-7.fc40.x86_64                  47/76 
+  Cleanup          : audit-libs-4.0.2-1.fc40.x86_64                       48/76 
+  Cleanup          : yum-4.22.0-1.fc40.noarch                             49/76 
+  Running scriptlet: dnf-4.22.0-1.fc40.noarch                             50/76 
+  Cleanup          : dnf-4.22.0-1.fc40.noarch                             50/76 
+  Running scriptlet: dnf-4.22.0-1.fc40.noarch                             50/76 
+  Cleanup          : python3-dnf-4.22.0-1.fc40.noarch                     51/76 
+  Cleanup          : dnf-data-4.22.0-1.fc40.noarch                        52/76 
+  Cleanup          : vim-data-2:9.1.1000-1.fc40.noarch                    53/76 
+  Cleanup          : elfutils-default-yama-scope-0.192-7.fc40.noarch      54/76 
+  Cleanup          : publicsuffix-list-dafsa-20240107-3.fc40.noarch       55/76 
+  Cleanup          : python3-hawkey-0.73.4-1.fc40.x86_64                  56/76 
+  Cleanup          : python3-libdnf-0.73.4-1.fc40.x86_64                  57/76 
+  Cleanup          : python3-libs-3.12.8-2.fc40.x86_64                    58/76 
+  Cleanup          : python3-3.12.8-2.fc40.x86_64                         59/76 
+  Cleanup          : libdnf-0.73.4-1.fc40.x86_64                          60/76 
+  Cleanup          : glib2-2.80.3-1.fc40.x86_64                           61/76 
+  Cleanup          : gnutls-3.8.6-1.fc40.x86_64                           62/76 
+  Cleanup          : libsolv-0.7.31-1.fc40.x86_64                         63/76 
+  Cleanup          : libxml2-2.12.9-1.fc40.x86_64                         64/76 
+  Cleanup          : openssl-libs-1:3.2.2-3.fc40.x86_64                   65/76 
+  Cleanup          : sqlite-libs-3.45.1-2.fc40.x86_64                     66/76 
+  Cleanup          : xz-libs-1:5.4.6-3.fc40.x86_64                        67/76 
+  Cleanup          : expat-2.6.3-1.fc40.x86_64                            68/76 
+  Cleanup          : libxcrypt-4.4.37-4.fc40.x86_64                       69/76 
+  Cleanup          : libzstd-1.5.6-1.fc40.x86_64                          70/76 
+  Cleanup          : libtasn1-4.19.0-6.fc40.x86_64                        71/76 
+  Cleanup          : libidn2-2.3.7-1.fc40.x86_64                          72/76 
+  Cleanup          : glibc-2.39-33.fc40.x86_64                            73/76 
+  Cleanup          : glibc-minimal-langpack-2.39-33.fc40.x86_64           74/76 
+  Cleanup          : glibc-common-2.39-33.fc40.x86_64                     75/76 
+  Cleanup          : tzdata-2024b-1.fc40.noarch                           76/76 
+  Running scriptlet: tzdata-2024b-1.fc40.noarch                           76/76 
+Upgraded:
+  audit-libs-4.0.3-1.fc40.x86_64                                                
+  dnf-4.23.0-1.fc40.1.noarch                                                    
+  dnf-data-4.23.0-1.fc40.1.noarch                                               
+  elfutils-default-yama-scope-0.192-9.fc40.noarch                               
+  elfutils-libelf-0.192-9.fc40.x86_64                                           
+  elfutils-libs-0.192-9.fc40.x86_64                                             
+  expat-2.7.1-1.fc40.x86_64                                                     
+  glib2-2.80.5-1.fc40.x86_64                                                    
+  glibc-2.39-38.fc40.x86_64                                                     
+  glibc-common-2.39-38.fc40.x86_64                                              
+  glibc-minimal-langpack-2.39-38.fc40.x86_64                                    
+  gnutls-3.8.9-1.fc40.x86_64                                                    
+  krb5-libs-1.21.3-3.fc40.x86_64                                                
+  libdnf-0.74.0-1.fc40.x86_64                                                   
+  libidn2-2.3.8-1.fc40.x86_64                                                   
+  libsolv-0.7.32-4.fc40.x86_64                                                  
+  libtasn1-4.20.0-1.fc40.x86_64                                                 
+  libxcrypt-4.4.38-7.fc40.x86_64                                                
+  libxml2-2.12.10-1.fc40.x86_64                                                 
+  libzstd-1.5.7-1.fc40.x86_64                                                   
+  openldap-2.6.9-1.fc40.x86_64                                                  
+  openssl-libs-1:3.2.4-1.fc40.x86_64                                            
+  publicsuffix-list-dafsa-20250116-1.fc40.noarch                                
+  python3-3.12.10-2.fc40.x86_64                                                 
+  python3-dnf-4.23.0-1.fc40.1.noarch                                            
+  python3-hawkey-0.74.0-1.fc40.x86_64                                           
+  python3-libdnf-0.74.0-1.fc40.x86_64                                           
+  python3-libs-3.12.10-2.fc40.x86_64                                            
+  rpm-sequoia-1.7.0-5.fc40.x86_64                                               
+  sqlite-libs-3.45.1-3.fc40.x86_64                                              
+  systemd-libs-255.18-1.fc40.x86_64                                             
+  tzdata-2025b-1.fc40.noarch                                                    
+  vim-data-2:9.1.1275-1.fc40.noarch                                             
+  vim-minimal-2:9.1.1275-1.fc40.x86_64                                          
+  xz-1:5.8.1-2.fc40.x86_64                                                      
+  xz-libs-1:5.8.1-2.fc40.x86_64                                                 
+  yum-4.23.0-1.fc40.1.noarch                                                    
+  zstd-1.5.7-1.fc40.x86_64                                                      
+Complete!

@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Mandara Login</title>
+  <desc id="desc">A warm dawn keyhole above the Mandara shoreline, in indigo and dusk violet.</desc>
+  <defs>
+    <linearGradient id="tile" x1="112" y1="64" x2="824" y2="1000" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#655A9D"/>
+      <stop offset=".55" stop-color="#30265E"/>
+      <stop offset="1" stop-color="#241D47"/>
+    </linearGradient>
+    <radialGradient id="glass" cx="152" cy="112" r="920" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#DDD7FF" stop-opacity=".22"/>
+      <stop offset=".62" stop-color="#7063B5" stop-opacity=".02"/>
+      <stop offset="1" stop-color="#EE9182" stop-opacity=".14"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="176" y1="64" x2="900" y2="992" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EFEAFF" stop-opacity=".72"/>
+      <stop offset=".45" stop-color="#C6B9ED" stop-opacity=".08"/>
+      <stop offset="1" stop-color="#EE9182" stop-opacity=".3"/>
+    </linearGradient>
+    <linearGradient id="sea" x1="296" y1="424" x2="728" y2="688" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E3D6FC"/>
+      <stop offset=".52" stop-color="#C2ACE3"/>
+      <stop offset="1" stop-color="#EE9182"/>
+    </linearGradient>
+    <linearGradient id="dawn" x1="466" y1="246" x2="558" y2="454" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF2CD"/>
+      <stop offset=".58" stop-color="#FFE4AB"/>
+      <stop offset="1" stop-color="#EE9182"/>
+    </linearGradient>
+  </defs>
+  <rect id="tile-shape" x="32" y="32" width="960" height="960" rx="216" fill="url(#tile)"/>
+  <rect x="32" y="32" width="960" height="960" rx="216" fill="url(#glass)"/>
+  <rect x="36" y="36" width="952" height="952" rx="212" fill="none" stroke="url(#rim)" stroke-width="8"/>
+  <path d="M112 280V248c0-75 61-136 136-136h130" fill="none" stroke="#F5EEFF" stroke-opacity=".13" stroke-width="12" stroke-linecap="round"/>
+  <path d="M92 756c180-80 292 172 468 102 151-60 226-64 365-17v63c-34 53-89 80-149 80H248c-76 0-128-38-156-104Z" fill="#EE9182" opacity=".07"/>
+  <path id="shoreline" d="M232 648c0-124 24-224 114-224s86 196 166 196 76-196 166-196 114 100 114 224" fill="none" stroke="url(#sea)" stroke-width="88" stroke-linecap="round"/>
+  <path id="dawn-keyhole" d="M512 246a66 66 0 0 1 32 124l18 65c3 11-5 21-16 21h-68c-11 0-19-10-16-21l18-65a66 66 0 0 1 32-124Z" fill="url(#dawn)"/>
+  <path d="m354 326 40 22m236 0 40-22" fill="none" stroke="#FFE4AB" stroke-width="24" stroke-linecap="round" opacity=".65"/>
+</svg>

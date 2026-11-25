@@ -1,0 +1,134 @@
+//! Login translations live in the shared external language pack under
+//! their own prefix. A missing login key falls back to the shell wording,
+//! then English. The greeter never registers a language download hook.
+
+use std::fmt::Display;
+
+use mandara_i18n::{Lang, fill, language, lookup};
+
+/// Translates a login key from the shared external pack, then the shell catalog.
+pub fn tl(key: &str) -> String {
+    match language() {
+        Lang::En => key.to_string(),
+        lang => mandara_i18n::bundle::greeter(lang, key).or_else(|| lookup(lang, key)).unwrap_or(key).to_string(),
+    }
+}
+
+/// [`tl`] with `{name}` placeholders.
+pub fn tlf(key: &str, args: &[(&str, &dyn Display)]) -> String {
+    fill(&tl(key), args)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeSet;
+    use std::sync::OnceLock;
+    use mandara_i18n::Catalog;
+
+    fn source(lang: Lang) -> String {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("locales").join(format!("{}.toml", lang.code()));
+        std::fs::read_to_string(path).unwrap()
+    }
+
+    fn catalog(lang: Lang) -> &'static Catalog {
+        static CATALOGS: [OnceLock<Catalog>; Lang::ALL.len()] = [const { OnceLock::new() }; Lang::ALL.len()];
+        CATALOGS[lang as usize].get_or_init(|| Catalog::parse(&source(lang)).unwrap())
+    }
+
+    #[test]
+    fn login_translations_are_not_embedded_in_the_binary() {
+        let source = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/i18n.rs")).unwrap();
+        let production = source.split("#[cfg(test)]").next().unwrap();
+        assert!(!production.contains("include_str!"));
+        assert!(!production.contains("install_hooks"), "the login process must use installed packs offline");
+    }
+
+    /// Keys used through `tl` / `tlf` string literals in this crate.
+    fn source_keys() -> BTreeSet<String> {
+        let mut keys = BTreeSet::new();
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut stack = vec![root.join("src")];
+        // Studio's Login screen page uses the greeter catalog too.
+        let mut files = vec![root.join("../mandara-studio/src/app/greeter_page.rs")];
+        while let Some(d) = stack.pop() {
+            for e in std::fs::read_dir(d).unwrap().flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    stack.push(p);
+                } else {
+                    files.push(p);
+                }
+            }
+        }
+        {
+            for p in files {
+                if !p.exists() {
+                    continue;
+                }
+                if p.extension().is_none_or(|x| x != "rs") {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&p).unwrap();
+                for marker in ["tl(\"", "tlf(\""] {
+                    let mut from = 0;
+                    while let Some(pos) = text[from..].find(marker) {
+                        let at = from + pos + marker.len();
+                        let prev = text[..from + pos].chars().next_back();
+                        if !prev.is_some_and(|c| c.is_alphanumeric() || c == '_') {
+                            let end = text[at..].find('"').unwrap();
+                            keys.insert(text[at..at + end].replace("\\\"", "\""));
+                        }
+                        from = at;
+                    }
+                }
+            }
+        }
+        keys
+    }
+
+    #[test]
+    fn catalogs_parse_and_keep_placeholders() {
+        for lang in Lang::ALL.into_iter().filter(|l| *l != Lang::En) {
+            let c = Catalog::parse(&source(lang)).unwrap_or_else(|e| panic!("{}: {e}", lang.code()));
+            for k in c.keys() {
+                let v = c.get(k).unwrap();
+                assert_eq!(mandara_i18n::placeholders(k), mandara_i18n::placeholders(v), "{}: {k:?} → {v:?}", lang.code());
+            }
+        }
+    }
+
+    #[test]
+    fn installer_directions_use_the_labels_studio_actually_displays() {
+        for lang in Lang::ALL.into_iter().filter(|lang| *lang != Lang::En) {
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../mandara-i18n/locales").join(format!("{}.toml", lang.code()));
+            let shared = Catalog::parse(&std::fs::read_to_string(path).unwrap()).unwrap();
+            let directions: &[(&str, &[&str])] = &[
+                ("Updates: Studio → About → Update now", &["Studio", "About", "Update now"]),
+                ("Login screen kept; switch any time in Studio → Login & Lock Screens → Login → Login manager.", &["Studio", "Login & Lock Screens", "Login", "Login manager"]),
+            ];
+            for &(instruction, labels) in directions {
+                let message = shared.get(instruction).unwrap();
+                for &label in labels {
+                    let displayed = if label == "Login manager" { catalog(lang).get(label) } else { None }.or_else(|| shared.get(label)).unwrap();
+                    assert!(message.contains(displayed), "{}: {instruction:?} should name {displayed:?}", lang.code());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn every_greeter_string_is_translated() {
+        let keys = source_keys();
+        assert!(keys.len() >= 15, "scanner found only {} keys", keys.len());
+        let mut missing = Vec::new();
+        for lang in Lang::ALL.into_iter().filter(|l| *l != Lang::En) {
+            for k in &keys {
+                if catalog(lang).get(k).is_none() && mandara_i18n::lookup(lang, k).is_none() {
+                    missing.push(format!("{}: {k:?}", lang.code()));
+                }
+            }
+        }
+        assert!(missing.is_empty(), "untranslated greeter strings:\n{}", missing.join("\n"));
+    }
+}

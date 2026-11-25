@@ -1,0 +1,2123 @@
+//! The Studio window: sidebar navigation + searchable, registry-driven
+//! settings pages, a theme gallery and plugin management. Every change goes
+//! straight into the shared config entity, so the live shell updates at once.
+
+use mandara_ui::bidi::Bidi as _;
+use std::collections::HashMap;
+use std::rc::Rc;
+
+use gpui::{
+    AnyElement, AppContext as _, ClickEvent, Context, Entity, FontWeight, InteractiveElement, IntoElement,
+    ParentElement, Render, SharedString, StatefulInteractiveElement, Styled, Window, div,
+    prelude::FluentBuilder as _, px,
+};
+use mandara_config::ShellConfig;
+use mandara_core::ToGpui;
+use mandara_i18n::{t, tf, tk, tr};
+use mandara_theme::MandaraPalette;
+use mandara_ui::icons::icon;
+use mandara_ui::state::{config, update_config};
+use serde_json::Value;
+
+pub(crate) mod auth_page;
+mod agent_page;
+mod depth_model_row;
+mod maint_page;
+mod market_page;
+mod motion_page;
+mod nav;
+mod recorder_row;
+mod store_page;
+pub(crate) use store_page::{HIDDEN_PLUGINS, PLUGIN_CATEGORIES, plugin_art_cache_clear, plugin_icon, plugin_tile};
+mod about_links;
+mod about_page;
+mod admin_run;
+mod ddc_writes;
+mod bars_page;
+mod designer;
+mod feeds_editor;
+mod fold;
+mod font_picker;
+mod greeter_page;
+mod keyrings_card;
+mod page_tabs;
+mod plugin_credentials;
+mod plugin_pool;
+mod plugin_updates;
+mod popover;
+mod sidebar_tabs_page;
+mod time_card;
+mod updates_card;
+mod users_page;
+mod whats_new;
+pub use time_card::set_demo as set_time_demo;
+pub use users_page::set_demo as set_users_demo;
+mod activity;
+mod app_templates;
+mod app_themes_page;
+pub mod apps_page;
+mod audio_page;
+mod auth_widgets;
+mod boot_page;
+mod choice;
+mod component_designs;
+mod compositor_page;
+mod compositor_presets;
+mod config_doctor;
+mod cursor_page;
+pub mod desktop_page;
+mod desktop_widgets_page;
+mod diagnostics_page;
+mod display_control;
+mod displays_page;
+mod dock_page;
+mod form;
+mod frame_meter;
+pub(crate) mod grid;
+mod grouped;
+mod icons_page;
+mod input_page;
+mod keybind_conflicts;
+mod launcher_data;
+mod launcher_page;
+mod launcher_placement;
+pub mod looks_page;
+mod looks_yours;
+mod network_page;
+mod native_shortcuts;
+pub use native_shortcuts::ShortcutsTab;
+mod notifications_page;
+mod page_visit;
+mod studio_frame;
+mod studio_looks;
+mod plugin_gate;
+mod plugin_grants;
+mod plugin_folder_grants;
+mod plugin_folders;
+mod market_catalog;
+pub mod plugin_modal;
+mod plugin_offer;
+pub mod plugins_local;
+pub(crate) mod power_page;
+mod profiles_page;
+#[cfg(test)]
+mod settings_audit;
+mod sounds_page;
+mod stash_edges;
+mod swatch_list;
+mod switcher_page;
+mod theme_galleries;
+mod themes_page;
+mod typography_page;
+mod wallgen_logic;
+mod wallgen_page;
+pub mod wallpaper_page;
+
+use crate::perf::{self, PerfMonitor};
+use crate::registry::{self, Control, Section, Setting};
+use crate::text_field::TextField;
+use crate::tokens::*;
+
+/// Pages that draw built-in plugins' artwork (tiles, the bar designer's
+/// pool); leaving the last of them releases it.
+fn shows_plugin_art(section: Section) -> bool {
+    matches!(section, Section::Plugins | Section::Bars | Section::Themes)
+}
+
+/// Drags the window: the compositor's own grab where the standard
+/// `xdg_toplevel.move` is ignored (MangoWM), the standard request otherwise.
+/// Not for a touchscreen tap: GPUI delivers its press only once the finger
+/// has lifted, so a move started then would follow the mouse pointer (the
+/// compositor's grab ends with a button that is no longer held) instead.
+fn begin_move(window: &mut Window) {
+    if window.last_input_was_touch() {
+        return;
+    }
+    if !mandara_compositor::begin_interactive_move() {
+        window.start_window_move();
+    }
+}
+
+pub struct StudioView {
+    /// Lock → the design gallery's miniatures (each design applied to a
+    /// login config, with its palette), made on first show and dropped
+    /// with the page.
+    lock_designs: Option<Rc<[(mandara_greeter::config::GreeterConfig, MandaraPalette)]>>,
+    agent_page: Option<Entity<agent_page::AgentPage>>,
+    motion_preview: Option<Entity<motion_page::Preview>>,
+    section: Section,
+    bars_tab: registry::bars::BarsTab,
+    search: Entity<TextField>,
+    query: String,
+    fields: HashMap<&'static str, Entity<TextField>>,
+    error: Option<String>,
+    perf: Entity<PerfMonitor>,
+    icon_search: Entity<TextField>,
+    icon_query: String,
+    icon_path: Entity<TextField>,
+    /// One font picker per font setting.
+    font_selects: HashMap<&'static str, Entity<font_picker::FontSelect>>,
+    /// Seeds extracted from the current wallpaper (path, hex colors).
+    wallpaper_seeds: Option<(std::path::PathBuf, Rc<[mandara_theme::Color]>)>,
+    /// The current wallpaper's picker thumbnail (wallpaper, thumbnail file),
+    /// made off the UI thread together with the seeds.
+    wallpaper_thumb: Option<(std::path::PathBuf, std::path::PathBuf)>,
+    seeds_loading: Option<std::path::PathBuf>,
+    /// Themes page: every theme with its palette for the current mode, read
+    /// once per visit (user themes are TOML files on disk).
+    themes: Option<themes_page::ThemeGallery>,
+    app_templates: app_templates::Templates,
+    /// Icon picker: the query and the theme icons matching it.
+    icon_matches: Option<(String, Rc<[String]>)>,
+    /// File-backed Launcher labels and ranking, owned only by its visible visit.
+    launcher_data: launcher_data::LauncherData,
+    /// Studio → Bars → Sidebar editor state.
+    sidebar_tabs: sidebar_tabs_page::TabsEditor,
+    /// Studio → Bars → Bar: the plugin pool's search and menu.
+    designer: plugin_pool::Designer,
+    /// Responsive breakpoints, recomputed from the window width each frame.
+    rail: bool,
+    stack_rows: bool,
+    /// Page geometry for the current window width (grids size from it).
+    page: grid::PageMetrics,
+    /// Text fields of the slash-command / skill editors, keyed by row+field.
+    list_fields: HashMap<String, Entity<TextField>>,
+    /// Keybind row waiting for a chord (Studio → Keyboard shortcuts).
+    capturing: Option<usize>,
+    shortcuts_tab: ShortcutsTab,
+    auth_tab: auth_page::AuthTab,
+    native_shortcuts: native_shortcuts::Editor,
+    focus: gpui::FocusHandle,
+    maint: maint_page::Maint,
+    depth_model: depth_model_row::DepthModelRow,
+    recorder_row: recorder_row::RecorderRow,
+    /// About → Mandara updates, and marketplace plugin updates.
+    updates: updates_card::Updates,
+    about_links: about_links::Links,
+    credentials: plugin_credentials::Editor,
+    /// Plugins → Feeds → settings: the subscription manager.
+    feeds: feeds_editor::Editor,
+    /// Each language card's download fill (Studio → General → Language).
+    lang_fills: mandara_ui::progress_fill::LanguageFills,
+    /// When the language cards' repaint timer fires, while one is live: a
+    /// frame schedules another only for an earlier moment, so repeated
+    /// renders never stack timer chains.
+    lang_wake: Option<std::time::Instant>,
+    /// Plugins page: the plugin detail / settings modal.
+    modal: plugin_modal::PluginModal,
+    /// Plugins page tab (Installed / Marketplace / Local).
+    plugins_tab: plugins_local::PluginsTab,
+    /// The plugin store (search, filter chips, featured hero).
+    store: store_page::Store,
+    market: market_page::Market,
+    local: plugins_local::Local,
+    /// The page scroller (deep links scroll to a section).
+    content_scroll: gpui::ScrollHandle,
+    /// Sidebar: keyboard focus, scroller, and the remembered collapsed
+    /// groups (`crate::ui_state`).
+    nav_focus: gpui::FocusHandle,
+    nav_scroll: gpui::ScrollHandle,
+    pub(crate) ui: crate::ui_state::UiState,
+    /// The folds on the page being built, in order, with whether each
+    /// starts open ([`fold`]).
+    fold_keys: Vec<(String, bool)>,
+    /// Themes → Components: the value the design previews show (drag one
+    /// and every preview follows; it is never saved).
+    component_preview: f32,
+    /// The other component previews (Themes → Components; never saved).
+    components: component_designs::Previews,
+    /// The Themes page's tab.
+    themes_tab: looks_page::ThemesTab,
+    studio_looks: studio_looks::Gallery,
+    /// The Desktop page's tab (Widgets when entering the page).
+    desktop_tab: desktop_page::DesktopTab,
+    /// Stash's edge catchers: the edge being resolved, and a change waiting
+    /// for you to choose which feature keeps an edge.
+    stash_edges: stash_edges::EdgesUi,
+}
+
+impl StudioView {
+    /// Initialize Studio’s inputs and page state from the active configuration.
+    pub fn new(cx: &mut Context<Self>) -> Self {
+        cx.observe_global::<mandara_ui::plugins::external::ReloadState>(|this: &mut Self, cx| {
+            if this.market_permissions_pending() && !cx.try_global::<mandara_ui::plugins::external::ReloadState>().is_some_and(|reload| reload.is_running()) { cx.notify(); }
+        }).detach();
+        cx.observe(&config(cx), |_, _, cx| cx.notify()).detach();
+        cx.observe(&mandara_core::theme_entity(cx), |_, _, cx| cx.notify()).detach();
+        profiles_page::track_history(cx);
+        let perf = perf::new(cx);
+        cx.observe(&perf, |this: &mut Self, _, cx| {
+            if matches!(this.section, Section::Performance | Section::Home) && this.query.is_empty() {
+                cx.notify();
+            }
+        })
+        .detach();
+        let this = cx.entity().downgrade();
+        let search = cx.new(|cx| {
+            TextField::new(
+                String::new(),
+                t("Search settings"),
+                true,
+                Rc::new(move |value, _, cx| {
+                    let _ = this.update(cx, |studio, cx| {
+                        studio.query = value;
+                        if !studio.query.is_empty() { studio.launcher_data.release(); }
+                        cx.notify();
+                    });
+                }),
+                cx,
+            )
+        });
+        let this = cx.entity().downgrade();
+        let icon_search = cx.new(|cx| {
+            TextField::new(
+                String::new(),
+                t("Search every icon in your theme…"),
+                true,
+                Rc::new(move |value, _, cx| {
+                    let _ = this.update(cx, |studio, cx| {
+                        studio.icon_query = value;
+                        cx.notify();
+                    });
+                }),
+                cx,
+            )
+        });
+        let icon_path = cx.new(|cx| {
+            TextField::new(
+                String::new(),
+                t("…or an image path, e.g. ~/Pictures/logo.svg"),
+                false,
+                Rc::new(|value, _, cx| {
+                    let value = value.trim().to_string();
+                    if !value.is_empty() {
+                        update_config(cx, |c| c.appearance.launcher_icon = value);
+                    }
+                }),
+                cx,
+            )
+            .clear_on_commit()
+        });
+        Self { agent_page: None, motion_preview: None, section: Section::Home, bars_tab: Default::default(), recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None,
+            app_templates: Default::default(),
+            icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, shortcuts_tab: Default::default(), auth_tab: Default::default(), native_shortcuts: Default::default(), focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), lock_designs: None, credentials: Default::default(), feeds: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: cx.try_global::<crate::ui_state::UiState>().cloned().unwrap_or_default(), fold_keys: Vec::new(), lang_fills: Default::default(), lang_wake: None, component_preview: component_designs::PREVIEW_VALUE, components: Default::default(), themes_tab: Default::default(), studio_looks: Default::default(), desktop_tab: Default::default(), stash_edges: Default::default() }
+    }
+
+    /// Navigates to a section. Entering a page drops what it cached from
+    /// disk, so a visit always shows fresh files, and opens it at the top
+    /// (the content scroller is shared: a page must not inherit the last
+    /// one's offset, which left short pages "stuck" at their bottom).
+    pub fn show(&mut self, section: Section, cx: &mut Context<Self>) {
+        let (section, tab) = auth_page::navigation(section, self.auth_tab);
+        if self.auth_tab != tab && section == Section::LoginScreen {
+            self.content_scroll.set_offset(gpui::point(px(0.0), px(0.0)));
+            if tab == auth_page::AuthTab::Lock { cx.defer(greeter_page::release); }
+        }
+        self.auth_tab = tab;
+        if section == Section::Bars { self.bars_tab = Default::default(); }
+        if section == Section::Themes && self.section != Section::Themes { self.themes_tab = Default::default(); }
+        if section == Section::Desktop && self.section != Section::Desktop { self.desktop_tab = Default::default(); }
+        if section == Section::Plugins { self.market_reopen(); }
+        if section != Section::Plugins { self.market_pause(); self.local.pause(); }
+        if section != self.section {
+            self.launcher_data.release();
+            self.agent_page = None;
+            self.motion_preview = None;
+            if section == Section::Maintenance { self.maint.invalidate(); }
+            self.content_scroll.set_offset(gpui::point(px(0.0), px(0.0)));
+            self.themes = None;
+            self.app_templates = Default::default();
+            self.studio_looks.release();
+            self.native_shortcuts.release();
+            keybind_conflicts::release(cx);
+            self.icon_matches = None;
+            self.lock_designs = None;
+            // The Components previews' text fields go with the page.
+            self.components = Default::default();
+            if self.section == Section::About {
+                self.about_links = Default::default();
+                self.updates.changelog = None;
+            }
+            // The recorder's device and display lists are read afresh.
+            self.recorder_row.new_visit();
+            plugin_art_cache_clear();
+            let leaving = self.section;
+            let modal = self.modal.showing();
+            let covers = leaving == Section::Plugins && !modal;
+            let art = shows_plugin_art(leaving) && !shows_plugin_art(section) && !modal;
+            // Deferred past this window update, so the pictures leave
+            // Studio's own atlas too (an updating window is out of reach).
+            cx.defer(move |cx| {
+                match leaving {
+                    Section::LoginScreen => greeter_page::release(cx),
+                    Section::Themes => {
+                        theme_galleries::release(cx);
+                        boot_page::release(cx);
+                        sounds_page::release(cx);
+                    }
+                    Section::Wallpaper => {
+                        wallgen_page::release(cx);
+                        wallpaper_page::release(cx);
+                    }
+                    Section::About => mandara_ui::plugin_art::release_brand(cx),
+                    Section::Desktop => desktop_page::release(cx),
+                    _ => {}
+                }
+                if covers {
+                    store_page::covers_release(cx);
+                }
+                if art {
+                    mandara_ui::plugin_art::release(cx);
+                }
+                // Freed pages go back to the system, off the UI thread.
+                mandara_services::memory::request_trim();
+            });
+        }
+        self.section = section;
+        self.query.clear();
+        self.search.update(cx, |f, _| f.value.clear());
+        cx.notify();
+    }
+
+    /// Opens the search results for `query` (`mandara studio search/<text>`,
+    /// e.g. a widget's settings button showing every weather setting).
+    pub fn show_search(&mut self, query: &str, cx: &mut Context<Self>) {
+        self.launcher_data.release();
+        self.agent_page = None;
+        self.motion_preview = None;
+        self.content_scroll.set_offset(gpui::point(px(0.0), px(0.0)));
+        self.query = query.to_string();
+        self.search.update(cx, |f, _| f.set(query));
+        cx.notify();
+    }
+
+    fn apply(&mut self, setting: &Setting, value: Value, cx: &mut Context<Self>) {
+        let cfg = config(cx).read(cx).snapshot();
+        match registry::set(&cfg, setting, value) {
+            Ok(next) => {
+                self.error = None;
+                // An edge Stash's catcher holds is never taken silently.
+                if !self.stash_edges.hold_if_colliding(&cfg, next.clone(), setting.label) {
+                    update_config(cx, |c| *c = next);
+                }
+            }
+            Err(err) => self.error = Some(err),
+        }
+        cx.notify();
+    }
+
+    /// Restores every setting of a group to its default in one edit.
+    fn reset_group(&mut self, settings: &[Setting], cx: &mut Context<Self>) {
+        let mut next = (*config(cx).read(cx).snapshot()).clone();
+        for s in settings {
+            if let Ok(c) = registry::set(&next, s, registry::default_value(s)) {
+                next = c;
+            }
+        }
+        self.error = None;
+        let cfg = config(cx).read(cx).snapshot();
+        if !self.stash_edges.hold_if_colliding(&cfg, next.clone(), tk("Reset to defaults")) {
+            update_config(cx, |c| *c = next);
+        }
+        cx.notify();
+    }
+
+    fn field(&mut self, setting: &Setting, current: String, placeholder: &'static str, cx: &mut Context<Self>) -> Entity<TextField> {
+        if let Some(f) = self.fields.get(setting.path) {
+            f.update(cx, |f, _| f.sync(&current));
+            return f.clone();
+        }
+        let this = cx.entity().downgrade();
+        let setting2 = setting.clone();
+        let field = cx.new(|cx| {
+            TextField::new(
+                current,
+                placeholder,
+                false,
+                Rc::new(move |value, _, cx| {
+                    let setting = setting2.clone();
+                    let _ = this.update(cx, |studio, cx| {
+                        let json = match setting.control {
+                            Control::OptionalText { .. } if value.trim().is_empty() => Value::Null,
+                            Control::List { .. } => Value::Array(value.split(',').map(str::trim).filter(|v| !v.is_empty()).map(Value::from).collect()),
+                            Control::Number { min, max } => match value.trim().parse::<f64>() {
+                                Ok(n) => Value::from(n.clamp(min, max)),
+                                Err(_) => {
+                                    studio.error = Some(tf("{setting} must be a number", &[("setting", &tr(setting.label))]));
+                                    return;
+                                }
+                            },
+                            _ => Value::from(value),
+                        };
+                        studio.apply(&setting, json, cx);
+                    });
+                }),
+                cx,
+            )
+        });
+        self.fields.insert(setting.path, field.clone());
+        field
+    }
+
+    /// A setting's control. `room` is the most width it may take (a long
+    /// choice turns into a balanced grid that fits it) and whether it sits
+    /// under its label.
+    fn control(&mut self, setting: &Setting, room: choice::Room, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        // A component's design: its choices drawn as live previews.
+        if let Some(component) = component_designs::by_path(setting.path) {
+            return self.design_picker(component, setting, room.width, cfg, p, cx);
+        }
+        let value = registry::get(cfg, setting);
+        match setting.control.clone() {
+            Control::Time => {
+                let raw = value.as_str().unwrap_or("00:00").to_string();
+                let (h, m) = raw.split_once(':').and_then(|(h, m)| Some((h.parse::<i32>().ok()?, m.parse::<i32>().ok()?))).unwrap_or((0, 0));
+                let step = |id: &'static str, label: &'static str, dh: i32, dm: i32, cx: &mut Context<Self>| {
+                    let setting = setting.clone();
+                    div()
+                        .id(SharedString::from(format!("{id}{}", setting.path)))
+                        .size(px(DIM_26_PX))
+                        .rounded_full()
+                        .row()
+                        .items_center()
+                        .justify_center()
+                        .cursor_pointer()
+                        .text_color(p.on_surface_variant.hsla())
+                        .hover(|s| s.bg(p.on_surface.with_alpha(ALPHA_8).hsla()))
+                        .child(label)
+                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                            let total = ((h * MINUTES_PER_HOUR + m + dh * MINUTES_PER_HOUR + dm) % MINUTES_PER_DAY + MINUTES_PER_DAY) % MINUTES_PER_DAY;
+                            this.apply(&setting, Value::from(format!("{:02}:{:02}", total / MINUTES_PER_HOUR, total % MINUTES_PER_HOUR)), cx);
+                        }))
+                };
+                let unit = |text: String| {
+                    div()
+                        .min_w(px(DIM_40_PX))
+                        .h(px(DIM_32_PX))
+                        .rounded(px(RADIUS_10_PX))
+                        .bg(p.surface_container_high.hsla())
+                        .row()
+                        .items_center()
+                        .justify_center()
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .font_features(mandara_ui::fonts::tabular_nums())
+                        .child(text)
+                };
+                // Clock times read HH:MM left to right in every language.
+                div()
+                    .ltr_row()
+                    .items_center()
+                    .gap(px(SPACE_4_PX))
+                    .child(step("h-", "‹", -1, 0, cx))
+                    .child(unit(format!("{h:02}")))
+                    .child(step("h+", "›", 1, 0, cx))
+                    .child(div().px(px(2.0)).font_weight(gpui::FontWeight::SEMIBOLD).child(":"))
+                    .child(step("m-", "‹", 0, -TIME_STEP_MINUTES, cx))
+                    .child(unit(format!("{m:02}")))
+                    .child(step("m+", "›", 0, TIME_STEP_MINUTES, cx))
+                    .into_any_element()
+            }
+            Control::Toggle if let Some(reason) = registry::locked(setting, cfg) => {
+                // The saved value, dimmed; one that is on can still be
+                // turned off.
+                let on = value.as_bool().unwrap_or(false);
+                let next = registry::locked_toggle_click(on);
+                let setting = setting.clone();
+                div()
+                    .id(SharedString::from(format!("t{}", setting.path)))
+                    .row()
+                    .items_center()
+                    .gap(px(SPACE_8_PX))
+                    .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(tr(reason))))
+                    .child(div().opacity(LOCKED_OPACITY).child(mandara_ui::plugins::network::switch(on, p)))
+                    .when_some(next, |el, next| {
+                        el.cursor_pointer().on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                this.apply(&setting, Value::from(next), cx)
+                            },
+                        ))
+                    })
+                    .into_any_element()
+            }
+            Control::Toggle => {
+                let on = value.as_bool().unwrap_or(false);
+                let setting = setting.clone();
+                div()
+                    .id(SharedString::from(format!("t{}", setting.path)))
+                    .cursor_pointer()
+                    .child(mandara_ui::plugins::network::switch(on, p))
+                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        this.apply(&setting, Value::from(!on), cx)
+                    }))
+                    .into_any_element()
+            }
+            Control::Slider { min, max, step, unit } => {
+                let v = value.as_f64().unwrap_or(min);
+                let frac = ((v - min) / (max - min)).clamp(0.0, 1.0) as f32;
+                let setting2 = setting.clone();
+                let this = cx.entity().downgrade();
+                let id = SharedString::from(format!("s{}", setting.path));
+                let v = slider_readout(&id, v, (min, max, step));
+                div()
+                    .row()
+                    .items_center()
+                    .gap(px(SPACE_12_PX))
+                    .child(div().w(px(DIM_220_PX)).child(mandara_ui::kit::slider_with_label(id, frac, p, move |f| {
+                                    slider_text(snap_slider(f, (min, max, step)), step, unit).into()
+                                }, move |f, window, cx| {
+                        let setting = setting2.clone();
+                        let _ = this.update(cx, |studio, cx| {
+                                        studio.apply(&setting, Value::from(snap_slider(f, (min, max, step))), cx)
+                                    });
+                        // At most one value a frame reaches the config.
+                        mandara_ui::slider_model::next_frame(window)
+                    })))
+                    .child(
+                        div()
+                            .w(px(DIM_76_PX))
+                            .text_end()
+                            .text_size(px(TEXT_12_PX))
+                            .text_color(p.on_surface_variant.hsla())
+                            .child(slider_text(v, step, unit)),
+                    )
+                    .into_any_element()
+            }
+            Control::Choice(choices) => {
+                let current = choice_current(&value);
+                let options = self.choice_options(setting, choices, &current, cfg);
+                self.chip_choice(setting, options, &current, room, p, cx)
+            }
+            Control::RecorderBackends => self.recorder_backends_control(cfg, p, cx),
+            Control::StashEdges => self.stash_edges_control(cfg, p, cx),
+            Control::Device { input } => {
+                self.recorder_device_control(setting, input, room, cfg, p, cx)
+            }
+            Control::Display => self.recorder_display_control(setting, room, cfg, p, cx),
+            Control::Text { placeholder } | Control::OptionalText { placeholder } => {
+                let current = value.as_str().unwrap_or_default().to_string();
+                self.field(setting, current, placeholder, cx).into_any_element()
+            }
+            Control::Number { .. } => {
+                let current = value.as_f64().map(|n| format!("{n}")).unwrap_or_default();
+                self.field(setting, current, "", cx).into_any_element()
+            }
+            Control::List { placeholder } => {
+                let current = value.as_array().map(|a| {
+                        a.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(", ")
+                    }).unwrap_or_default();
+                self.field(setting, current, placeholder, cx).into_any_element()
+            }
+            Control::OptionalSlider { min, max, step, unit, default } => {
+                let setting2 = setting.clone();
+                match value.as_f64() {
+                    // Unset: say so, and offer to take over.
+                    None => div()
+                        .row()
+                        .items_center()
+                        .gap(px(SPACE_10_PX))
+                        .child(div().text_size(px(TEXT_12_5_PX)).text_color(p.on_surface_variant.hsla()).child(t("Your config")))
+                        .child(
+                            div()
+                                .id(SharedString::from(format!("ov{}", setting.path)))
+                                .px(px(SPACE_12_PX))
+                                .h(px(DIM_28_PX))
+                                .rounded_full()
+                                .row()
+                                .items_center()
+                                .cursor_pointer()
+                                .bg(p.primary.with_alpha(ALPHA_14).hsla())
+                                .text_color(p.primary.hsla())
+                                .text_size(px(TEXT_12_5_PX))
+                                .child(t("Override"))
+                                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                    this.apply(&setting2, Value::from(default), cx)
+                                })),
+                        )
+                        .into_any_element(),
+                    Some(v) => {
+                        let frac = ((v - min) / (max - min)).clamp(0.0, 1.0) as f32;
+                        let this = cx.entity().downgrade();
+                        let slide = setting.clone();
+                        let id = SharedString::from(format!("s{}", setting.path));
+                        let v = slider_readout(&id, v, (min, max, step));
+                        div()
+                            .row()
+                            .items_center()
+                            .gap(px(SPACE_12_PX))
+                            .child(div().w(px(DIM_200_PX)).child(mandara_ui::kit::slider_with_label(id, frac, p, move |f| {
+                                        slider_text(snap_slider(f, (min, max, step)), step, unit).into()
+                                    }, move |f, window, cx| {
+                                let setting = slide.clone();
+                                let _ = this.update(cx, |studio, cx| {
+                                            studio.apply(&setting, Value::from(snap_slider(f, (min, max, step))), cx)
+                                        });
+                                mandara_ui::slider_model::next_frame(window)
+                            })))
+                            .child(div().w(px(DIM_56_PX)).text_end().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(if step >= 1.0 { format!("{v:.0}{unit}") } else { format!("{v:.2}{unit}") }))
+                            .child(
+                                div()
+                                    .id(SharedString::from(format!("rs{}", setting.path)))
+                                    .px(px(SPACE_10_PX))
+                                    .h(px(DIM_26_PX))
+                                    .rounded_full()
+                                    .row()
+                                    .items_center()
+                                    .cursor_pointer()
+                                    .text_size(px(TEXT_12_PX))
+                                    .text_color(p.on_surface_variant.hsla())
+                                    .hover(|s| s.bg(p.on_surface.with_alpha(ALPHA_6).hsla()))
+                                    .child(t("Reset"))
+                                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                        this.apply(&setting2, Value::Null, cx)
+                                    })),
+                            )
+                            .into_any_element()
+                    }
+                }
+            }
+            Control::DepthModel => self.depth_model_control(cfg, p, cx),
+            Control::Command { button, args } => div()
+                .id(SharedString::from(format!("cmd{}", setting.path)))
+                .h(px(DIM_32_PX))
+                .px(px(SPACE_16_PX))
+                .rounded_full()
+                .row()
+                .items_center()
+                .cursor_pointer()
+                .bg(p.primary.with_alpha(ALPHA_14).hsla())
+                .text_color(p.primary.hsla())
+                .text_size(px(TEXT_12_5_PX))
+                .font_weight(gpui::FontWeight::MEDIUM)
+                .hover(|s| s.bg(p.primary.with_alpha(ALPHA_22).hsla()))
+                .child(mandara_ui::bidi::paragraph(tr(button)))
+                .on_click(move |_: &ClickEvent, _, cx| {
+                    if let Some(ipc) = cx.try_global::<perf::ShellIpc>().cloned() {
+                        ipc.fire(args.iter().map(|s| s.to_string()).collect());
+                    }
+                })
+                .into_any_element(),
+            Control::Font { follows } => {
+                let fallback = follows.map(|path| {
+                    registry::by_path(path).map(|s| registry::get(cfg, s)).and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default()
+                });
+                let current = value.as_str().unwrap_or_default().to_string();
+                let picker = self.font_selects.entry(setting.path).or_insert_with(|| {
+                    let s = setting.clone();
+                    let studio = cx.entity().downgrade();
+                    cx.new(|_| {
+                            font_picker::FontSelect::new(format!("font-{}", s.path), Rc::new(move |family, _, cx| {
+                        let s = s.clone();
+                        let _ = studio.update(cx, |this, cx| {
+                                        this.apply(&s, Value::from(family), cx)
+                                    });
+                    }))
+                        })
+                }).clone();
+                picker.update(cx, |f, _| f.sync(&current, fallback.as_deref()));
+                picker.into_any_element()
+            }
+            Control::Icon => {
+                let current = value.as_str().unwrap_or("grid").to_string();
+                div()
+                    .size(px(DIM_52_PX))
+                    .rounded(px(RADIUS_16_PX))
+                    .bg(p.primary.with_alpha(ALPHA_12).hsla())
+                    .row()
+                    .items_center()
+                    .justify_center()
+                    .child(mandara_ui::icons::any_icon(&current, ICON_26_PX, p.primary))
+                    .into_any_element()
+            }
+        }
+    }
+
+    /// The visible settings of `settings`, by group (rows of an opt-in
+    /// plugin that is off stay out: its store card offers it instead).
+    fn visible_groups<'a>(&self, settings: impl IntoIterator<Item = &'a Setting>, cfg: &ShellConfig, cx: &mut Context<Self>) -> Vec<(&'static str, Vec<&'a Setting>)> {
+        let registry = cx.try_global::<mandara_plugins::PluginRegistry>();
+        let shown = |s: &&Setting| {
+            registry::required_plugin(s.path).is_none_or(|id| registry.is_some_and(|r| r.is_enabled(id, &cfg.plugins)))
+        };
+        let mut groups = group_rows(settings.into_iter().filter(shown).collect::<Vec<_>>());
+        // Related groups next to each other, the everyday ones first.
+        if let Some(order) = groups.first().and_then(|(_, list)| list.first()).and_then(|s| group_order(s.section)) {
+            groups.sort_by_key(|(title, _)| {
+                order.iter().position(|g| g == title).unwrap_or(order.len())
+            });
+        }
+        groups
+    }
+
+    /// A group's "Reset", shown once a setting in it differs from the
+    /// defaults.
+    fn group_reset(&mut self, title: &'static str, list: &[&Setting], cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let resettable: Vec<Setting> = list.iter().filter(|s| s.control.has_value()).map(|s| (*s).clone()).collect();
+        let changed = resettable.iter().any(|s| registry::get(cfg, s) != registry::default_value(s));
+        changed.then(|| {
+            div()
+                .id(SharedString::from(format!("reset-{}-{title}", resettable.first().map_or("", |s| s.path))))
+                .px(px(SPACE_10_PX))
+                .py(px(SPACE_3_PX))
+                .rounded_full()
+                .cursor_pointer()
+                .text_size(px(TEXT_12_PX))
+                .text_color(p.on_surface_variant.hsla())
+                .hover(|s| s.bg(p.on_surface.with_alpha(ALPHA_8).hsla()))
+                .child(t("Reset"))
+                // Inside a fold header: don't also open / close it.
+                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                    cx.stop_propagation();
+                    this.reset_group(&resettable, cx)
+                }))
+                .into_any_element()
+        })
+    }
+
+    /// A registry choice's options, each with why it can't be picked right
+    /// now (if it can't). The one place a choice's options are listed, for
+    /// its control and for its row's layout (filter `choices` here).
+    fn choice_options(&self, setting: &Setting, choices: &'static [(&'static str, &'static str)], current: &str, cfg: &ShellConfig) -> Vec<recorder_row::ChipOption> {
+        choices
+            .iter()
+            // Choices the running compositor can't do stay hidden (unless already saved).
+            .filter(|(raw, _)| *raw == current || !registry::choice_hidden(setting.path, raw))
+            .map(|(raw, label)| recorder_row::ChipOption { value: registry::choice_value(raw), raw: raw.to_string(), label: tr(label), locked: registry::choice_locked(setting, raw, cfg) })
+            .collect()
+    }
+
+    /// The labels of a setting's choice (registry choices, sound devices,
+    /// displays), or `None` for other controls.
+    fn choice_labels(&mut self, setting: &Setting, cfg: &ShellConfig, cx: &mut Context<Self>) -> Option<Vec<SharedString>> {
+        let options = match setting.control {
+            Control::Choice(choices) => self.choice_options(setting, choices, &choice_current(&registry::get(cfg, setting)), cfg),
+            Control::Device { input } => self.recorder_device_options(setting, input, cfg, cx)?,
+            Control::Display => self.recorder_display_options(setting, cfg, cx),
+            _ => return None,
+        };
+        Some(options.into_iter().map(|o| SharedString::from(o.label)).collect())
+    }
+
+    /// One group's rows (inside a fold or a plain card) on a card `width`
+    /// logical px wide.
+    fn group_card(&mut self, list: &[&Setting], width: f32, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> gpui::Div {
+        let mut card = div().row().flex_col();
+        let pad = if self.stack_rows { SPACE_14_PX } else { GROUP_ROW_PAD_X_PX };
+        let line = grouped::hairline(p);
+        let mut first = true;
+        // The room a control gets: the row's inner width under its label,
+        // or beside a label squeezed to its minimum.
+        let under = (width - 2.0 * pad).max(0.0);
+        let beside = (under - SPACE_24_PX - ROW_LABEL_MIN_PX).max(0.0);
+            for s in list.iter() {
+                let locked = registry::locked(s, cfg);
+                let help = registry::note(s, cfg).unwrap_or(s.help);
+                // A choice too long for one line beside its label goes under
+                // it, where its grid gets the whole row (fewer, wider rows)
+                // and the label and help keep their measure; so do the
+                // design pickers with their previews.
+                let stack = self.stack_rows
+                    || component_designs::by_path(s.path).is_some()
+                    || (locked.is_none() && self.choice_labels(s, cfg, cx).is_some_and(|labels| {
+                        !choice::fits_line(&labels, beside, &choice::SETTING_CHOICE)
+                    }));
+                let room = if stack { choice::Room::under(under) } else { choice::Room::beside(beside) };
+                // A control that does nothing in the current setup shows why
+                // instead (toggles render their own locked state).
+                let control = match locked {
+                    Some(reason) if s.control != Control::Toggle => div()
+                        .max_w(px(LOCKED_NOTE_MAX_W_PX))
+                        .text_size(px(TEXT_12_PX))
+                        .text_color(p.on_surface_variant.with_alpha(LOCKED_OPACITY).hsla())
+                        .child(mandara_ui::bidi::paragraph(tr(reason)))
+                        .into_any_element(),
+                    _ => self.control(s, room, cfg, p, cx),
+                };
+                let picker = (s.control == Control::Icon).then(|| self.icon_picker(s, cfg, p, cx));
+                // Rows are divided by inset hairlines, one calm list.
+                if !std::mem::take(&mut first) {
+                    card = card.child(div().w_full().px(px(pad)).child(div().h(px(BORDER_1_PX)).w_full().bg(line)));
+                }
+                card = card.child(
+                    div()
+                        .min_h(px(ROW_MIN_H_PX))
+                        .px(px(pad))
+                        .py(px(SPACE_12_PX))
+                        .row()
+                        // Narrow: the control sits under its label.
+                        .when(stack, |el| el.flex_col().cross_start().gap(px(SPACE_10_PX)))
+                        // The control sits at the end; the label keeps a
+                        // readable measure on wide windows.
+                        .when(!stack, |el| {
+                        el.items_center().justify_between().gap(px(SPACE_24_PX))
+                    })
+                        .child(
+                            div()
+                                .flex_1()
+                                // A wide control (a long choice list such as a
+                                // hot corner's actions) wraps instead of
+                                // squeezing its label to one letter per line.
+                                .min_w(px(ROW_LABEL_MIN_PX))
+                                .max_w(px(TEXT_MEASURE_PX))
+                                .row()
+                                .flex_col()
+                                .gap(px(SPACE_3_PX))
+                                .child(div().text_size(px(TEXT_13_5_PX)).font_weight(FontWeight::MEDIUM).child(mandara_ui::bidi::paragraph(tr(s.label))))
+                                .when(!help.is_empty(), |el| {
+                                el.child(div().text_size(px(TEXT_12_PX)).line_height(px(LEADING_17_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(tr(help))))
+                            }),
+                        )
+                        .child(control),
+                );
+                if let Some(picker) = picker {
+                    card = card.child(div().px(px(SPACE_18_PX)).pb(px(SPACE_14_PX)).child(picker));
+                }
+            }
+        card
+    }
+
+    /// A page's settings: each group in its own collapsible fold. On a wide
+    /// page the folds sit in two columns, balanced by how many settings
+    /// each holds (not by whether it's open, so a fold never jumps columns
+    /// when it opens).
+    fn rows<'a>(&mut self, settings: impl IntoIterator<Item = &'a Setting>, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        let groups = self.visible_groups(settings, cfg, cx);
+        let two = self.page.column_w >= TWO_COLUMNS_FROM_PX && groups.len() > 1;
+        // A fold's settings card: its column, less the fold body's padding.
+        let card_w = (if two { (self.page.column_w - SPACE_12_PX) / 2.0 } else { self.page.column_w }) - 2.0 * SPACE_6_PX;
+        let sides = grid::two_columns(&groups.iter().map(|(_, l)| l.len()).collect::<Vec<_>>());
+        let mut cols = [div().flex_1().min_w(px(0.0)).row().flex_col().gap(px(SPACE_12_PX)), div().flex_1().min_w(px(0.0)).row().flex_col().gap(px(SPACE_12_PX))];
+        for (n, (title, list)) in groups.into_iter().enumerate() {
+            let changed = list.iter().filter(|s| {
+                    s.control.has_value() && registry::get(cfg, s) != registry::default_value(s)
+                }).count();
+            let preview = fold::preview_of(list.iter().map(|s| s.label));
+            let badge = Some(if changed > 0 { tf("{changed} of {count} changed", &[("changed", &changed), ("count", &list.len())]) } else { list.len().to_string() });
+            // The Reset button lives in the header, so it works while closed.
+            let reset = self.group_reset(title, &list, cfg, p, cx);
+            let first = list[0];
+            let tab = (first.section == Section::Bars).then(|| registry::bars::BarsTab::for_path(first.path)).flatten();
+            let key = match tab {
+                Some(tab) => format!("Bars/{}/{title}", tab.slug()),
+                None => format!("{:?}/{title}", first.section),
+            };
+            let heading = if self.query.is_empty() { tr(title) }
+                else if let Some(tab) = tab { format!("{} · {} · {}", first.section.label(), tr(tab.title()), tr(title)) }
+                else { format!("{} · {}", first.section.label(), tr(title)) };
+            let head = fold::FoldHead { title: heading.into(), preview, badge, trailing: reset, closed: false };
+            let list: Vec<Setting> = list.into_iter().cloned().collect();
+            let fold = self.fold_at(key, head, p, cx, move |this, cx| {
+                let refs: Vec<&Setting> = list.iter().collect();
+                let cfg = config(cx).read(cx).snapshot();
+                this.group_card(&refs, card_w, &cfg, p, cx).into_any_element()
+            });
+            let side = if two { sides[n] } else { 0 };
+            let [first, second] = cols;
+            cols = if side == 0 { [first.child(fold), second] } else { [first, second.child(fold)] };
+        }
+        let [first, second] = cols;
+        if two { div().row().cross_start().gap(px(SPACE_12_PX)).child(first).child(second).into_any_element() } else { first.w_full().into_any_element() }
+    }
+
+    /// Settings as plain titled cards, always open (inside a dialog or
+    /// another card, where a fold would nest), `width` logical px wide.
+    fn rows_plain<'a>(&mut self, settings: impl IntoIterator<Item = &'a Setting>, width: f32, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        let groups = self.visible_groups(settings, cfg, cx);
+        let mut col = div().row().flex_col().gap(px(SPACE_26_PX));
+        for (title, list) in groups {
+            let reset = self.group_reset(title, &list, cfg, p, cx);
+            let card = self.group_card(&list, width - 2.0 * SPACE_6_PX, cfg, p, cx);
+            col = col.child(
+                div()
+                    .row()
+                    .flex_col()
+                    .gap(px(SPACE_10_PX))
+                    .child(
+                        div()
+                            .row()
+                            .items_center()
+                            .child(div().flex_1().px(px(SPACE_4_PX)).text_size(px(TEXT_15_PX)).font_weight(FontWeight::SEMIBOLD).child(mandara_ui::bidi::paragraph(tr(title))))
+                            .children(reset),
+                    )
+                    // The surface first (a squircle or cut one is drawn behind), then the rows.
+                    .child(mandara_ui::components::surfaces::CardSurface::card_surface(div(), RADIUS_20_PX, mandara_ui::components::surfaces::Fill(p.surface_container, None), Vec::new(), p).p(px(SPACE_6_PX)).child(card)),
+            );
+        }
+        col.into_any_element()
+    }
+
+    /// Keyboard shortcuts: Mandara's compositor binds with chord capture,
+    /// conflict detection, actions and quick-add suggestions.
+    fn shortcuts(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        use mandara_config::compositor::{BindAction, Keybind, Target, existing_chords};
+        let target: Option<Target> = mandara_compositor::detected().map(mandara_compositor::CompositorKind::target);
+        let _ = existing_chords;
+        let taken = keybind_conflicts::user_binds(target, &cfg.compositor, cx);
+        let binds = &cfg.compositor.keybinds;
+        let mut counts: HashMap<String, usize> = HashMap::new();
+        for b in binds {
+            *counts.entry(b.chord()).or_default() += 1;
+        }
+        let mut list = div().row().flex_col().gap(px(SPACE_8_PX));
+        for (i, b) in binds.iter().enumerate() {
+            let capturing = self.capturing == Some(i);
+            let (is_mandara, text) = match &b.action {
+                BindAction::Mandara(w) => (true, w.as_str()),
+                BindAction::Spawn(c) => (false, c.as_str()),
+            };
+            let action = self.list_field(
+                format!("bind-{i}-action"),
+                text,
+                if is_mandara { t("Mandara command, e.g. launcher toggle") } else { t("Program, e.g. ghostty") },
+                Rc::new(move |cfg, v| {
+                    if let Some(k) = cfg.compositor.keybinds.get_mut(i) {
+                        k.action = match k.action {
+                            BindAction::Mandara(_) => BindAction::Mandara(v.trim().to_string()),
+                            BindAction::Spawn(_) => BindAction::Spawn(v.trim().to_string()),
+                        };
+                    }
+                }),
+                cx,
+            );
+            let conflict = if b.key.is_empty() {
+                None
+            } else if b.problem().is_some() {
+                // Skipped by the drop-in (it would block typing that key).
+                Some((t("Needs Super, Ctrl or Alt"), p.warning_amber))
+            } else if counts.get(&b.chord()).copied().unwrap_or(0) > 1 {
+                Some((t("Duplicate"), p.urgent_coral))
+            } else {
+                None
+            };
+            let used = (!b.key.is_empty() && conflict.is_none()).then(|| taken.get(&b.chord())).flatten().map(|u| keybind_conflicts::badge(i, u, p));
+            let chord_label = if capturing {
+                t("Press keys…").to_string()
+            } else if b.key.is_empty() {
+                t("Set shortcut").to_string()
+            } else {
+                b.display().replace('+', " + ")
+            };
+            list = list.child(
+                div()
+                    .p(px(SPACE_10_PX))
+                    .rounded(px(RADIUS_14_PX))
+                    .bg(p.surface_container_high.with_alpha(ALPHA_50).hsla())
+                    .row()
+                    .flex_wrap()
+                    .items_center()
+                    .gap(px(SPACE_10_PX))
+                    .child(
+                        div()
+                            .id(("chord", i))
+                            .min_w(px(DIM_170_PX))
+                            .h(px(DIM_34_PX))
+                            .px(px(SPACE_12_PX))
+                            .rounded(px(RADIUS_10_PX))
+                            .row()
+                            .items_center()
+                            .justify_center()
+                            .cursor_pointer()
+                            .font_family(mandara_ui::fonts::fonts(cx).mono.clone())
+                            .text_size(px(TEXT_12_5_PX))
+                            .border_2()
+                            .border_color(if capturing { p.primary.hsla() } else { gpui::transparent_black() })
+                            .bg(if capturing { p.primary.with_alpha(ALPHA_12).hsla() } else { p.surface_container.hsla() })
+                            .child(chord_label)
+                            .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
+                                this.capturing = Some(i);
+                                this.focus.focus(window, cx);
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        div()
+                            .id(("bind-kind", i))
+                            .row()
+                            .p(px(SPACE_3_PX))
+                            .rounded(px(RADIUS_10_PX))
+                            .bg(p.surface_container.hsla())
+                            .children([(tk("Mandara"), true), (tk("Program"), false)].map(|(label, mandara)| {
+                                let active = mandara == is_mandara;
+                                div()
+                                    .id(SharedString::from(format!("kind-{i}-{label}")))
+                                    .px(px(SPACE_10_PX))
+                                    .h(px(DIM_28_PX))
+                                    .rounded(px(RADIUS_8_PX))
+                                    .row()
+                                    .items_center()
+                                    .cursor_pointer()
+                                    .text_size(px(TEXT_12_PX))
+                                    .when(active, |el| {
+                                            el.bg(p.primary.hsla()).text_color(p.on_primary.hsla())
+                                        })
+                                    .child(mandara_ui::bidi::paragraph(tr(label)))
+                                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                        this.list_fields.remove(&format!("bind-{i}-action"));
+                                        update_config(cx, |c| {
+                                            if let Some(k) = c.compositor.keybinds.get_mut(i) {
+                                                let text = match &k.action {
+                                                    BindAction::Mandara(t) | BindAction::Spawn(t) => t.clone(),
+                                                };
+                                                k.action = if mandara { BindAction::Mandara(text) } else { BindAction::Spawn(text) };
+                                            }
+                                        });
+                                    }))
+                            })),
+                    )
+                    .child(div().flex_1().min_w(px(DIM_200_PX)).child(action))
+                    .when_some(conflict, |el, (label, color)| {
+                        el.child(div().px(px(SPACE_10_PX)).h(px(DIM_24_PX)).rounded_full().row().items_center().bg(color.with_alpha(ALPHA_16).hsla()).text_color(color.hsla()).text_size(px(TEXT_11_PX)).child(label))
+                    })
+                    .when_some(used, |el, badge| el.child(badge))
+                    .child(
+                        div()
+                            .id(("bind-del", i))
+                            .size(px(DIM_32_PX))
+                            .rounded_full()
+                            .row()
+                            .items_center()
+                            .justify_center()
+                            .cursor_pointer()
+                            .hover(|s| s.bg(p.urgent_coral.with_alpha(ALPHA_14).hsla()))
+                            .child(icon("trash", ICON_15_PX, p.on_surface_variant))
+                            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                this.list_fields.clear();
+                                this.capturing = None;
+                                update_config(cx, |c| {
+                                    if i < c.compositor.keybinds.len() {
+                                        c.compositor.keybinds.remove(i);
+                                    }
+                                });
+                            })),
+                    ),
+            );
+        }
+        const QUICK: &[(&str, &str)] = &[
+            (tk("Launcher"), "launcher toggle"),
+            (tk("Wallpapers"), "wallpaper picker toggle"),
+            (tk("Screenshot"), "screenshot region"),
+            (tk("Record screen"), "record toggle"),
+            (tk("Record region"), "record region"),
+            (tk("Pause recording"), "record pause-toggle"),
+            (tk("Stop recording"), "record stop"),
+            (tk("Sidebar"), "sidebar toggle"),
+            (tk("Power menu"), "session menu toggle"),
+            (tk("Clipboard"), "panel toggle clipboard"),
+            (tk("Light / dark"), "theme mode toggle"),
+            (tk("Pomodoro"), "pomodoro toggle"),
+            (tk("New shelf"), "stash new"),
+            (tk("Studio"), "studio"),
+        ];
+        let quick = div().row().flex_wrap().gap(px(SPACE_6_PX)).children(QUICK.iter().map(|(label, cmd)| {
+            let cmd = cmd.to_string();
+            div()
+                .id(SharedString::from(format!("quick-{label}")))
+                .px(px(SPACE_12_PX))
+                .h(px(DIM_30_PX))
+                .rounded_full()
+                .row()
+                .items_center()
+                .gap(px(SPACE_6_PX))
+                .cursor_pointer()
+                .bg(p.surface_container_high.hsla())
+                .hover(|s| s.bg(p.primary.with_alpha(ALPHA_14).hsla()))
+                .text_size(px(TEXT_12_5_PX))
+                .child(icon("plus", ICON_12_PX, p.primary))
+                .child(mandara_ui::bidi::paragraph(tr(label)))
+                .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
+                    let cmd = cmd.clone();
+                    this.list_fields.clear();
+                    let index = config(cx).read(cx).get().compositor.keybinds.len();
+                    update_config(cx, |c| {
+                            c.compositor.keybinds.push(Keybind { mods: Vec::new(), key: String::new(), action: BindAction::Mandara(cmd) })
+                        });
+                    // Straight into chord capture for the new row.
+                    this.capturing = Some(index);
+                    this.focus.focus(window, cx);
+                    cx.notify();
+                }))
+        }));
+        let target_name = target.map_or_else(|| t("your compositor"), Target::name);
+        div()
+            .id("shortcuts")
+            .track_focus(&self.focus)
+            .row()
+            .flex_col()
+            .gap(px(SPACE_18_PX))
+            .on_key_down(cx.listener(|this, e: &gpui::KeyDownEvent, _, cx| {
+                let Some(i) = this.capturing else { return };
+                let k = &e.keystroke;
+                if k.key == "escape" {
+                    this.capturing = None;
+                    // Cancelling a just-added row removes it: a bind with
+                    // no key is never written, so it would only linger.
+                    update_config(cx, |c| {
+                        if c.compositor.keybinds.get(i).is_some_and(|b| b.key.trim().is_empty()) {
+                            c.compositor.keybinds.remove(i);
+                        }
+                    });
+                    this.list_fields.clear();
+                    cx.notify();
+                    return;
+                }
+                // Wait for a non-modifier key.
+                if matches!(k.key.as_str(), "shift" | "control" | "alt" | "platform" | "function" | "super") {
+                    return;
+                }
+                let key = mandara_config::compositor::keysym_for(&k.key);
+                let mut mods = Vec::new();
+                if k.modifiers.platform {
+                    mods.push("super".to_string());
+                }
+                if k.modifiers.control {
+                    mods.push("ctrl".to_string());
+                }
+                if k.modifiers.alt {
+                    mods.push("alt".to_string());
+                }
+                if k.modifiers.shift {
+                    mods.push("shift".to_string());
+                }
+                this.capturing = None;
+                update_config(cx, |c| {
+                    if let Some(b) = c.compositor.keybinds.get_mut(i) {
+                        b.mods = mods;
+                        b.key = key;
+                    }
+                });
+                cx.notify();
+            }))
+            .child(div().text_color(p.on_surface_variant.hsla()).line_height(px(LEADING_19_PX)).child(tf(
+                "Mandara writes these to its own drop-in for {target_name} (never your config) and reloads it. Chords your own config already uses are skipped and marked “taken”. Click a shortcut, then press the keys; Esc cancels.",
+                &[("target_name", &target_name)],
+            )))
+            .child(list)
+            .child(div().row().flex_col().gap(px(SPACE_8_PX)).child(div().text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(t("Add a shortcut"))).child(quick))
+            .into_any_element()
+    }
+
+    /// A text field bound to one field of a list row; `apply` writes it back.
+    fn list_field(&mut self, key: String, current: &str, placeholder: &'static str, apply: Rc<dyn Fn(&mut ShellConfig, String)>, cx: &mut Context<Self>) -> Entity<TextField> {
+        if let Some(f) = self.list_fields.get(&key) {
+            f.update(cx, |f, _| f.sync(current));
+            return f.clone();
+        }
+        let field = cx.new(|cx| {
+            TextField::new(
+                current.to_string(),
+                placeholder,
+                false,
+                Rc::new(move |value, _, cx| {
+                    let apply = apply.clone();
+                    update_config(cx, move |c| apply(c, value));
+                }),
+                cx,
+            )
+        });
+        self.list_fields.insert(key, field.clone());
+        field
+    }
+
+    /// Slash commands and skills: edit, add and remove.
+    fn launcher_editor(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        let delete_btn = |id: SharedString, p: &MandaraPalette| {
+            div()
+                .id(id)
+                .size(px(DIM_32_PX))
+                .flex_none()
+                .rounded_full()
+                .row()
+                .items_center()
+                .justify_center()
+                .cursor_pointer()
+                .hover(|s| s.bg(p.urgent_coral.with_alpha(ALPHA_14).hsla()))
+                .child(icon("trash", ICON_15_PX, p.on_surface_variant))
+        };
+        let add_btn = |id: &'static str, label: &'static str, p: &MandaraPalette| {
+            div()
+                .id(id)
+                .h(px(DIM_34_PX))
+                .px(px(SPACE_14_PX))
+                .rounded_full()
+                .row()
+                .items_center()
+                .gap(px(SPACE_6_PX))
+                .cursor_pointer()
+                .bg(p.primary.with_alpha(ALPHA_14).hsla())
+                .text_color(p.primary.hsla())
+                .font_weight(FontWeight::MEDIUM)
+                .child(icon("plus", ICON_14_PX, p.primary))
+                .child(label)
+        };
+        let stack = self.stack_rows;
+        // Slash commands.
+        let mut cmds = div().row().flex_col().gap(px(SPACE_8_PX));
+        for (i, c) in cfg.launcher.commands.iter().enumerate() {
+            let trigger = self.list_field(format!("cmd-{i}-trigger"), &c.trigger, t("trigger"), Rc::new(move |cfg, v| {
+                    if let Some(c) = cfg.launcher.commands.get_mut(i) { c.trigger = v.trim().trim_start_matches('/').to_string() }
+                }), cx);
+            let title = self.list_field(format!("cmd-{i}-title"), &c.title, t("Title"), Rc::new(move |cfg, v| {
+                    if let Some(c) = cfg.launcher.commands.get_mut(i) { c.title = v }
+                }), cx);
+            let action = self.list_field(format!("cmd-{i}-action"), &c.action, "url:https://…{query}", Rc::new(move |cfg, v| {
+                    if let Some(c) = cfg.launcher.commands.get_mut(i) { c.action = v.trim().to_string() }
+                }), cx);
+            cmds = cmds.child(
+                div()
+                    .p(px(SPACE_10_PX))
+                    .rounded(px(RADIUS_14_PX))
+                    .bg(p.surface_container_high.with_alpha(ALPHA_50).hsla())
+                    .row()
+                    .when(stack, |el| el.flex_col())
+                    .gap(px(SPACE_8_PX))
+                    .child(div().row().gap(px(SPACE_8_PX)).items_center().child(div().text_color(p.primary.hsla()).font_weight(FontWeight::SEMIBOLD).child("/")).child(div().w(px(DIM_90_PX)).child(trigger)).child(div().flex_1().min_w(px(DIM_120_PX)).child(title)))
+                    .child(div().row().flex_1().min_w(px(0.0)).gap(px(SPACE_8_PX)).items_center().child(div().flex_1().min_w(px(0.0)).child(action)).child(delete_btn(SharedString::from(format!("cmd-del-{i}")), p).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        this.list_fields.clear();
+                        update_config(cx, |c| {
+                            if i < c.launcher.commands.len() {
+                                c.launcher.commands.remove(i);
+                            }
+                        });
+                    })))),
+            );
+        }
+        cmds = cmds.child(div().row().child(add_btn("cmd-add", t("Add slash command"), p).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+            this.list_fields.clear();
+            update_config(cx, |c| {
+                c.launcher.commands.push(mandara_config::SlashCommand {
+                    trigger: format!("cmd{}", c.launcher.commands.len() + 1),
+                    title: t("New command").into(),
+                    description: String::new(),
+                    action: "url:https://duckduckgo.com/?q={query}".into(),
+                    icon: "search".into(),
+                })
+            });
+        }))));
+        // Skills.
+        let mut skills = div().row().flex_col().gap(px(SPACE_8_PX));
+        for (i, sk) in cfg.launcher.skills.iter().enumerate() {
+            let name = self.list_field(format!("skill-{i}-name"), &sk.name, t("Name"), Rc::new(move |cfg, v| {
+                    if let Some(s) = cfg.launcher.skills.get_mut(i) { s.name = v }
+                }), cx);
+            let desc = self.list_field(format!("skill-{i}-desc"), &sk.description, t("What it does"), Rc::new(move |cfg, v| {
+                    if let Some(s) = cfg.launcher.skills.get_mut(i) { s.description = v }
+                }), cx);
+            let steps = self.list_field(
+                format!("skill-{i}-steps"),
+                &sk.steps.join("; "),
+                t("commands separated by ;  e.g. notifications dnd on; pomodoro start"),
+                Rc::new(move |cfg, v| {
+                    if let Some(s) = cfg.launcher.skills.get_mut(i) {
+                        s.steps = v.split(';').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect();
+                    }
+                }),
+                cx,
+            );
+            skills = skills.child(
+                div()
+                    .p(px(SPACE_10_PX))
+                    .rounded(px(RADIUS_14_PX))
+                    .bg(p.surface_container_high.with_alpha(ALPHA_50).hsla())
+                    .row()
+                    .flex_col()
+                    .gap(px(SPACE_8_PX))
+                    .child(div().row().when(stack, |el| el.flex_col()).gap(px(SPACE_8_PX)).child(div().w(px(DIM_180_PX)).child(name)).child(div().flex_1().min_w(px(0.0)).child(desc)))
+                    .child(div().row().gap(px(SPACE_8_PX)).items_center().child(div().flex_1().min_w(px(0.0)).child(steps)).child(delete_btn(SharedString::from(format!("skill-del-{i}")), p).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        this.list_fields.clear();
+                        update_config(cx, |c| {
+                            if i < c.launcher.skills.len() {
+                                c.launcher.skills.remove(i);
+                            }
+                        });
+                    })))),
+            );
+        }
+        skills = skills.child(div().row().child(add_btn("skill-add", t("Add skill"), p).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+            this.list_fields.clear();
+            update_config(cx, |c| {
+                c.launcher.skills.push(mandara_config::Skill { name: t("New skill").into(), description: String::new(), steps: vec!["theme mode toggle".into()], icon: "grid".into() })
+            });
+        }))));
+        // A page section each (launcher_page.rs): the heading with its
+        // help, then the list in a card.
+        let display = mandara_ui::fonts::fonts(cx).display.clone();
+        let group = |title: &'static str, help: &'static str, body: gpui::Div, p: &MandaraPalette| {
+            launcher_page::page_section(themes_page::section_head(title, help, vec![], display.clone(), p), [div().p(px(SPACE_14_PX)).rounded(px(RADIUS_20_PX)).bg(p.surface_container.hsla()).child(body).into_any_element()])
+        };
+        div()
+            .row()
+            .flex_col()
+            .gap(px(PAGE_SECTION_GAP_PX))
+            .child(group(
+                t("Slash commands"),
+                t("Type /trigger and your words in the launcher. Actions: url:<address with {query}> opens the browser, mandara:<command> runs a Mandara command (see `mandara commands`), exec:<shell command> runs a program; {query} is replaced by what you typed."),
+                cmds,
+                p,
+            ))
+            .child(group(t("Skills"), t("Named routines: each step is a Mandara command, run in order. Find them by name in the launcher or as /name."), skills, p))
+            .into_any_element()
+    }
+
+    /// Visual icon chooser: bundled set, distro logo, themed suggestions,
+    /// live search over the whole icon theme, and a custom path.
+    fn icon_picker(&mut self, setting: &Setting, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        const BUNDLED: &[&str] = &[mandara_ui::icons::BRAND_SPEC, "grid", "search", "circle", "sun", "moon", "crescent", "music", "monitor", "image", "note", "bolt", "cloud-sun", "coffee", "power"];
+        const SUGGESTED: &[&str] = &[
+            "distro", "start-here", "start-here-symbolic", "distributor-logo", "view-app-grid-symbolic", "view-grid-symbolic", "applications-all-symbolic",
+            "open-menu-symbolic", "archlinux-logo", "cachyos", "fedora-logo-icon", "ubuntu-logo-icon", "debian-logo", "nix-snowflake", "manjaro",
+            "endeavouros", "linuxmint-logo", "pop-os", "opensuse-logo",
+        ];
+        let current = registry::get(cfg, setting).as_str().unwrap_or(mandara_ui::icons::BRAND_SPEC).to_string();
+        let query = self.icon_query.trim().to_lowercase();
+        // Resolved once per query (the full theme listing is thousands of names).
+        let theme_names = match &self.icon_matches {
+            Some((q, names)) if *q == query => names.clone(),
+            _ => {
+                let names: Rc<[String]> = if query.is_empty() {
+                    SUGGESTED.iter().filter(|n| {
+                            **n == "distro" || mandara_ui::icon_theme::resolve(n, None, false).is_some()
+                        }).map(|n| n.to_string()).collect()
+                } else {
+                    mandara_ui::icon_theme::all_names().into_iter().filter(|n| n.to_lowercase().contains(&query)).take(ICON_MATCHES_MAX).collect()
+                };
+                self.icon_matches = Some((query.clone(), names.clone()));
+                names
+            }
+        };
+        let tile = |spec: String, label: Option<String>, p: &MandaraPalette, cx: &mut Context<Self>| {
+            let active = spec == current;
+            let value = spec.clone();
+            div()
+                .id(SharedString::from(format!("icon-{spec}")))
+                .row()
+                .flex_col()
+                .items_center()
+                .gap(px(SPACE_4_PX))
+                .cursor_pointer()
+                .child(
+                    div()
+                        .size(px(DIM_46_PX))
+                        .rounded(px(RADIUS_14_PX))
+                        .row()
+                        .items_center()
+                        .justify_center()
+                        .bg(if active { p.primary.with_alpha(ALPHA_16).hsla() } else { p.surface_container_high.hsla() })
+                        .border_2()
+                        .border_color(if active { p.primary.hsla() } else { gpui::transparent_black() })
+                        .hover(|s| s.bg(p.primary.with_alpha(ALPHA_10).hsla()))
+                        .child(mandara_ui::icons::any_icon(&spec, ICON_22_PX, if active { p.primary } else { p.on_surface })),
+                )
+                .when_some(label, |el, l| {
+                        el.child(div().w_full().text_center().truncate().text_size(px(TEXT_10_5_PX)).text_color(p.on_surface_variant.hsla()).child(l))
+                    })
+                .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
+                    let v = value.clone();
+                    update_config(cx, |c| c.appearance.launcher_icon = v);
+                }))
+        };
+        let section_title = |t: &'static str, p: &MandaraPalette| {
+            div().pt(px(SPACE_6_PX)).text_size(px(TEXT_11_5_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.on_surface_variant.hsla()).child(t)
+        };
+        let mut bundled: Vec<_> = BUNDLED.iter().map(|n| tile(n.to_string(), None, p, cx)).collect();
+        bundled.extend(mandara_ui::launcher_art::ICONS.iter().map(|icon| {
+            tile(icon.spec.to_string(), Some(icon.name.replace('-', " ")), p, cx)
+        }));
+        let themed: Vec<_> = theme_names.iter().map(|n| {
+                tile(n.clone(), Some(if n == "distro" { t("Distro logo").into() } else { n.trim_end_matches("-symbolic").to_string() }), p, cx)
+            }).collect();
+        let empty = themed.is_empty();
+        // Inside the settings card (its padding + the picker row's) and the picker's own padding.
+        let fit = grid::fit(self.page.column_w - 2.0 * (SPACE_6_PX + SPACE_18_PX + SPACE_14_PX), ICON_TILE_GRID);
+        div()
+            .row()
+            .flex_col()
+            .gap(px(SPACE_10_PX))
+            .p(px(SPACE_14_PX))
+            .rounded(px(RADIUS_16_PX))
+            .bg(p.surface_base.with_alpha(ALPHA_55).hsla())
+            .child(section_title(t("Mandara"), p))
+            .child(fit.render(bundled))
+            .child(section_title(if query.is_empty() { t("From your system") } else { t("Matching icons") }, p))
+            .child(div().child(self.icon_search.clone()))
+            .when(!empty, |el| el.child(fit.render(themed)))
+            .when(empty, |el| {
+                el.child(div().py(px(SPACE_8_PX)).text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(tf("No icons named like “{query}” in your theme", &[("query", &query)])))
+            })
+            .child(section_title(t("Your own"), p))
+            .child(div().child(self.icon_path.clone()))
+            .into_any_element()
+    }
+
+    /// Language picker: every supported language as a card, in its own
+    /// script, plus "System".
+    fn language_picker(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        use mandara_config::Locale;
+        use mandara_i18n::Lang;
+        use mandara_services::self_update::langpacks;
+        use mandara_ui::progress_fill::{self as fill, Tone, Visual};
+        let current = cfg.general.locale;
+        let system = Lang::from_env();
+        let fonts = mandara_ui::fonts::fonts(cx);
+        // Each card's background follows its language pack's download.
+        let ui_rtl = mandara_ui::bidi::rtl();
+        let mut wakes = Vec::new();
+        let visuals = self.lang_fills.frame(cfg.motion.reduced(mandara_core::spring::system_reduced_motion()), window, |after| wakes.push(after));
+        for after in wakes {
+            let due = std::time::Instant::now() + after;
+            if self.lang_wake.is_some_and(|live| live <= due) {
+                continue;
+            }
+            self.lang_wake = Some(due);
+            cx.spawn(async move |this, cx| {
+                cx.background_executor().timer(after).await;
+                let _ = this.update(cx, |view, cx| {
+                    if view.lang_wake == Some(due) {
+                        view.lang_wake = None;
+                    }
+                    cx.notify();
+                });
+            })
+            .detach();
+        }
+        let idle: (Visual, Option<String>) = (fill::IDLE, None);
+        let card = |id: String, sample: String, native: String, english: String, selected: bool, rtl: bool, locale: Locale, status: (Visual, Option<String>), cx: &mut Context<Self>| {
+            let (visual, line) = status;
+            let failed = visual.tone == Tone::Error;
+            let lang = locale.lang();
+            let accent = match visual.tone {
+                Tone::Error => p.urgent_coral,
+                Tone::Success => p.success_emerald,
+                _ => p.primary,
+            };
+            let corner = if let Some(badge) = fill::check_badge(&visual, p) {
+                Some(badge)
+            } else if failed {
+                Some(
+                    compositor_page::button(SharedString::from(format!("lang-retry-{}", lang.code())), "refresh", t("Retry"), false, p)
+                        .on_click(move |_, _, cx| {
+                            cx.stop_propagation();
+                            langpacks::retry(lang);
+                        })
+                        .into_any_element(),
+                )
+            } else if selected {
+                Some(div().size(px(DIM_20_PX)).rounded_full().bg(p.primary.hsla()).row().items_center().justify_center().child(icon("check", ICON_12_PX, p.on_primary)).into_any_element())
+            } else {
+                None
+            };
+            let detail = match &line {
+                Some(text) => div().text_size(px(TEXT_11_5_PX)).font_features(mandara_ui::fonts::tabular_nums()).text_color(if failed { p.urgent_coral.hsla() } else { p.on_surface.hsla() }).truncate().child(text.clone()),
+                None => div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(english),
+            };
+            mandara_ui::style::ClipRounded::clip_rounded(div().id(SharedString::from(id)))
+                .relative()
+                .flex_1()
+                .min_w_0()
+                .rounded(px(RADIUS_16_PX))
+                .p(px(SPACE_14_PX))
+                .row()
+                .flex_col()
+                .gap(px(SPACE_6_PX))
+                .cursor_pointer()
+                .bg(fill::base(&visual, if selected { p.primary.with_alpha(ALPHA_14) } else { p.surface_container_high }, p.surface_container_high).hsla())
+                .border_2()
+                .border_color(if visual.tone != Tone::None && visual.tone != Tone::Progress { accent.hsla() } else if selected { p.primary.hsla() } else { gpui::transparent_black() })
+                .hover(|s| s.bg(p.primary.with_alpha(ALPHA_10).hsla()))
+                .children(fill::layer(&visual, ui_rtl, p))
+                .child(
+                    div()
+                        .row()
+                        .items_center()
+                        .justify_between()
+                        .gap(px(SPACE_6_PX))
+                        .child(div().text_size(px(TEXT_20_PX)).font_weight(FontWeight::SEMIBOLD).when(rtl, |el| el.font_family(fonts.arabic.clone())).child(sample))
+                        .children(corner),
+                )
+                .child(div().text_size(px(TEXT_13_PX)).font_weight(FontWeight::MEDIUM).when(rtl, |el| el.font_family(fonts.arabic.clone())).child(native))
+                .child(detail)
+                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                    if let Some(setting) = registry::by_path(LOCALE_PATH) {
+                        this.apply(setting, serde_json::to_value(locale).unwrap_or(Value::Null), cx);
+                    }
+                }))
+        };
+        let status_of = |lang: Lang| visuals.get(&lang).cloned().unwrap_or_else(|| idle.clone());
+        let mut cards = vec![card(
+            "lang-auto".into(),
+            system.sample().into(),
+            mandara_i18n::t("System").into(),
+            format!("{} · {}", mandara_i18n::t("Follows your desktop"), system.native_name()),
+            current == Locale::Auto,
+            system.is_rtl(),
+            Locale::Auto,
+            if current == Locale::Auto { status_of(system) } else { idle.clone() },
+            cx,
+        )];
+        for lang in Lang::ALL {
+            let locale = Locale::from_lang(lang);
+            cards.push(card(format!("lang-{}", lang.code()), lang.sample().into(), lang.native_name().into(), tr(lang.english_name()), current == locale, lang.is_rtl(), locale, status_of(lang), cx));
+        }
+        let grid = grid::fit(self.page.column_w, LANGUAGE_GRID).balanced(cards.len()).render(cards);
+        div()
+            .row()
+            .flex_col()
+            .gap(px(SPACE_10_PX))
+            .child(div().px(px(SPACE_6_PX)).text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(mandara_i18n::t("Language")))
+            .child(grid)
+            .children(language_downloads(p, cx))
+            .into_any_element()
+    }
+
+    /// One sampler follows both consumers, without stopping during navigation
+    /// between Home and Performance or waking a hidden Studio window.
+    pub(super) fn poll_performance(&self, window: &Window, cx: &mut Context<Self>) {
+        let this = cx.entity().downgrade();
+        let handle = window.window_handle();
+        perf::poll_while(&self.perf, move |cx| {
+            let visible = cx.update_window(handle, |_, window, _| window.is_visible()).unwrap_or(false);
+            this.read_with(cx, |view, _| {
+                    activity::visible_page(view.section, &activity::PROCESS_PAGES, !view.query.is_empty(), visible)
+                }).unwrap_or(false)
+        }, cx);
+    }
+
+    fn performance(&self, p: &MandaraPalette, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+        self.poll_performance(window, cx);
+        let m = self.perf.read(cx);
+        let card = || {
+            div().rounded(px(RADIUS_18_PX)).bg(p.surface_container.hsla()).p(px(SPACE_20_PX)).row().flex_col().gap(px(SPACE_14_PX))
+        };
+        let Some(now) = m.latest() else {
+            return card()
+                .child(div().font_weight(FontWeight::MEDIUM).child(t("The shell isn't running")))
+                .child(div().text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(t("Start it with `mandara`; its CPU and memory appear here live."))))
+                .into_any_element();
+        };
+        let cpu_hist: Vec<f32> = m.shell.iter().map(|u| u.cpu).collect();
+        let mem_hist: Vec<f32> = m.shell.iter().map(|u| u.rss_mib).collect();
+        let vram_hist: Vec<f32> = m.shell.iter().map(|u| u.vram_mib.unwrap_or(0.0)).collect();
+        let tile = |label: &'static str, icon_name: &'static str, value: String, detail: String, hist: &[f32], floor: f32, color: mandara_theme::Color| {
+            // Headroom keeps steady values mid-height instead of pinned flat at the top.
+            let max = hist.iter().copied().fold(floor, f32::max) * SPARK_HEADROOM;
+            div()
+                .flex_1()
+                .min_w(px(0.0))
+                .rounded(px(RADIUS_14_PX))
+                .bg(p.surface_container_high.hsla())
+                .p(px(SPACE_16_PX))
+                .row()
+                .flex_col()
+                .gap(px(SPACE_6_PX))
+                .child(div().row().items_center().gap(px(SPACE_8_PX)).child(icon(icon_name, ICON_15_PX, color)).child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(label)))
+                .child(div().text_size(px(TEXT_26_PX)).font_weight(FontWeight::MEDIUM).font_family(mandara_ui::fonts::fonts(cx).mono.clone()).child(value))
+                .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(detail))
+                .child(
+                    div()
+                        .mt(px(SPACE_6_PX))
+                        .h(px(DIM_56_PX))
+                        // A time series: oldest → newest left to right everywhere.
+                        .ltr_row()
+                        .items_end()
+                        .gap(px(SPACE_3_PX))
+                        .children((0..perf::HISTORY).map(|i| {
+                            // Right-align the history so the newest bar is last.
+                            let offset = perf::HISTORY - hist.len();
+                            let v = if i >= offset { hist[i - offset] } else { 0.0 };
+                            let h = if i >= offset { (v / max).clamp(0.0, 1.0) * SPARK_RANGE_PX + SPARK_MIN_PX } else { SPARK_MIN_PX };
+                            div()
+                                .flex_1()
+                                .h(px(h))
+                                .rounded(px(RADIUS_1_5_PX))
+                                .bg(if i >= offset { color.with_alpha(SPARK_OLDEST_ALPHA + (1.0 - SPARK_OLDEST_ALPHA) * (i as f32 / perf::HISTORY as f32)).hsla() } else { p.on_surface.with_alpha(ALPHA_6).hsla() })
+                        })),
+                )
+        };
+        let shell = card()
+            .child(
+                div()
+                    .row()
+                    .items_center()
+                    .gap(px(SPACE_10_PX))
+                    .child(div().flex_1().font_weight(FontWeight::SEMIBOLD).child(t("Mandara Shell")))
+                    .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(tf("pid {pid} · {threads} threads", &[("pid", &m.shell_pid.unwrap_or(0)), ("threads", &now.threads)]))),
+            )
+            .child(
+                grid::fit(self.page.column_w - 2.0 * SPACE_20_PX, STAT_TILE_GRID).balanced(if now.vram_mib.is_some() { 3 } else { 2 }).render([tile(
+                        t("CPU"),
+                        "cpu",
+                        format!("{:.1}%", now.cpu),
+                        tf("of one core · avg {average}% · {cores} cores", &[("average", &format!("{:.1}", m.average_cpu())), ("cores", &m.cores)]),
+                        &cpu_hist,
+                        CPU_SPARK_FLOOR_PERCENT,
+                        p.primary,
+                    ),
+                    tile(t("Memory"), "memory", format!("{:.0} MB", now.rss_mib), tf("resident · peak {peak} MB", &[("peak", &format!("{:.0}", m.peak_rss()))]), &mem_hist, 1.0, p.tertiary)]
+                .into_iter()
+                .chain(now.vram_mib.map(|v| {
+                            tile(t("Video memory"), "monitor", format!("{v:.0} MB"), tf("on the GPU · peak {peak} MB", &[("peak", &format!("{:.0}", m.peak_vram()))]), &vram_hist, 1.0, p.secondary,
+                            )
+                        })),
+                    ),
+            );
+        let studio = card().child(
+            div()
+                .row()
+                .items_center()
+                .gap(px(SPACE_10_PX))
+                .child(icon("window", ICON_15_PX, p.on_surface_variant))
+                .child(div().flex_1().min_w(px(0.0)).child(t("Mandara Studio (this window)")))
+                .child(div().font_family(mandara_ui::fonts::fonts(cx).mono.clone()).child(format!("{:.1}% · {:.0} MB", m.studio.cpu, m.studio.rss_mib))),
+        )
+        .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(t("Studio runs as its own process, so its usage is measured separately and never counted in the shell figures above."))));
+        let action = |id: &'static str, icon_name: &'static str, label: &'static str, danger: bool, args: &'static [&'static str]| {
+            div()
+                .id(id)
+                .h(px(DIM_36_PX))
+                .px(px(SPACE_14_PX))
+                .rounded_full()
+                .row()
+                .items_center()
+                .gap(px(SPACE_8_PX))
+                .cursor_pointer()
+                .bg(if danger { p.urgent_coral.with_alpha(ALPHA_14).hsla() } else { p.surface_container_high.hsla() })
+                .text_color(if danger { p.urgent_coral.hsla() } else { p.on_surface.hsla() })
+                .font_weight(FontWeight::MEDIUM)
+                .hover(|s| s.opacity(ALPHA_85))
+                .child(icon(icon_name, ICON_15_PX, if danger { p.urgent_coral } else { p.on_surface_variant }))
+                .child(label)
+                .on_click(move |_, _, cx| {
+                    if let Some(ipc) = cx.try_global::<crate::perf::ShellIpc>().cloned() {
+                        ipc.fire(args.iter().map(|a| a.to_string()).collect());
+                    }
+                })
+        };
+        let controls = card()
+            .child(div().font_weight(FontWeight::SEMIBOLD).child(t("Shell process")))
+            .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(
+                t("Restart reloads everything from scratch. Quit stops Mandara completely (the supervisor exits too); start it again with `mandara`."),
+            ))
+            .child(div().row().gap(px(SPACE_10_PX)).child(action("shell-restart", "refresh", t("Restart shell"), false, &["restart"])).child(action("shell-quit", "power", t("Quit Mandara"), true, &["quit"])));
+        div().row().flex_col().gap(px(SPACE_14_PX)).child(shell).child(studio).child(controls).into_any_element()
+    }
+}
+
+impl Render for StudioView {
+    /// Render the selected Studio page and its active dialogs from the current config.
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        frame_meter::begin();
+        let p = mandara_core::frame_palette(window, cx);
+        let cfg = config(cx).read(cx).snapshot();
+        self.market_visibility(window.is_visible());
+        if self.section != Section::Plugins || !self.query.is_empty() {
+            self.market_pause();
+            self.local.pause();
+        }
+        if window.is_visible() { self.market_permissions(&cfg, window, cx); }
+        let client_controls = crate::client_controls(window.window_decorations(), registry::running_compositor());
+        registry::set_client_controls(client_controls);
+        registry::prime(&cfg);
+        self.launcher_follow(&cfg, window, cx);
+        if !self.query.is_empty() || !window.is_visible() {
+            self.agent_page = None;
+            self.motion_preview = None;
+            self.app_templates = Default::default();
+            self.studio_looks.release();
+            self.native_shortcuts.release();
+            keybind_conflicts::release(cx);
+            self.updates.changelog = None;
+            self.lock_designs = None;
+        }
+        let fonts = mandara_ui::fonts::fonts(cx);
+        // Grain behind the pages and on the cards (`[grain.studio]`, `[grain.cards]`).
+        mandara_ui::components::grain::prepare(mandara_ui::components::grain::Slot::Studio, &cfg.grain.studio, &p, window, cx);
+        mandara_ui::components::grain::prepare(mandara_ui::components::grain::Slot::Cards, &cfg.grain.cards, &p, window, cx);
+        // Choices measure their labels in Studio's font this frame.
+        choice::begin_frame(window, fonts.studio.clone());
+        // Breakpoints: icon rail under 900 px; stacked rows when the content
+        // column gets too narrow for label + control side by side.
+        let studio_frame = studio_frame::frame(&cfg);
+        self.page = grid::PageMetrics::with_frame(f32::from(window.viewport_size().width), studio_frame.as_ref());
+        self.rail = self.page.rail;
+        self.stack_rows = self.page.stack_rows;
+        let gutter = self.page.gutter;
+        let rail = self.rail;
+
+        let nav = self.nav(rail, studio_frame.as_ref(), window, &p, cx);
+
+        // The folds of this frame's page, counted as the body builds them.
+        self.fold_keys.clear();
+        let (title, body) = if !self.query.is_empty() {
+            let q = self.query.clone();
+            let all = registry::settings();
+            let matches: Vec<&Setting> = registry::search(&q).iter().map(|&i| &all[usize::from(i)]).collect();
+            // Pages whose name or topics match (VPN, autostart, cursor…),
+            // including pages built from bespoke editors.
+            let pages = form::page_matches(&q, &p, cx);
+            let body = if matches.is_empty() && pages.is_none() {
+                div().text_color(p.on_surface_variant.hsla()).child(tf("No settings match “{query}”", &[("query", &q)])).into_any_element()
+            } else {
+                let rows = (!matches.is_empty()).then(|| self.rows(matches, &cfg, &p, cx));
+                div().row().flex_col().gap(px(SPACE_22_PX)).children(pages).children(rows).into_any_element()
+            };
+            (tf("Results for “{query}”", &[("query", &q)]), body)
+        } else {
+            let body = match self.section {
+                Section::AiShellAgent => self.agent_page(&cfg, &p, cx),
+                Section::Motion => self.motion_page(&cfg, &p, cx),
+                Section::Home => self.home_page(&cfg, &p, window, cx),
+                Section::Themes => self.themes_page(&cfg, &p, window, cx),
+                Section::Plugins => self.store_page(&cfg, &p, window, cx),
+                Section::About => self.about(&cfg, &p, window, cx),
+                Section::Performance => {
+                    let base = self.performance(&p, window, cx);
+                    let diagnostics = self.diagnostics(&p, window, cx);
+                    div().row().flex_col().gap(px(SPACE_14_PX)).child(base).child(diagnostics).into_any_element()
+                }
+                Section::Compositor => self.compositor_page(&cfg, &p, cx),
+                Section::Audio => self.audio_page(&cfg, &p, cx),
+                Section::Notifications => self.notifications_page(&cfg, &p, cx),
+                Section::Privacy => self.privacy_page(&cfg, &p, cx),
+                Section::Network => self.network_page(&cfg, &p, cx),
+                Section::Input => self.input_page(&cfg, &p, cx),
+                Section::Applications => self.apps_page(&cfg, &p, window, cx),
+                Section::Profiles => self.profiles_page(&cfg, &p, cx),
+                Section::Power => self.power_page(&cfg, &p, cx),
+                Section::Displays => self.displays_page(&cfg, &p, cx),
+                Section::Maintenance => self.maintenance(&p, cx),
+                Section::LoginScreen | Section::LockScreen => self.auth_page(&cfg, &p, window, cx),
+                Section::Users => users_page::element(cx),
+                Section::Bars => self.bars_page(&cfg, &p, window, cx),
+                Section::General => {
+                    let picker = self.language_picker(&cfg, &p, window, cx);
+                    let rows = self.rows(registry::in_section(Section::General).filter(|s| s.path != LOCALE_PATH), &cfg, &p, cx);
+                    // Under the Keyrings & passwords rows: what unlocks at login.
+                    let keyrings = keyrings_card::element(cx);
+                    div().row().flex_col().gap(px(SPACE_26_PX)).child(picker).child(rows).child(keyrings).into_any_element()
+                }
+                Section::Shortcuts => self.shortcuts_page(&cfg, &p, window, cx),
+                // The ready-made looks first, then the sections in setup
+                // order (launcher_page.rs).
+                Section::Launcher => self.launcher_page(&cfg, &p, cx),
+                Section::Dock => self.dock_page(&cfg, &p, window, cx),
+                Section::DateTime => {
+                    // The system clock first: time zone, network time and
+                    // the mismatch warning (time_card.rs).
+                    let clock = time_card::element(cx);
+                    let rows = self.rows(registry::in_section(Section::DateTime), &cfg, &p, cx);
+                    div().row().flex_col().gap(px(GROUP_SECTION_GAP_PX)).child(clock).child(rows).into_any_element()
+                }
+                // Widgets, cards & visualizers, the context menu: three tabs
+                // (desktop_page.rs).
+                Section::Desktop => self.desktop_page(&cfg, &p, window, cx),
+                Section::WindowSwitcher => self.switcher_page(&cfg, &p, cx),
+                // The wallpaper on the desktop first, then tabs
+                // (wallpaper_page.rs).
+                Section::Wallpaper => self.wallpaper_page(&cfg, &p, window, cx),
+                Section::Typography => self.typography_page(&cfg, &p, cx),
+                section => self.rows(registry::in_section(section), &cfg, &p, cx),
+            };
+            (self.section.label(), body)
+        };
+
+        let subtitle = self.query.is_empty().then(|| SharedString::from(tr(self.section.subtitle())));
+        let titlebar = client_controls
+            .then(|| studio_frame::titlebar(studio_frame.as_ref(), &p, fonts.studio.clone(), window.window_controls()));
+        // `MANDARA_STUDIO_SCROLL=<px>` opens the page scrolled down, once
+        // (screenshots of long pages without driving the pointer).
+        static SCROLLED: std::sync::Once = std::sync::Once::new();
+        if let Some(y) = std::env::var("MANDARA_STUDIO_SCROLL").ok().and_then(|v| v.parse::<f32>().ok()) {
+            // Wait for pages that load their lists asynchronously.
+            static OPENED: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+            const SCROLL_SETTLE: std::time::Duration = std::time::Duration::from_secs(3);
+            let handle = self.content_scroll.clone();
+            if OPENED.get_or_init(std::time::Instant::now).elapsed() >= SCROLL_SETTLE {
+                SCROLLED.call_once(|| {
+                    handle.set_offset(gpui::point(px(0.0), -px(y).min(handle.max_offset().y)))
+                });
+            } else if !SCROLLED.is_completed() {
+                window.request_animation_frame();
+            }
+        }
+        let folds_toolbar = self.fold_toolbar(&p, cx);
+        let content_bar = mandara_ui::scrollbar::keyed_state("studio-content");
+        let shortcut_workspace = self.query.is_empty() && self.section == Section::Shortcuts && self.shortcuts_tab == native_shortcuts::ShortcutsTab::Compositor;
+        let content = div()
+            .id("studio-content")
+            .flex_1()
+            .min_w(px(0.0))
+            .min_h(px(0.0))
+            .when(!shortcut_workspace, |el| el.overflow_y_scroll())
+            .when(shortcut_workspace, |el| el.overflow_hidden())
+            .track_scroll(&self.content_scroll)
+            .px(px(gutter))
+            .pb(px(SPACE_30_PX))
+            .child(
+                div()
+                    .w_full()
+                    .max_w(px(PAGE_MAX_W_PX))
+                    .when(shortcut_workspace, |el| el.h_full().min_h(px(0.0)))
+                    .mx_auto()
+                    .min_w(px(0.0))
+                    .row()
+                    .flex_col()
+                    .gap(px(SPACE_22_PX))
+                    // With the icon rail, search moves into the page header.
+                    .when(rail, |el| el.child(self.search.clone()))
+                    .child(
+                        div()
+                            .row()
+                            .flex_wrap()
+                            .items_end()
+                            .justify_between()
+                            .gap(px(SPACE_12_PX))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w(px(DIM_200_PX))
+                                    .row()
+                                    .flex_col()
+                                    .cross_start()
+                                    .gap(px(SPACE_4_PX))
+                                    .child(div().font_family(fonts.display.clone()).text_size(px(if gutter < GUTTER_MEDIUM_PX { PAGE_TITLE_SMALL_PX } else { PAGE_TITLE_PX })).font_weight(FontWeight::SEMIBOLD).child(title))
+                                    .when_some(subtitle, |el, s| el.child(div().max_w(px(TEXT_MEASURE_PX)).text_size(px(PAGE_SUBTITLE_PX)).line_height(px(PAGE_SUBTITLE_LEADING_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(s)))),
+                            )
+                            .children(folds_toolbar),
+                    )
+                    .when_some(self.error.clone(), |el, e| {
+                        el.child(div().px(px(SPACE_14_PX)).py(px(SPACE_10_PX)).rounded(px(RADIUS_12_PX)).bg(p.urgent_coral.with_alpha(ALPHA_15).hsla()).text_color(p.urgent_coral.hsla()).child(e))
+                    })
+                    .child(body),
+            );
+        // The page's overlay scroll bar (it fills the content's place).
+        // Left to right, the page's end edge is the window's border.
+        let edge = if mandara_i18n::language().is_rtl() { px(0.0) } else { px(mandara_ui::scrollbar::WINDOW_EDGE_CLEARANCE_PX) };
+        let content = div().relative().flex_1().min_w(px(0.0)).min_h(px(0.0)).flex().flex_col().children(mandara_ui::components::grain::layer(mandara_ui::components::grain::Slot::Studio, gpui::Corners::default())).child(content).child(mandara_ui::scrollbar::overlay_scrollbar(&self.content_scroll, &content_bar, &p).end_inset(edge));
+
+        let modal = self.plugin_modal_layer(&cfg, &p, window, cx);
+        let edge_choice = self.stash_collision_layer(&cfg, &p, cx);
+        let dock_picker = self.dock_picker_layer(&p, cx);
+        // Right-to-left languages mirror everything (`mandara_ui::bidi`):
+        // the sidebar sits on the right and text aligns to the right.
+        div()
+            .size_full()
+            .relative()
+            .row()
+            .text_start()
+            .on_key_down(cx.listener(|this, e: &gpui::KeyDownEvent, window, cx| {
+                if this.nav_key(e, window, cx) {
+                    cx.stop_propagation();
+                }
+            }))
+            .text_color(p.on_surface.hsla())
+            // Typography → Studio font.
+            .font_family(fonts.studio.clone())
+            .text_size(px(TEXT_13_PX))
+            .child(studio_frame::window(studio_frame.as_ref(), nav, content.into_any_element(), titlebar, &p)
+                .children(modal)
+                .children(edge_choice)
+                .children(dock_picker))
+            .children(frame_meter::end())
+    }
+}
+
+// ── Layout ──────────────────────────────────────────────────────────────
+// Breakpoints, sidebar widths and gutters live in `tokens.rs` (Responsive
+// layout) and are applied through `grid::PageMetrics`.
+
+// ── Performance sparklines ──────────────────────────────────────────────
+/// Headroom over the highest sample, so steady values sit mid-height.
+const SPARK_HEADROOM: f32 = 1.35;
+/// Bar heights: an empty slot, plus the range a sample spans above it.
+const SPARK_MIN_PX: f32 = 2.0;
+const SPARK_RANGE_PX: f32 = 52.0;
+/// Opacity of the oldest bar (the newest is opaque).
+const SPARK_OLDEST_ALPHA: f32 = 0.35;
+/// The CPU sparkline's scale never drops below this many percent.
+const CPU_SPARK_FLOOR_PERCENT: f32 = 5.0;
+
+// ── Settings controls ───────────────────────────────────────────────────
+const MINUTES_PER_HOUR: i32 = 60;
+const MINUTES_PER_DAY: i32 = 24 * MINUTES_PER_HOUR;
+/// The time control's minute arrows move by a quarter hour.
+const TIME_STEP_MINUTES: i32 = 15;
+/// Slider steps at least this coarse show two decimals (finer: three).
+const TWO_DECIMAL_STEP: f64 = 0.05;
+
+/// A setting slider's value at fraction `f` of its track, snapped to its
+/// step.
+fn snap_slider(f: f32, (min, max, step): (f64, f64, f64)) -> f64 {
+    ((min + (max - min) * f64::from(f)) / step).round() * step
+}
+
+/// A setting slider's value as its readout and value bubble show it.
+fn slider_text(v: f64, step: f64, unit: &str) -> String {
+    if step >= 1.0 {
+        format!("{v:.0}{unit}")
+    } else if step >= TWO_DECIMAL_STEP {
+        format!("{v:.2}{unit}")
+    } else {
+        format!("{v:.3}{unit}")
+    }
+}
+
+/// A choice setting's current value as its raw option.
+fn choice_current(value: &Value) -> String {
+    match value {
+        Value::String(s) => s.clone(),
+        other => other.to_string(),
+    }
+}
+
+/// What a setting slider's readout shows: the value under the knob while
+/// the slider is held, so the number follows the pointer at once (the
+/// config catches up at most a frame later), else the setting's `value`.
+fn slider_readout(id: &SharedString, value: f64, range: (f64, f64, f64)) -> f64 {
+    mandara_ui::slider_model::held(&gpui::ElementId::Name(id.clone())).map_or(value, |f| snap_slider(f, range))
+}
+
+/// A switch that can't be changed right now (see `registry::locked`).
+const LOCKED_OPACITY: f32 = 0.45;
+/// Widest a "doesn't apply here" note grows in place of a control.
+const LOCKED_NOTE_MAX_W_PX: f32 = 260.0;
+/// Narrowest a setting's label column gets beside a wide control.
+const ROW_LABEL_MIN_PX: f32 = 160.0;
+/// A settings row's least height (a label over one line of help).
+const ROW_MIN_H_PX: f32 = 60.0;
+
+/// Most theme icons the icon picker lists for a search.
+const ICON_MATCHES_MAX: usize = 64;
+
+/// Config path of the language setting (Studio → General shows it as a picker).
+const LOCALE_PATH: &str = "/general/locale";
+
+
+/// Settings grouped into cards by their group title, in order of first
+/// appearance. A page's groups merge even when the registry lists them apart
+/// (Themes' app themes come from two registry files); the same title in
+/// another section (search results) stays its own card.
+/// The order of a page's groups, where the registry's own order (first
+/// appearance) doesn't put related ones together. Unlisted groups follow,
+/// in registry order.
+fn group_order(section: Section) -> Option<&'static [&'static str]> {
+    use registry::side_bar_settings::{SIDE_BAR_ITEMS, SIDE_BAR_MATERIAL, SIDE_BAR_SHAPE, SIDE_BARS};
+    use registry::surface_settings::{APPEARANCE, PANEL_MOTION, PANELS};
+    Some(match section {
+        Section::Bars => &["Layout", "Spacing", "Shape", APPEARANCE, "Screen frame", "Behaviour", "Clock", SIDE_BARS, SIDE_BAR_SHAPE, SIDE_BAR_ITEMS, SIDE_BAR_MATERIAL, PANELS, PANEL_MOTION],
+        Section::Launcher => &["Size & placement", "Button", "Results", "Grid", "Beacon search bar", "Search providers", "Ranking", "General", "Starting apps", "Pinned & hidden apps"],
+        Section::Themes => &["Mode", "Style", "Components", "Tuning", "Accessibility", "Wallpaper colors", "Icons", "Cursor", "App themes"],
+        Section::Wallpaper => &["Desktop", "Sketch transition", "Light & dark", "Video", "Depth clock", "Picker", "Slideshow", "Source", "When to change", "Slideshow transition", "Displays", "Wallhaven"],
+        _ => return None,
+    })
+}
+
+/// Groups rows in their input order without merging equal titles from
+/// different pages or Bars tabs. Search can display several such groups at
+/// once; their labels alone do not identify their settings or reset scope.
+/// Starts noticing customizations of an applied Look ([`looks_yours`]).
+pub(crate) fn looks_yours_watch(cx: &mut gpui::App) {
+    looks_yours::watch(cx);
+}
+
+pub(crate) fn group_rows<'a>(settings: impl IntoIterator<Item = &'a Setting>) -> Vec<(&'static str, Vec<&'a Setting>)> {
+    let mut groups: Vec<(&'static str, Vec<&'a Setting>)> = Vec::new();
+    for s in settings {
+        match groups.iter_mut().find(|(g, list)| {
+            *g == s.group && list.first().is_some_and(|f| {
+                    f.section == s.section && (s.section != Section::Bars || registry::bars::BarsTab::for_path(f.path) == registry::bars::BarsTab::for_path(s.path))
+                })
+        }) {
+            Some((_, list)) => list.push(s),
+            None => groups.push((s.group, vec![s])),
+        }
+    }
+    groups
+}
+
+/// Project links on the About page.
+const PROJECT_URL: &str = "https://github.com/theHamdiz/mandara";
+const ISSUES_URL: &str = "https://github.com/theHamdiz/mandara/issues";
+const PLUGIN_GUIDE_URL: &str = "https://github.com/theHamdiz/mandara/blob/main/PLUGINS.md";
+const RELEASES_URL: &str = "https://github.com/theHamdiz/mandara/releases";
+/// Optional support for the project (AI credits and developer time).
+pub(crate) const SUPPORT_URL: &str = "https://ko-fi.com/thehamdiz";
+/// The license, shown as is (an SPDX identifier, never translated).
+const LICENSE: &str = "GPL-3.0-or-later";
+
+/// Under the language picker: the full reason a language pack couldn't be
+/// downloaded, with Retry (the card itself turns red with a short version;
+/// downloads show on their cards). The interface stays in English
+/// meanwhile.
+fn language_downloads(p: &MandaraPalette, _cx: &mut Context<StudioView>) -> Option<AnyElement> {
+    use mandara_services::self_update::langpacks::{self, State};
+    let rows: Vec<AnyElement> = langpacks::active()
+        .into_iter()
+        .filter(|(_, state)| matches!(state, State::Failed(_)))
+        .filter_map(|(lang, state)| {
+            let line = langpacks::describe(lang, &state)?;
+            let tone = p.urgent_coral;
+            Some(
+                div()
+                    .px(px(SPACE_14_PX))
+                    .py(px(SPACE_10_PX))
+                    .rounded(px(RADIUS_12_PX))
+                    .bg(tone.with_alpha(ALPHA_12).hsla())
+                    .row()
+                    .items_center()
+                    .gap(px(SPACE_8_PX))
+                    .text_size(px(TEXT_12_5_PX))
+                    .text_color(tone.hsla())
+                    .child(icon("close", ICON_14_PX, tone))
+                    .child(div().flex_1().min_w_0().child(mandara_ui::bidi::paragraph(line)))
+                    .child(compositor_page::button(SharedString::from(format!("lang-retry-all-{}", lang.code())), "refresh", t("Retry"), false, p).on_click(move |_, _, _| langpacks::retry(lang)))
+                    .into_any_element(),
+            )
+        })
+        .collect();
+    (!rows.is_empty()).then(|| {
+        div().row().flex_col().gap(px(SPACE_8_PX)).children(rows).into_any_element()
+    })
+}
+
+/// Opens a web link in the default browser, off the UI thread.
+fn open_link(url: &'static str) {
+    std::thread::spawn(move || {
+        if let Err(err) = mandara_services::session::open_uri(url) {
+            tracing::warn!("opening {url}: {err}");
+        }
+    });
+}
+
+#[cfg(test)]
+mod group_order_tests {
+    use super::*;
+
+    #[test]
+    fn bars_search_groups_never_mix_two_tabs_with_the_same_title() {
+        let groups = group_rows(registry::in_section(Section::Bars));
+        let layouts: Vec<_> = groups.iter().filter(|(title, _)| *title == "Layout").collect();
+        assert_eq!(layouts.len(), 2);
+        for (_, settings) in groups {
+            let tab = registry::bars::BarsTab::for_path(settings[0].path);
+            assert!(settings.iter().all(|s| registry::bars::BarsTab::for_path(s.path) == tab));
+        }
+    }
+
+    /// A misspelt name in a page's order table would silently sink that
+    /// group to the end; every listed group must exist on its page, and
+    /// every page section keeps all its groups.
+    #[test]
+    fn ordered_groups_exist_and_none_are_lost() {
+        for section in [Section::Bars, Section::Launcher, Section::Themes, Section::Wallpaper] {
+            let order = group_order(section).unwrap();
+            let groups: Vec<&str> = group_rows(registry::in_section(section)).into_iter().map(|(g, _)| g).collect();
+            for g in order {
+                assert!(groups.contains(g), "{section:?}: no group {g:?} (has {groups:?})");
+            }
+        }
+        // Bar: spacing and the frame split out of a 15-setting Layout.
+        let bar = group_rows(registry::in_section(Section::Bars));
+        let size = |name: &str| {
+            bar.iter().find(|(g, _)| *g == name).map_or(0, |(_, l)| l.len())
+        };
+        assert!(size("Layout") <= 7 && size("Spacing") >= 4 && size("Screen frame") == 3, "{:?}", bar.iter().map(|(g, l)| (*g, l.len())).collect::<Vec<_>>());
+    }
+}

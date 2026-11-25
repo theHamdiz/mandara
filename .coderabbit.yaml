@@ -1,0 +1,15 @@
+# CodeRabbit reviews the code and the guides. Pictures, fonts, translation
+# catalogs, recorded command output used as test fixtures and the lockfile
+# are checked by the test suite instead, and leaving them out keeps large
+# release PRs within CodeRabbit's file limit.
+reviews:
+  path_filters:
+    - "!**/*.png"
+    - "!**/*.webp"
+    - "!**/*.jpg"
+    - "!**/*.svg"
+    - "!**/*.woff2"
+    - "!**/*.wasm"
+    - "!crates/mandara-i18n/locales/**"
+    - "!crates/*/src/**/fixtures/**"
+    - "!Cargo.lock"

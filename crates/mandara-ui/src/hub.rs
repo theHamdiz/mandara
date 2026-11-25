@@ -1,0 +1,563 @@
+//! The services hub: one GPUI entity holding the latest state of every
+//! service actor plus their command handles. Plugins observe it; the app
+//! pumps actor updates into it on the foreground executor.
+
+mod initial;
+mod domains;
+pub use domains::Domains;
+
+use std::collections::HashMap;
+
+use gpui::{App, AppContext as _, AsyncApp, Entity, Global};
+use mandara_compositor::{ClientInfo, CompositorBackend, CompositorEvent, NavigationModel};
+use crate::widgets::system::SystemSampler;
+use mandara_services::{
+    AudioService, AudioState, BluetoothService, BluetoothState, ClipboardService, ClipboardState, MediaService, MediaState,
+    NetworkService, NetworkState, NotificationService, NotificationsState,
+};
+
+#[derive(Default)]
+pub struct Hub {
+    revisions: domains::Revisions,
+    pub media: Option<MediaState>,
+    pub network: NetworkState,
+    pub bluetooth: BluetoothState,
+    pub audio: AudioState,
+    pub clipboard: ClipboardState,
+    pub notifications: NotificationsState,
+    pub weather: mandara_services::WeatherState,
+    /// Smoothed CPU / memory load. Updated *without* notifying the hub;
+    /// observe [`resources_entity`] to follow it.
+    pub resources: crate::widgets::system::SystemSampler,
+    /// Navigation model per monitor name.
+    pub navigation: HashMap<String, NavigationModel>,
+    pub focused: Option<ClientInfo>,
+    /// Every window (for per-workspace app icons).
+    pub clients: Vec<ClientInfo>,
+    pub keymode: String,
+    /// Active keyboard layout name ("English (US)"), when reported.
+    pub keyboard_layout: String,
+
+    pub media_service: Option<MediaService>,
+    pub network_service: Option<NetworkService>,
+    pub bluetooth_service: Option<BluetoothService>,
+    pub audio_service: Option<AudioService>,
+    /// Clipboard history: runs only while the clipboard plugin is on.
+    pub clipboard_service: Option<ClipboardService>,
+    pub notification_service: Option<NotificationService>,
+    /// The CPU / memory sampler loop: runs only while a plugin that shows
+    /// it (resources, processes) is on. Dropping it stops the loop.
+    sampler_task: Option<gpui::Task<()>>,
+    /// Started only once the weather plugin is placed somewhere (it makes
+    /// network requests).
+    pub weather_service: Option<mandara_services::WeatherService>,
+    /// The running compositor's native driver (MangoWM, Niri, Hyprland, Umbriel, Sway or River).
+    pub compositor: Option<std::sync::Arc<dyn CompositorBackend>>,
+}
+
+impl Hub {
+    /// Equality token for the selected sources, without cloning their data.
+    /// Compare with the previous token; wrapping revisions are not timestamps.
+    pub fn revision(&self, domains: Domains) -> u64 { self.revisions.get(domains) }
+
+    /// Record the changed sources before notifying hub observers.
+    pub fn mark_changed(&mut self, domains: Domains) { self.revisions.bump(domains); }
+}
+
+#[derive(Clone)]
+pub struct GlobalHub(pub Entity<Hub>);
+impl Global for GlobalHub {}
+
+pub fn hub(cx: &App) -> Entity<Hub> {
+    cx.global::<GlobalHub>().0.clone()
+}
+
+/// The hub, when this process runs the shell (Studio on its own has none).
+pub fn try_hub(cx: &App) -> Option<Entity<Hub>> {
+    cx.try_global::<GlobalHub>().map(|h| h.0.clone())
+}
+
+#[derive(Clone)]
+struct GlobalResources(Entity<SystemSampler>);
+impl Global for GlobalResources {}
+
+/// The CPU / memory sampler as its own entity. Samples arrive every
+/// the System resources plugin's `refresh_ms`; keeping them out of the hub means only the
+/// views that show load re-render on each tick, not every plugin view that
+/// observes the hub.
+pub fn resources_entity(cx: &App) -> Entity<SystemSampler> {
+    cx.global::<GlobalResources>().0.clone()
+}
+
+/// Forwards updates from `rx` into the hub, notifying observers only when
+/// `apply` reports a change. `domains` must include every source it changes,
+/// so scoped views invalidate correctly. Identical snapshots leave revisions
+/// alone even when a service sends them repeatedly.
+///
+/// Updates that queued up while the foreground was busy are coalesced: only
+/// the newest value of a burst is applied, and observers hear about it once.
+fn pump<T: 'static>(
+    hub: Entity<Hub>,
+    rx: async_channel::Receiver<T>,
+    domains: Domains,
+    apply: impl Fn(&mut Hub, T) -> bool + 'static,
+    cx: &mut App,
+) {
+    cx.spawn(async move |cx: &mut AsyncApp| {
+        while let Ok(mut value) = rx.recv().await {
+            while let Ok(newer) = rx.try_recv() {
+                value = newer;
+            }
+            hub.update(cx, |h, cx| {
+                if apply(h, value) {
+                    h.mark_changed(domains);
+                    cx.notify();
+                }
+            });
+        }
+    })
+    .detach();
+}
+
+/// Like [`pump`] for event streams where every message matters (compositor
+/// events are deltas of different kinds, so none may be dropped).
+fn pump_events<T: 'static>(
+    hub: Entity<Hub>,
+    rx: async_channel::Receiver<T>,
+    apply: impl Fn(&mut Hub, T) -> Domains + 'static,
+    cx: &mut App,
+) {
+    cx.spawn(async move |cx: &mut AsyncApp| {
+        while let Ok(value) = rx.recv().await {
+            hub.update(cx, |h, cx| {
+                let mut changed = apply(h, value);
+                // Drain whatever else is already queued before notifying.
+                while let Ok(more) = rx.try_recv() {
+                    changed = changed.union(apply(h, more));
+                }
+                if !changed.is_empty() {
+                    h.mark_changed(changed);
+                    cx.notify();
+                }
+            });
+        }
+    })
+    .detach();
+}
+
+/// Playback drift below which a re-sent MPRIS position is just the
+/// extrapolation of the previous one (players report position ~1×/s).
+const MEDIA_POSITION_TOLERANCE: std::time::Duration = std::time::Duration::from_millis(250);
+
+/// Stores a media update, reporting whether observers must re-render.
+/// Position-only updates that agree with [`MediaState::position_now`] of the
+/// previous state are stored silently: views extrapolate the position
+/// themselves, so they need no notification for a clock that ticks as
+/// predicted.
+fn set_media(slot: &mut Option<MediaState>, mut value: Option<MediaState>) -> bool {
+    let predicted = match (slot.as_ref(), value.as_mut()) {
+        (Some(old), Some(new)) => {
+            let expected = old.position_now(new.position_at);
+            let drift = expected.abs_diff(new.position);
+            drift <= MEDIA_POSITION_TOLERANCE && {
+                let position = new.position;
+                let at = new.position_at;
+                new.position = old.position;
+                new.position_at = old.position_at;
+                let unchanged = *new == *old;
+                new.position = position;
+                new.position_at = at;
+                unchanged
+            }
+        }
+        _ => false,
+    };
+    if predicted {
+        *slot = value;
+        return false;
+    }
+    set(slot, value)
+}
+
+/// Replaces `slot` with `value`, reporting whether it differed.
+fn set<T: PartialEq>(slot: &mut T, value: T) -> bool {
+    if *slot == value {
+        return false;
+    }
+    *slot = value;
+    true
+}
+
+/// Applies one native delta and identifies only the data it changed.
+/// The caller combines these domains before notifying; events themselves
+/// must remain ordered rather than being replaced by the newest message.
+fn apply_compositor(hub: &mut Hub, event: CompositorEvent) -> Domains {
+    let (source, changed) = match event {
+        CompositorEvent::Navigation { monitor, model } => {
+            use std::collections::hash_map::Entry;
+            let changed = match hub.navigation.entry(monitor) {
+                Entry::Occupied(mut entry) => set(entry.get_mut(), model),
+                Entry::Vacant(entry) => { entry.insert(model); true }
+            };
+            (Domains::NAVIGATION, changed)
+        }
+        CompositorEvent::FocusedClient(client) => (Domains::FOCUS, set(&mut hub.focused, client)),
+        CompositorEvent::Clients(clients) => (Domains::CLIENTS, set(&mut hub.clients, clients)),
+        CompositorEvent::Keymode(mode) => (Domains::KEYBOARD, set(&mut hub.keymode, mode)),
+        CompositorEvent::KeyboardLayout(layout) => (Domains::KEYBOARD, set(&mut hub.keyboard_layout, layout)),
+        CompositorEvent::Monitors(_) => return Domains::NONE,
+    };
+    if changed { source } else { Domains::NONE }
+}
+
+/// Starts every service actor and installs the hub as a global.
+pub fn init_hub(cx: &mut App) -> Entity<Hub> {
+    crate::productivity::init(cx);
+    crate::recorder::init(cx);
+    crate::wallpaper::init_theme_sync(cx);
+    crate::wallpaper::init_login_share(cx);
+    crate::state::init_app_theme_sync(cx);
+    crate::font_sync::init_font_sync(cx);
+    crate::theme_auto::init(cx);
+    crate::state::init_language(cx);
+    crate::plugins::external::watch(cx);
+    crate::plugins::lifecycle::init(cx);
+    let media = mandara_services::spawn_media_service();
+    let network = mandara_services::spawn_network_service();
+    let bluetooth = mandara_services::spawn_bluetooth_service();
+    let audio = mandara_services::spawn_audio_service();
+    let notifications = mandara_services::spawn_notification_service();
+    let compositor = mandara_compositor::connect();
+
+    let hub = cx.new(|_| Hub {
+        media_service: Some(media.clone()),
+        network_service: Some(network.clone()),
+        bluetooth_service: Some(bluetooth.clone()),
+        audio_service: Some(audio.clone()),
+        notification_service: Some(notifications.clone()),
+        compositor: compositor.clone(),
+        ..Default::default()
+    });
+    cx.set_global(GlobalHub(hub.clone()));
+    crate::outputs::watch_focused_monitor(&hub, cx);
+
+    pump(hub.clone(), media.updates.clone(), Domains::MEDIA, |h, s| set_media(&mut h.media, s), cx);
+    pump(hub.clone(), network.updates.clone(), Domains::NETWORK, |h, s| set(&mut h.network, s), cx);
+    pump(hub.clone(), bluetooth.updates.clone(), Domains::BLUETOOTH, |h, s| set(&mut h.bluetooth, s), cx);
+    pump(hub.clone(), audio.updates.clone(), Domains::AUDIO, |h, s| set(&mut h.audio, s), cx);
+    pump(hub.clone(), notifications.updates.clone(), Domains::NOTIFICATIONS, |h, s| set(&mut h.notifications, s), cx);
+    let resources = cx.new(|_| SystemSampler::default());
+    cx.set_global(GlobalResources(resources));
+
+    // Plugin-owned services start and stop with their plugin.
+    sync_plugin_services(&hub, cx);
+    let services_hub = hub.clone();
+    cx.observe(&crate::state::config(cx), move |_, cx| sync_plugin_services(&services_hub, cx)).detach();
+
+    // Weather: start when first placed; follow location / unit changes.
+    ensure_weather(&hub, cx);
+    let weather_hub = hub.clone();
+    cx.observe(&crate::state::config(cx), move |_, cx| ensure_weather(&weather_hub, cx)).detach();
+
+    if let Some(backend) = compositor {
+        tracing::info!("compositor: {:?}", backend.kind());
+        let hub = hub.clone();
+        cx.spawn(async move |cx| {
+            let (snapshot, events) = cx.background_executor().spawn(async move { initial::load(backend.as_ref()) }).await;
+            cx.update(|cx| {
+                hub.update(cx, |hub, cx| {
+                    snapshot.install(hub);
+                    hub.mark_changed(Domains::NAVIGATION.union(Domains::FOCUS).union(Domains::CLIENTS));
+                    cx.notify();
+                });
+                pump_events(hub, events, apply_compositor, cx);
+            });
+        }).detach();
+    }
+    crate::osd::init(&hub, cx);
+    // Notification popups, privacy monitor, event sounds, auto-DND.
+    crate::alerts::init(cx);
+    crate::plugins::sound_themes::init(cx);
+    crate::toasts::init(cx);
+    crate::update_watch::init(cx);
+    crate::night_light::init(cx);
+    crate::plugins::displays::init(cx);
+    hub
+}
+
+/// Plugins that show the CPU / memory sampler.
+const SAMPLER_PLUGINS: &[&str] = &[crate::plugins::resources::ID, crate::plugins::processes::ID];
+
+/// Which plugin-owned hub services should run.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct PluginServices {
+    /// Clipboard history (the clipboard plugin).
+    pub clipboard: bool,
+    /// CPU / memory sampler ([`SAMPLER_PLUGINS`]).
+    pub sampler: bool,
+    /// Weather requests: the weather plugin on, weather not switched off,
+    /// and the forecast shown somewhere (bar, sidebar, desktop clock).
+    pub weather: bool,
+}
+
+impl PluginServices {
+    /// Start a shared service only when an enabled placement actually uses its data.
+    pub fn wanted(registry: &mandara_plugins::PluginRegistry, cfg: &mandara_config::ShellConfig) -> Self {
+        let on = |id: &str| registry.is_enabled(id, &cfg.plugins);
+        let weather_id = crate::plugins::weather::ID;
+        let weather_shown = !cfg.plugin_places(weather_id).is_empty()
+            || (cfg.wallpaper.desktop_clock && cfg.wallpaper.show_date && cfg.wallpaper.show_weather)
+            || cfg.desktop.widgets.painted().any(|w| w.kind.uses_weather());
+        Self {
+            clipboard: on(crate::plugins::clipboard::ID),
+            sampler: SAMPLER_PLUGINS.iter().any(|id| on(id)),
+            weather: cfg.weather.enabled && on(weather_id) && weather_shown,
+        }
+    }
+}
+
+/// Starts or stops the services owned by one plugin as it is switched on or
+/// off (or removed), so an off plugin keeps nothing running.
+fn sync_plugin_services(hub: &Entity<Hub>, cx: &mut App) {
+    let want = {
+        let cfg = crate::state::config(cx).read(cx).snapshot();
+        match cx.try_global::<mandara_plugins::PluginRegistry>() {
+            Some(registry) => PluginServices::wanted(registry, &cfg),
+            None => PluginServices { clipboard: true, sampler: true, weather: true },
+        }
+    };
+    let (want_clipboard, want_sampler) = (want.clipboard, want.sampler);
+    match (hub.read(cx).clipboard_service.is_some(), want_clipboard) {
+        (false, true) => start_clipboard(hub, cx),
+        (true, false) => hub.update(cx, |h, cx| {
+            // Dropping the last handle ends the actor; its watcher thread
+            // follows at its next wake-up.
+            h.clipboard_service = None;
+            h.clipboard = Default::default();
+            h.mark_changed(Domains::CLIPBOARD);
+            cx.notify();
+        }),
+        _ => {}
+    }
+    match (hub.read(cx).sampler_task.is_some(), want_sampler) {
+        (false, true) => {
+            let task = sampler_loop(hub.clone(), cx);
+            hub.update(cx, |h, _| h.sampler_task = Some(task));
+        }
+        (true, false) => hub.update(cx, |h, _| h.sampler_task = None),
+        _ => {}
+    }
+}
+
+thread_local! {
+    /// The clipboard history started once already this session (so turning
+    /// the plugin back on doesn't apply "clear on start" again).
+    static CLIPBOARD_STARTED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+fn start_clipboard(hub: &Entity<Hub>, cx: &mut App) {
+    let mut config = crate::state::config(cx).read(cx).get().clipboard.clone();
+    if CLIPBOARD_STARTED.with(|s| s.replace(true)) {
+        config.clear_on_start = false;
+    }
+    let service = mandara_services::clipboard::spawn_clipboard_service_with(&config);
+    pump(hub.clone(), service.updates.clone(), Domains::CLIPBOARD, |h, s| set(&mut h.clipboard, s), cx);
+    // Notify: hooks that configure the service (`plugins::clipboard::init`)
+    // follow the hub.
+    hub.update(cx, |h, cx| {
+        h.clipboard_service = Some(service);
+        h.mark_changed(Domains::CLIPBOARD);
+        cx.notify();
+    });
+}
+
+/// Samples CPU / memory every `refresh_ms` (System resources) until the
+/// returned task is dropped. Sampling reads two small procfs files: a timer
+/// on the shared background executor replaces a dedicated sleeping thread.
+fn sampler_loop(hub: Entity<Hub>, cx: &mut App) -> gpui::Task<()> {
+    let resources = resources_entity(cx);
+    cx.spawn(async move |cx: &mut AsyncApp| {
+        let bg = cx.background_executor().clone();
+        let mut sampler = SystemSampler::default();
+        loop {
+            sampler = bg
+                .spawn(async move {
+                    sampler.sample();
+                    sampler
+                })
+                .await;
+            let sample = sampler.clone();
+            // Mirror into `Hub::resources` for readers, but notify only the
+            // dedicated entity's observers.
+            hub.update(cx, |h, _| h.resources = sample.clone());
+            resources.update(cx, |r, cx| {
+                if set(r, sample) {
+                    cx.notify();
+                }
+            });
+            let every = cx.update(|cx| crate::plugins::resources::sample_every(cx));
+            bg.timer(every).await;
+        }
+    })
+}
+
+fn ensure_weather(hub: &Entity<Hub>, cx: &mut App) {
+    let cfg = crate::state::config(cx).read(cx).snapshot();
+    let wanted = cx.try_global::<mandara_plugins::PluginRegistry>().is_none_or(|r| PluginServices::wanted(r, &cfg).weather);
+    if !cfg.weather.enabled {
+        // "Off: no weather requests at all" — stop the running service
+        // (dropping its handle ends the actor) and forget its forecast.
+        if hub.read(cx).weather_service.is_some() {
+            hub.update(cx, |h, cx| {
+                h.weather_service = None;
+                h.weather = Default::default();
+                h.mark_changed(Domains::WEATHER);
+                cx.notify();
+            });
+            crate::plugins::weather::forget_query(cx);
+        }
+        return;
+    }
+    if !wanted {
+        // Off, removed or shown nowhere: no requests in the background.
+        if hub.read(cx).weather_service.is_some() {
+            hub.update(cx, |h, cx| {
+                h.weather_service = None;
+                h.weather = Default::default();
+                h.mark_changed(Domains::WEATHER);
+                cx.notify();
+            });
+            crate::plugins::weather::forget_query(cx);
+        }
+        return;
+    }
+    let query = crate::plugins::weather::query(&cfg);
+    if let Some(service) = hub.read(cx).weather_service.clone() {
+        if crate::plugins::weather::last_query(cx) != Some(query) {
+            service.send(mandara_services::WeatherCommand::Configure(query));
+        }
+    } else {
+        let service = mandara_services::spawn_weather_service(query);
+        pump(hub.clone(), service.updates.clone(), Domains::WEATHER, |h, s| set(&mut h.weather, s), cx);
+        hub.update(cx, |h, _| h.weather_service = Some(service));
+    }
+    crate::plugins::weather::remember_query(query, cx);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mandara_config::ShellConfig;
+    use mandara_plugins::PluginRegistry;
+
+    fn registry() -> PluginRegistry {
+        let mut r = PluginRegistry::default();
+        crate::plugins::register_builtin(&mut r);
+        r
+    }
+
+    #[test]
+    fn compositor_deltas_invalidate_only_their_own_data() {
+        let mut hub = Hub::default();
+        let navigation = || CompositorEvent::Navigation { monitor: "DP-1".into(), model: NavigationModel::Workspaces { workspaces: Vec::new() } };
+        assert_eq!(apply_compositor(&mut hub, navigation()), Domains::NAVIGATION);
+        assert_eq!(apply_compositor(&mut hub, navigation()), Domains::NONE);
+        let focused = || CompositorEvent::FocusedClient(Some(ClientInfo { id: 1, title: "Editor".into(), ..Default::default() }));
+        assert_eq!(apply_compositor(&mut hub, focused()), Domains::FOCUS);
+        assert_eq!(apply_compositor(&mut hub, focused()), Domains::NONE);
+        assert_eq!(apply_compositor(&mut hub, CompositorEvent::KeyboardLayout("English".into())), Domains::KEYBOARD);
+        assert_eq!(apply_compositor(&mut hub, CompositorEvent::Keymode("resize".into())), Domains::KEYBOARD);
+        assert_eq!(apply_compositor(&mut hub, CompositorEvent::Clients(vec![ClientInfo { id: 1, ..Default::default() }])), Domains::CLIENTS);
+    }
+
+    #[test]
+    fn predicted_media_positions_keep_the_new_timestamp_without_invalidating_metadata() {
+        let now = std::time::Instant::now();
+        let mut old = MediaState::default();
+        old.status = mandara_services::PlaybackStatus::Playing;
+        old.title = "Track".into();
+        old.position = std::time::Duration::from_secs(10);
+        old.position_at = now;
+        let mut next = old.clone();
+        next.position = std::time::Duration::from_secs(12);
+        next.position_at = now + std::time::Duration::from_secs(2);
+        let next_at = next.position_at;
+        let mut slot = Some(old);
+        assert!(!set_media(&mut slot, Some(next)));
+        let state = slot.as_ref().unwrap();
+        assert_eq!(state.title, "Track");
+        assert_eq!(state.position, std::time::Duration::from_secs(12));
+        assert_eq!(state.position_at, next_at);
+    }
+
+    #[test]
+    fn real_media_seeks_and_metadata_changes_still_invalidate_views() {
+        let mut old = MediaState::default();
+        old.status = mandara_services::PlaybackStatus::Playing;
+        old.title = "First".into();
+        let mut seek = old.clone();
+        seek.position = MEDIA_POSITION_TOLERANCE * 2;
+        let mut slot = Some(old.clone());
+        assert!(set_media(&mut slot, Some(seek)));
+        let mut changed = old.clone();
+        changed.title = "Second".into();
+        let mut slot = Some(old);
+        assert!(set_media(&mut slot, Some(changed)));
+        assert_eq!(slot.unwrap().title, "Second");
+    }
+
+    #[test]
+    fn off_plugins_run_no_hub_services() {
+        let r = registry();
+        let mut c = ShellConfig::default();
+        assert_eq!(PluginServices::wanted(&r, &c), PluginServices { clipboard: true, sampler: true, weather: true });
+        for id in [crate::plugins::clipboard::ID, crate::plugins::resources::ID, crate::plugins::processes::ID] {
+            c.plugins.disabled.push(id.into());
+        }
+        let w = PluginServices::wanted(&r, &c);
+        assert!(!w.clipboard && !w.sampler, "{w:?}");
+        // Removing weather stops requests even for the desktop clock's line.
+        c.wallpaper.desktop_clock = true;
+        c.wallpaper.show_date = true;
+        c.wallpaper.show_weather = true;
+        mandara_plugins::lifecycle::remove(&mut c, crate::plugins::weather::ID, "Weather").unwrap();
+        assert!(!PluginServices::wanted(&r, &c).weather);
+        mandara_plugins::lifecycle::restore(&mut c, crate::plugins::weather::ID, None);
+        assert!(PluginServices::wanted(&r, &c).weather, "restored live");
+    }
+
+    #[test]
+    fn weather_runs_only_where_it_is_shown() {
+        let r = registry();
+        let mut c = ShellConfig::default();
+        c.wallpaper.show_weather = false;
+        c.take_plugin_places(crate::plugins::weather::ID);
+        assert!(!PluginServices::wanted(&r, &c).weather, "placed nowhere");
+    }
+
+    /// Weather demand follows enabled desktop views as well as the global and plugin switches.
+    #[test]
+    fn desktop_weather_alone_keeps_the_forecast_service_running() {
+        use mandara_config::desktop_widgets::{ClockFace, ClockWidget, DesktopWidget, WeatherWidget, WidgetKind};
+        let r = registry();
+        let mut cfg = ShellConfig::default();
+        cfg.wallpaper.desktop_clock = false;
+        cfg.take_plugin_places(crate::plugins::weather::ID);
+        cfg.desktop.widgets.items.clear();
+        assert!(!PluginServices::wanted(&r, &cfg).weather);
+        cfg.desktop.widgets.add(DesktopWidget { kind: WidgetKind::Weather(WeatherWidget::default()), ..Default::default() });
+        assert!(PluginServices::wanted(&r, &cfg).weather);
+        cfg.desktop.widgets.items[0].enabled = false;
+        assert!(!PluginServices::wanted(&r, &cfg).weather);
+        cfg.desktop.widgets.items[0] = DesktopWidget { kind: WidgetKind::Clock(ClockWidget { face: ClockFace::DayBlock, weather: true, ..Default::default() }), ..Default::default() };
+        assert!(PluginServices::wanted(&r, &cfg).weather);
+        if let WidgetKind::Clock(clock) = &mut cfg.desktop.widgets.items[0].kind { clock.face = ClockFace::Word; }
+        assert!(!PluginServices::wanted(&r, &cfg).weather);
+        cfg.desktop.widgets.items[0] = DesktopWidget { kind: WidgetKind::Weather(WeatherWidget::default()), ..Default::default() };
+        cfg.weather.enabled = false;
+        assert!(!PluginServices::wanted(&r, &cfg).weather);
+        cfg.weather.enabled = true;
+        cfg.plugins.disabled.push(crate::plugins::weather::ID.into());
+        assert!(!PluginServices::wanted(&r, &cfg).weather);
+    }
+}

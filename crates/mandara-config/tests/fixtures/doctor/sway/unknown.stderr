@@ -1,0 +1,8 @@
+00:00:00.003 [INFO] [sway/config.c:422] Loading config from @FIXTURES@/sway/unknown.conf
+00:00:00.003 [INFO] [sway/commands.c:381] Config command: set $mod Mod4
+00:00:00.003 [INFO] [sway/commands.c:404] After replacement: set $mod Mod4
+00:00:00.003 [INFO] [sway/commands.c:381] Config command: frobnicate on
+00:00:00.003 [ERROR] [sway/config.c:814] Error on line 2 'frobnicate on': Unknown/invalid command 'frobnicate' (@FIXTURES@/sway/unknown.conf)
+00:00:00.003 [INFO] [sway/commands.c:381] Config command: bindsym $mod+Return exec foot
+00:00:00.003 [INFO] [sway/commands.c:404] After replacement: bindsym Mod4+Return exec foot
+00:00:00.003 [ERROR] [sway/config.c:440] Error(s) loading config!

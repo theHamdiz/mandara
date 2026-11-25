@@ -1,0 +1,1081 @@
+//! Polkit authentication agent (`org.freedesktop.PolicyKit1.AuthenticationAgent`).
+//!
+//! When an app asks polkit for a privileged action that needs a password,
+//! polkitd calls `BeginAuthentication` on the agent registered for the
+//! user's session. Mandara registers one on the system bus (subject:
+//! `unix-session` with the logind session id) unless another agent already
+//! holds the session — then polkitd refuses and we just log it.
+//!
+//! FreeBSD's polkit tracks sessions with ConsoleKit2 instead: the session
+//! id is the ConsoleKit session's object path
+//! (`GetSessionForUnixProcess`). Without a ConsoleKit session (a login
+//! whose PAM stack doesn't run `pam_ck_connector`), the agent registers
+//! for this process (`unix-process`), which still answers everything the
+//! shell itself asks for (pkexec authenticates for its parent); its setuid
+//! helper lives in `/usr/local/lib/polkit-1`.
+//!
+//! The password is never checked here: it goes to polkit's own helper,
+//! which runs PAM as root and reports the result straight to polkitd. The
+//! helper is reached through the socket-activated
+//! `/run/polkit/agent-helper.socket` (polkit ≥ 126), falling back to the
+//! classic setuid `polkit-agent-helper-1`. Its line protocol:
+//!
+//! ```text
+//! → <user>\n            (socket mode only; setuid mode takes it as argv[1])
+//! → <cookie>\n
+//! ← PAM_PROMPT_ECHO_OFF Password:      answer with "<secret>\n"
+//! ← PAM_PROMPT_ECHO_ON <prompt>        answer with "<text>\n"
+//! ← PAM_ERROR_MSG <text> / PAM_TEXT_INFO <text>
+//! ← SUCCESS | FAILURE
+//! ```
+//!
+//! The UI (a modal dialog in mandara-ui) talks to this actor through
+//! [`PolkitEvent`]s and [`PolkitReply`]s keyed by the request's cookie.
+
+use std::collections::HashMap;
+use std::io::{BufRead, BufReader, Write};
+use std::sync::Arc;
+
+use futures::FutureExt as _;
+use mandara_i18n::t;
+use parking_lot::Mutex;
+use serde::Serialize;
+use crate::actor::send_event;
+use zbus::interface;
+use zbus::zvariant::{OwnedValue, Value};
+use zeroize::Zeroizing;
+
+/// Events (prompts, results) buffered for the UI and replies buffered for
+/// a session; a dialog exchanges a handful of each.
+const EVENT_QUEUE: usize = 64;
+const REPLY_QUEUE: usize = 16;
+/// Helper output lines buffered before the reader thread waits.
+const HELPER_LINE_QUEUE: usize = 32;
+
+/// polkitd's bus name.
+const POLKITD: &str = "org.freedesktop.PolicyKit1";
+/// How long to wait before registering again after a failed attempt.
+const REREGISTER_AFTER: std::time::Duration = std::time::Duration::from_secs(30);
+
+pub const AGENT_PATH: &str = "/org/mandara/PolicyKit1/AuthenticationAgent";
+pub const HELPER_SOCKET: &str = "/run/polkit/agent-helper.socket";
+#[cfg(not(target_os = "freebsd"))]
+pub const HELPER_PATHS: [&str; 3] =
+    ["/usr/lib/polkit-1/polkit-agent-helper-1", "/usr/libexec/polkit-agent-helper-1", "/usr/lib/policykit-1/polkit-agent-helper-1"];
+/// FreeBSD's polkit port (`sysutils/polkit`) installs its setuid helper
+/// under the ports prefix.
+#[cfg(target_os = "freebsd")]
+pub const HELPER_PATHS: [&str; 1] = ["/usr/local/lib/polkit-1/polkit-agent-helper-1"];
+
+/// Someone who may authenticate a request.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct AdminUser {
+    pub uid: u32,
+    pub name: String,
+    /// Full name from GECOS (falls back to `name`).
+    pub display: String,
+}
+
+/// A pending authentication, as shown in the dialog.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AuthRequest {
+    pub cookie: String,
+    pub action_id: String,
+    pub message: String,
+    pub icon_name: String,
+    pub details: Vec<(String, String)>,
+    /// The current user first when eligible.
+    pub users: Vec<AdminUser>,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Outcome {
+    Authorized,
+    Cancelled,
+    Failed,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AgentStatus {
+    Registered { session: String },
+    /// Another agent (polkit-gnome, KDE, hyprpolkitagent…) holds the session.
+    AnotherAgent(String),
+    Disabled,
+    Unavailable(String),
+}
+
+/// Agent → UI.
+#[derive(Clone, Debug, PartialEq)]
+pub enum PolkitEvent {
+    Begin(AuthRequest),
+    /// The helper asks for input (`echo = false`: a password).
+    Prompt { cookie: String, user: String, text: String, echo: bool },
+    Message { cookie: String, text: String, error: bool },
+    /// The last answer was wrong; a fresh prompt follows.
+    Retry { cookie: String, message: String },
+    Close { cookie: String, outcome: Outcome },
+    Status(AgentStatus),
+}
+
+/// UI → agent.
+#[derive(Clone, Debug, PartialEq)]
+pub enum PolkitReply {
+    SelectUser { cookie: String, user: String },
+    /// The typed answer; wiped (spare capacity included) when dropped.
+    Answer { cookie: String, text: Zeroizing<String> },
+    Cancel { cookie: String },
+}
+
+impl PolkitReply {
+    fn cookie(&self) -> &str {
+        match self {
+            PolkitReply::SelectUser { cookie, .. } | PolkitReply::Answer { cookie, .. } | PolkitReply::Cancel { cookie } => cookie,
+        }
+    }
+}
+
+/// Handle held by the UI.
+#[derive(Clone)]
+pub struct PolkitAgent {
+    pub events: async_channel::Receiver<PolkitEvent>,
+    replies: async_channel::Sender<PolkitReply>,
+    /// Closed by [`PolkitAgent::stop`]: the agent drops its bus
+    /// connection, which unregisters it from polkit.
+    stop: async_channel::Sender<()>,
+    /// Set by [`PolkitAgent::stop`] (shared by every clone).
+    stopped: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl PolkitAgent {
+    /// A handle over arbitrary channels (previews and tests).
+    pub fn from_channels(events: async_channel::Receiver<PolkitEvent>, replies: async_channel::Sender<PolkitReply>) -> Self {
+        Self { events, replies, stop: async_channel::bounded(1).0, stopped: Arc::default() }
+    }
+
+    pub fn reply(&self, reply: PolkitReply) {
+        let _ = self.replies.try_send(reply);
+    }
+
+    /// Unregisters the agent (General → Authentication dialogs off);
+    /// pending requests are left to polkit, which cancels them.
+    pub fn stop(&self) {
+        self.stopped.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.stop.close();
+    }
+
+    /// Whether [`PolkitAgent::stop`] was called on any clone.
+    pub fn is_stopped(&self) -> bool {
+        self.stopped.load(std::sync::atomic::Ordering::Relaxed)
+    }
+}
+
+// ───────────────────────────── helper protocol ─────────────────────────────
+
+/// One line from `polkit-agent-helper-1`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum HelperLine {
+    Prompt { text: String, echo: bool },
+    Error(String),
+    Info(String),
+    Success,
+    Failure,
+    Unknown(String),
+}
+
+/// Reverses `g_strescape` (`\n`, `\t`, `\\`, `\"`, octal `\NNN`, …).
+pub fn unescape(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] != b'\\' || i + 1 == bytes.len() {
+            out.push(bytes[i]);
+            i += 1;
+            continue;
+        }
+        i += 1;
+        match bytes[i] {
+            b'0'..=b'7' => {
+                let mut v: u32 = 0;
+                let mut n = 0;
+                while n < 3 && i < bytes.len() && (b'0'..=b'7').contains(&bytes[i]) {
+                    v = v * 8 + (bytes[i] - b'0') as u32;
+                    i += 1;
+                    n += 1;
+                }
+                out.push(v as u8);
+                continue;
+            }
+            b'b' => out.push(8),
+            b'f' => out.push(12),
+            b'n' => out.push(b'\n'),
+            b'r' => out.push(b'\r'),
+            b't' => out.push(b'\t'),
+            b'v' => out.push(11),
+            other => out.push(other),
+        }
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+pub fn parse_helper_line(line: &str) -> HelperLine {
+    let line = line.trim_end_matches(['\n', '\r']);
+    let rest = |prefix: &str| line.strip_prefix(prefix).map(|r| unescape(r.strip_prefix(' ').unwrap_or(r)));
+    if let Some(text) = rest("PAM_PROMPT_ECHO_OFF") {
+        HelperLine::Prompt { text, echo: false }
+    } else if let Some(text) = rest("PAM_PROMPT_ECHO_ON") {
+        HelperLine::Prompt { text, echo: true }
+    } else if let Some(text) = rest("PAM_ERROR_MSG") {
+        HelperLine::Error(text)
+    } else if let Some(text) = rest("PAM_TEXT_INFO") {
+        HelperLine::Info(text)
+    } else if line == "SUCCESS" {
+        HelperLine::Success
+    } else if line == "FAILURE" {
+        HelperLine::Failure
+    } else {
+        HelperLine::Unknown(line.to_string())
+    }
+}
+
+/// A running helper: its output, its input, and how to stop it.
+pub struct HelperConn {
+    pub reader: Box<dyn BufRead + Send>,
+    pub writer: Box<dyn Write + Send>,
+    pub kill: Box<dyn FnMut() + Send>,
+}
+
+/// Starts helpers (the real one, or a mock in tests).
+pub trait HelperSpawner: Send + Sync {
+    fn spawn(&self, user: &str, cookie: &str) -> std::io::Result<HelperConn>;
+}
+
+/// polkit's helper: socket-activated first, setuid binary second.
+pub struct SystemHelper;
+
+impl HelperSpawner for SystemHelper {
+    fn spawn(&self, user: &str, cookie: &str) -> std::io::Result<HelperConn> {
+        use std::os::unix::net::UnixStream;
+        match UnixStream::connect(HELPER_SOCKET) {
+            Ok(stream) => {
+                let mut writer = stream.try_clone()?;
+                writeln!(writer, "{user}")?;
+                writeln!(writer, "{cookie}")?;
+                writer.flush()?;
+                let reader = BufReader::new(stream.try_clone()?);
+                return Ok(HelperConn {
+                    reader: Box::new(reader),
+                    writer: Box::new(writer),
+                    kill: Box::new(move || {
+                        let _ = stream.shutdown(std::net::Shutdown::Both);
+                    }),
+                });
+            }
+            Err(err) => tracing::debug!("polkit: {HELPER_SOCKET} unavailable ({err}); trying the setuid helper"),
+        }
+        let path = HELPER_PATHS
+            .iter()
+            .find(|p| std::path::Path::new(p).exists())
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "polkit-agent-helper-1 not found"))?;
+        let mut child = std::process::Command::new(path)
+            .arg(user)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .spawn()?;
+        let mut stdin = child.stdin.take().ok_or_else(|| std::io::Error::other("helper stdin"))?;
+        let stdout = child.stdout.take().ok_or_else(|| std::io::Error::other("helper stdout"))?;
+        writeln!(stdin, "{cookie}")?;
+        stdin.flush()?;
+        let mut child = Some(child);
+        Ok(HelperConn {
+            reader: Box::new(BufReader::new(stdout)),
+            writer: Box::new(stdin),
+            kill: Box::new(move || {
+                let Some(mut child) = child.take() else { return };
+                let _ = child.kill();
+                // Reap off the caller's thread (an executor thread).
+                let _ = std::thread::Builder::new().name("mandara-polkit-reap".into()).spawn(move || {
+                    let _ = child.wait();
+                });
+            }),
+        })
+    }
+}
+
+/// Reads helper lines on a thread (`None` = the helper hung up).
+fn read_lines(mut reader: Box<dyn BufRead + Send>) -> async_channel::Receiver<Option<HelperLine>> {
+    let (tx, rx) = async_channel::bounded(HELPER_LINE_QUEUE);
+    let _ = std::thread::Builder::new().name("mandara-polkit-helper".into()).spawn(move || {
+        loop {
+            let mut line = String::new();
+            match reader.read_line(&mut line) {
+                Ok(0) | Err(_) => {
+                    let _ = tx.send_blocking(None);
+                    break;
+                }
+                Ok(_) => {
+                    if tx.send_blocking(Some(parse_helper_line(&line))).is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+    });
+    rx
+}
+
+/// Drives one request to its end: runs the helper for the chosen user,
+/// relays prompts and answers, retries after a wrong password, follows user
+/// switches, and stops on cancel.
+pub async fn run_session(
+    spawner: &dyn HelperSpawner,
+    events: &async_channel::Sender<PolkitEvent>,
+    replies: &async_channel::Receiver<PolkitReply>,
+    cookie: &str,
+    mut user: String,
+) -> Outcome {
+    let close = async |outcome| {
+        send_event(events, PolkitEvent::Close { cookie: cookie.to_string(), outcome }, "polkit").await;
+        outcome
+    };
+    loop {
+        let HelperConn { reader, mut writer, mut kill } = match spawner.spawn(&user, cookie) {
+            Ok(conn) => conn,
+            Err(err) => {
+                tracing::error!("polkit: cannot start the authentication helper: {err}");
+                send_event(events, PolkitEvent::Message { cookie: cookie.into(), text: t("The authentication helper is not available").into(), error: true }, "polkit").await;
+                return close(Outcome::Failed).await;
+            }
+        };
+        let lines = read_lines(reader);
+        let mut answered = false;
+        let restart = loop {
+            futures::select! {
+                line = lines.recv().fuse() => match line.ok().flatten() {
+                    Some(HelperLine::Prompt { text, echo }) => {
+                        // PAM waits for an answer nobody could give: end the session.
+                        if !send_event(events, PolkitEvent::Prompt { cookie: cookie.into(), user: user.clone(), text, echo }, "polkit").await {
+                            kill();
+                            return close(Outcome::Failed).await;
+                        }
+                    }
+                    Some(HelperLine::Error(text)) => {
+                        send_event(events, PolkitEvent::Message { cookie: cookie.into(), text, error: true }, "polkit").await;
+                    }
+                    Some(HelperLine::Info(text)) => {
+                        send_event(events, PolkitEvent::Message { cookie: cookie.into(), text, error: false }, "polkit").await;
+                    }
+                    Some(HelperLine::Success) => {
+                        kill();
+                        return close(Outcome::Authorized).await;
+                    }
+                    Some(HelperLine::Unknown(l)) => tracing::debug!("polkit: unexpected helper line {l:?}"),
+                    Some(HelperLine::Failure) | None => {
+                        kill();
+                        if !answered {
+                            // It failed before asking anything: nothing a
+                            // retry could fix (broken PAM, bad cookie).
+                            tracing::warn!("polkit: the helper failed before prompting");
+                            return close(Outcome::Failed).await;
+                        }
+                        send_event(events, PolkitEvent::Retry { cookie: cookie.into(), message: t("That didn't work — try again").into() }, "polkit").await;
+                        break true;
+                    }
+                },
+                reply = replies.recv().fuse() => match reply {
+                    Ok(PolkitReply::Answer { text, .. }) => {
+                        let ok = writeln!(writer, "{}", text.as_str()).and_then(|_| writer.flush()).is_ok();
+                        drop(text);
+                        answered |= ok;
+                    }
+                    Ok(PolkitReply::SelectUser { user: next, .. }) => {
+                        kill();
+                        user = next;
+                        break true;
+                    }
+                    Ok(PolkitReply::Cancel { .. }) | Err(_) => {
+                        kill();
+                        return close(Outcome::Cancelled).await;
+                    }
+                },
+            }
+        };
+        if !restart {
+            return close(Outcome::Failed).await;
+        }
+    }
+}
+
+// ─────────────────────────────── identities ───────────────────────────────
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Identity {
+    User(u32),
+    Group(u32),
+}
+
+/// Parses one `(sa{sv})` polkit identity.
+pub fn parse_identity(kind: &str, details: &HashMap<String, OwnedValue>) -> Option<Identity> {
+    let id = |key: &str| details.get(key).and_then(|v| u32::try_from(v).ok().or_else(|| i32::try_from(v).ok().map(|i| i as u32)));
+    match kind {
+        "unix-user" => id("uid").map(Identity::User),
+        "unix-group" => id("gid").map(Identity::Group),
+        _ => None,
+    }
+}
+
+/// Expands identities into users (groups → members, incl. primary-group
+/// members), current user first, deduplicated.
+pub fn expand_identities(identities: &[Identity], passwd: &str, group: &str, me: u32) -> Vec<AdminUser> {
+    struct Pw {
+        uid: u32,
+        gid: u32,
+        name: String,
+        display: String,
+    }
+    let users: Vec<Pw> = passwd
+        .lines()
+        .filter(|l| !l.starts_with('#'))
+        .filter_map(|l| {
+            let f: Vec<&str> = l.split(':').collect();
+            if f.len() < 7 {
+                return None;
+            }
+            let full = f[4].split(',').next().unwrap_or("").trim();
+            Some(Pw { uid: f[2].parse().ok()?, gid: f[3].parse().ok()?, name: f[0].into(), display: if full.is_empty() { f[0].into() } else { full.into() } })
+        })
+        .collect();
+    let members = |gid: u32| -> Vec<String> {
+        group
+            .lines()
+            .filter_map(|l| {
+                let f: Vec<&str> = l.split(':').collect();
+                (f.len() >= 4 && f[2].parse::<u32>().ok() == Some(gid)).then(|| f[3].split(',').filter(|m| !m.is_empty()).map(String::from).collect::<Vec<_>>())
+            })
+            .flatten()
+            .collect()
+    };
+    let mut out: Vec<AdminUser> = Vec::new();
+    let mut push = |pw: &Pw| {
+        if !out.iter().any(|u| u.uid == pw.uid) {
+            out.push(AdminUser { uid: pw.uid, name: pw.name.clone(), display: pw.display.clone() });
+        }
+    };
+    for identity in identities {
+        match *identity {
+            Identity::User(uid) => users.iter().filter(|u| u.uid == uid).for_each(&mut push),
+            Identity::Group(gid) => {
+                let names = members(gid);
+                users.iter().filter(|u| u.gid == gid || names.contains(&u.name)).for_each(&mut push);
+            }
+        }
+    }
+    if let Some(i) = out.iter().position(|u| u.uid == me) {
+        let mine = out.remove(i);
+        out.insert(0, mine);
+    }
+    out
+}
+
+/// Users and group members that `/etc/passwd` and `/etc/group` lack but NSS
+/// resolves (sssd, LDAP, systemd-homed): identities with no match in `found`.
+fn nss_users(identities: &[Identity], found: &[AdminUser]) -> Vec<AdminUser> {
+    let mut out: Vec<AdminUser> = Vec::new();
+    let mut add = |user: Option<AdminUser>| {
+        if let Some(u) = user
+            && !found.iter().chain(out.iter()).any(|f| f.uid == u.uid)
+        {
+            out.push(u);
+        }
+    };
+    for identity in identities {
+        match *identity {
+            Identity::User(uid) => add(nss_user_by_uid(uid)),
+            Identity::Group(gid) => {
+                for member in nss_group_members(gid) {
+                    add(nss_user_by_name(&member));
+                }
+            }
+        }
+    }
+    out
+}
+
+fn passwd_entry(pw: &libc::passwd) -> AdminUser {
+    // SAFETY: getpw*_r filled `pw` with NUL-terminated strings in its buffer.
+    let (name, gecos) = unsafe { (std::ffi::CStr::from_ptr(pw.pw_name).to_string_lossy().into_owned(), if pw.pw_gecos.is_null() { String::new() } else { std::ffi::CStr::from_ptr(pw.pw_gecos).to_string_lossy().into_owned() }) };
+    let full = gecos.split(',').next().unwrap_or("").trim().to_string();
+    AdminUser { uid: pw.pw_uid, display: if full.is_empty() { name.clone() } else { full }, name }
+}
+
+/// First buffer for a `getpw*_r` lookup (glibc's usual `_SC_GETPW_R_SIZE_MAX`).
+const NSS_PASSWD_BUF: usize = 4096;
+/// First buffer for `getgrgid_r`: large groups list many members.
+const NSS_GROUP_BUF: usize = 16384;
+/// Largest buffer an NSS lookup grows to on `ERANGE` before giving up.
+const NSS_BUF_MAX: usize = 1 << 20;
+
+/// Runs a reentrant NSS lookup, doubling its buffer while it reports
+/// `ERANGE` (up to [`NSS_BUF_MAX`]). `lookup` returns the call's error code
+/// or the record (`None` when there is none).
+fn nss_lookup<T>(start: usize, what: &str, mut lookup: impl FnMut(&mut [libc::c_char]) -> Result<Option<T>, libc::c_int>) -> Option<T> {
+    let mut buf = vec![0 as libc::c_char; start];
+    loop {
+        match lookup(&mut buf) {
+            Ok(found) => return found,
+            Err(libc::ERANGE) if buf.len() < NSS_BUF_MAX => buf.resize(buf.len() * 2, 0),
+            Err(rc) => {
+                tracing::debug!("polkit: NSS lookup of {what} failed: {}", std::io::Error::from_raw_os_error(rc));
+                return None;
+            }
+        }
+    }
+}
+
+fn nss_user_by_uid(uid: u32) -> Option<AdminUser> {
+    nss_lookup(NSS_PASSWD_BUF, "a user", |buf| {
+        let mut pw = std::mem::MaybeUninit::<libc::passwd>::uninit();
+        let mut result: *mut libc::passwd = std::ptr::null_mut();
+        // SAFETY: the buffers outlive the call; `result` is checked before use.
+        let rc = unsafe { libc::getpwuid_r(uid, pw.as_mut_ptr(), buf.as_mut_ptr(), buf.len(), &mut result) };
+        if rc != 0 {
+            return Err(rc);
+        }
+        // SAFETY: on success `pw` is initialised and points into `buf`.
+        Ok((!result.is_null()).then(|| passwd_entry(unsafe { &*result })))
+    })
+}
+
+fn nss_user_by_name(name: &str) -> Option<AdminUser> {
+    let name = std::ffi::CString::new(name).ok()?;
+    nss_lookup(NSS_PASSWD_BUF, "a user", |buf| {
+        let mut pw = std::mem::MaybeUninit::<libc::passwd>::uninit();
+        let mut result: *mut libc::passwd = std::ptr::null_mut();
+        // SAFETY: as in `nss_user_by_uid`.
+        let rc = unsafe { libc::getpwnam_r(name.as_ptr(), pw.as_mut_ptr(), buf.as_mut_ptr(), buf.len(), &mut result) };
+        if rc != 0 {
+            return Err(rc);
+        }
+        // SAFETY: as in `nss_user_by_uid`.
+        Ok((!result.is_null()).then(|| passwd_entry(unsafe { &*result })))
+    })
+}
+
+fn nss_group_members(gid: u32) -> Vec<String> {
+    nss_lookup(NSS_GROUP_BUF, "a group", |buf| {
+        let mut gr = std::mem::MaybeUninit::<libc::group>::uninit();
+        let mut result: *mut libc::group = std::ptr::null_mut();
+        // SAFETY: the buffers outlive the call; `result` is checked before use.
+        let rc = unsafe { libc::getgrgid_r(gid, gr.as_mut_ptr(), buf.as_mut_ptr(), buf.len(), &mut result) };
+        if rc != 0 {
+            return Err(rc);
+        }
+        if result.is_null() {
+            return Ok(None);
+        }
+        let mut members = Vec::new();
+        // SAFETY: `gr_mem` is a NULL-terminated array of C strings inside `buf`.
+        unsafe {
+            let mut p = (*result).gr_mem;
+            while !p.is_null() && !(*p).is_null() {
+                members.push(std::ffi::CStr::from_ptr(*p).to_string_lossy().into_owned());
+                p = p.add(1);
+            }
+        }
+        Ok(Some(members))
+    })
+    .unwrap_or_default()
+}
+
+// ─────────────────────────────── D-Bus side ───────────────────────────────
+
+struct Shared {
+    events: async_channel::Sender<PolkitEvent>,
+    sessions: Mutex<HashMap<String, async_channel::Sender<PolkitReply>>>,
+    spawner: Arc<dyn HelperSpawner>,
+}
+
+struct Agent {
+    shared: Arc<Shared>,
+}
+
+#[derive(Debug, zbus::DBusError)]
+#[zbus(prefix = "org.freedesktop.PolicyKit1.Error")]
+enum PolkitError {
+    #[zbus(error)]
+    ZBus(zbus::Error),
+    Failed(String),
+    Cancelled(String),
+}
+
+#[interface(name = "org.freedesktop.PolicyKit1.AuthenticationAgent")]
+impl Agent {
+    async fn begin_authentication(
+        &self,
+        #[zbus(connection)] conn: &zbus::Connection,
+        #[zbus(header)] header: zbus::message::Header<'_>,
+        action_id: String,
+        message: String,
+        icon_name: String,
+        details: HashMap<String, String>,
+        cookie: String,
+        identities: Vec<(String, HashMap<String, OwnedValue>)>,
+    ) -> Result<(), PolkitError> {
+        if !crate::actor::caller_is(conn, &header, POLKITD).await {
+            return Err(PolkitError::Failed("only polkitd may start an authentication".into()));
+        }
+        let parsed: Vec<Identity> = identities.iter().filter_map(|(k, d)| parse_identity(k, d)).collect();
+        let me = rustix::process::getuid().as_raw();
+        let users = crate::runtime::unblock(move || {
+            let passwd = std::fs::read_to_string("/etc/passwd").unwrap_or_default();
+            let group = std::fs::read_to_string("/etc/group").unwrap_or_default();
+            let mut users = expand_identities(&parsed, &passwd, &group, me);
+            // Users only NSS knows (sssd, LDAP, systemd-homed).
+            for extra in nss_users(&parsed, &users) {
+                users.push(extra);
+            }
+            if let Some(i) = users.iter().position(|u| u.uid == me) {
+                let mine = users.remove(i);
+                users.insert(0, mine);
+            }
+            users
+        })
+        .await;
+        let Some(first) = users.first().map(|u| u.name.clone()) else {
+            return Err(PolkitError::Failed("no user can authenticate this request".into()));
+        };
+        tracing::info!("polkit: authentication requested for {action_id} ({} candidate user(s))", users.len());
+        let (tx, rx) = async_channel::bounded(REPLY_QUEUE);
+        {
+            // A cookie names one request: a duplicate must not replace the
+            // first session's channel (nor have its end remove it).
+            let mut sessions = self.shared.sessions.lock();
+            if sessions.contains_key(&cookie) {
+                return Err(PolkitError::Failed("an authentication with this cookie is already running".into()));
+            }
+            sessions.insert(cookie.clone(), tx);
+        }
+        let mut details: Vec<(String, String)> = details.into_iter().collect();
+        details.sort();
+        send_event(&self.shared.events, PolkitEvent::Begin(AuthRequest { cookie: cookie.clone(), action_id, message, icon_name, details, users }), "polkit").await;
+        let spawner = self.shared.spawner.clone();
+        let events = self.shared.events.clone();
+        let outcome = run_session(spawner.as_ref(), &events, &rx, &cookie, first).await;
+        self.shared.sessions.lock().remove(&cookie);
+        match outcome {
+            Outcome::Authorized => Ok(()),
+            Outcome::Cancelled => Err(PolkitError::Cancelled("Authentication was cancelled".into())),
+            Outcome::Failed => Err(PolkitError::Failed("Authentication failed".into())),
+        }
+    }
+
+    async fn cancel_authentication(&self, #[zbus(connection)] conn: &zbus::Connection, #[zbus(header)] header: zbus::message::Header<'_>, cookie: String) -> Result<(), PolkitError> {
+        if !crate::actor::caller_is(conn, &header, POLKITD).await {
+            return Err(PolkitError::Failed("only polkitd may cancel an authentication".into()));
+        }
+        if let Some(tx) = self.shared.sessions.lock().get(&cookie) {
+            let _ = tx.try_send(PolkitReply::Cancel { cookie: cookie.clone() });
+        }
+        Ok(())
+    }
+}
+
+/// Registers the agent for this session (unless `enabled` is false) and
+/// serves requests on the service runtime.
+pub fn spawn_polkit_agent(enabled: bool) -> PolkitAgent {
+    let (events_tx, events) = async_channel::bounded(EVENT_QUEUE);
+    let (replies, replies_rx) = async_channel::bounded::<PolkitReply>(REPLY_QUEUE);
+    let (stop, stop_rx) = async_channel::bounded::<()>(1);
+    let agent = PolkitAgent { events, replies, stop, stopped: Arc::default() };
+    if !enabled {
+        let _ = events_tx.try_send(PolkitEvent::Status(AgentStatus::Disabled));
+        return agent;
+    }
+    let shared = Arc::new(Shared { events: events_tx.clone(), sessions: Mutex::new(HashMap::new()), spawner: Arc::new(SystemHelper) });
+    // Route UI replies to the session they belong to.
+    {
+        let shared = shared.clone();
+        crate::runtime::spawn("polkit-router", async move {
+            while let Ok(reply) = replies_rx.recv().await {
+                if let Some(tx) = shared.sessions.lock().get(reply.cookie()) {
+                    let _ = tx.try_send(reply);
+                }
+            }
+        });
+    }
+    crate::runtime::spawn("polkit", async move {
+        let conn = match serve(shared).await {
+            Ok(conn) => conn,
+            Err(status) => {
+                tracing::warn!("polkit: authentication agent unavailable: {status:?}");
+                send_event(&events_tx, PolkitEvent::Status(status), "polkit").await;
+                return;
+            }
+        };
+        let mut owners = crate::actor::owner_changes(&conn, POLKITD).await.ok();
+        let mut last: Option<AgentStatus> = None;
+        loop {
+            // A stalled registration must not outlive a stop.
+            let registered = {
+                let mut registering = std::pin::pin!(register(&conn).fuse());
+                futures::select! {
+                    r = registering => Some(r),
+                    _ = stop_rx.recv().fuse() => None,
+                }
+            };
+            let Some(registered) = registered else {
+                // Dropping the connection also undoes a registration polkitd
+                // already accepted.
+                drop(conn);
+                tracing::info!("polkit: authentication agent stopped");
+                send_event(&events_tx, PolkitEvent::Status(AgentStatus::Disabled), "polkit").await;
+                return;
+            };
+            let (status, retry) = match registered {
+                Ok(session) => {
+                    tracing::info!("polkit: authentication agent registered for session {session}");
+                    (AgentStatus::Registered { session }, None)
+                }
+                Err(status) => {
+                    match &status {
+                        AgentStatus::AnotherAgent(msg) => tracing::info!("polkit: not registering — another authentication agent is running ({msg})"),
+                        AgentStatus::Unavailable(msg) => tracing::warn!("polkit: authentication agent unavailable: {msg}"),
+                        _ => {}
+                    }
+                    // Another agent holds the session until polkitd restarts;
+                    // anything else may be transient.
+                    let retry = matches!(status, AgentStatus::Unavailable(_)).then_some(REREGISTER_AFTER);
+                    (status, retry)
+                }
+            };
+            if last.as_ref() != Some(&status) {
+                last = Some(status.clone());
+                send_event(&events_tx, PolkitEvent::Status(status), "polkit").await;
+            }
+            // Serve until stopped; re-register when polkitd comes back (it
+            // forgets agents when it restarts).
+            let again = async {
+                match owners.as_mut() {
+                    Some(owners) => crate::actor::wait_for_owner(owners, retry).await,
+                    None => match retry {
+                        Some(retry) => {
+                            crate::runtime::sleep(retry).await;
+                            true
+                        }
+                        None => false,
+                    },
+                }
+            };
+            futures::select! {
+                _ = stop_rx.recv().fuse() => {
+                    // Dropping the connection makes polkit forget the agent
+                    // (its bus name is gone).
+                    drop(conn);
+                    tracing::info!("polkit: authentication agent stopped");
+                    send_event(&events_tx, PolkitEvent::Status(AgentStatus::Disabled), "polkit").await;
+                    return;
+                }
+                keep_going = again.fuse() => {
+                    if !keep_going {
+                        // Nothing will change: serve until stopped.
+                        let _ = stop_rx.recv().await;
+                        drop(conn);
+                        send_event(&events_tx, PolkitEvent::Status(AgentStatus::Disabled), "polkit").await;
+                        return;
+                    }
+                }
+            }
+        }
+    });
+    agent
+}
+
+/// The bus connection that serves the agent object.
+async fn serve(shared: Arc<Shared>) -> Result<zbus::Connection, AgentStatus> {
+    let unavailable = |e: zbus::Error| AgentStatus::Unavailable(e.to_string());
+    let builder = zbus::connection::Builder::system().and_then(|b| b.serve_at(AGENT_PATH, Agent { shared })).map_err(unavailable)?;
+    crate::runtime::connect(builder).await.map_err(unavailable)
+}
+
+/// Registers the served agent with polkitd for this session.
+async fn register(conn: &zbus::Connection) -> Result<String, AgentStatus> {
+    let unavailable = |e: zbus::Error| AgentStatus::Unavailable(e.to_string());
+    let (kind, subject, session) = agent_subject(conn).await.map_err(unavailable)?;
+    let authority = crate::actor::proxy(conn, POLKITD, "/org/freedesktop/PolicyKit1/Authority", "org.freedesktop.PolicyKit1.Authority").await.map_err(unavailable)?;
+    let locale = std::env::var("LC_ALL").or_else(|_| std::env::var("LANG")).unwrap_or_else(|_| "en_US.UTF-8".into());
+    // polkit declares the object path as a string (`s`), not `o`.
+    match authority.call::<_, _, ()>("RegisterAuthenticationAgent", &((kind, subject), locale.as_str(), AGENT_PATH)).await {
+        Ok(()) => Ok(session),
+        Err(zbus::Error::MethodError(name, msg, _)) if msg.as_deref().is_some_and(|m| m.contains("already exists")) => {
+            Err(AgentStatus::AnotherAgent(msg.unwrap_or_else(|| name.to_string())))
+        }
+        Err(err) => Err(unavailable(err)),
+    }
+}
+
+/// A polkit subject: its kind and details.
+type Subject = (&'static str, HashMap<&'static str, Value<'static>>);
+
+/// `unix-session` with `id`.
+fn session_subject(id: String) -> Subject {
+    ("unix-session", HashMap::from([("session-id", Value::from(id))]))
+}
+
+/// `unix-process` for this process (polkitd reads its start time itself
+/// when it is 0).
+pub fn process_subject(pid: u32, uid: u32) -> Subject {
+    let uid = i32::try_from(uid).unwrap_or(-1);
+    ("unix-process", HashMap::from([("pid", Value::from(pid)), ("start-time", Value::from(0u64)), ("uid", Value::from(uid))]))
+}
+
+/// What the agent registers for, and how it's logged: the logind session.
+#[cfg(not(target_os = "freebsd"))]
+async fn agent_subject(conn: &zbus::Connection) -> zbus::Result<(&'static str, HashMap<&'static str, Value<'static>>, String)> {
+    let session = crate::logind::session_id(conn).await?;
+    let (kind, details) = session_subject(session.clone());
+    Ok((kind, details, session))
+}
+
+/// FreeBSD: the ConsoleKit2 session polkit tracks, else this process.
+#[cfg(target_os = "freebsd")]
+async fn agent_subject(conn: &zbus::Connection) -> zbus::Result<(&'static str, HashMap<&'static str, Value<'static>>, String)> {
+    let pid = std::process::id();
+    let session = async {
+        let manager = crate::actor::proxy(conn, "org.freedesktop.ConsoleKit", "/org/freedesktop/ConsoleKit/Manager", "org.freedesktop.ConsoleKit.Manager").await?;
+        manager.call::<_, _, zbus::zvariant::OwnedObjectPath>("GetSessionForUnixProcess", &(pid,)).await
+    }
+    .await;
+    match session {
+        Ok(path) => {
+            let id = path.as_str().to_string();
+            let (kind, details) = session_subject(id.clone());
+            Ok((kind, details, id))
+        }
+        Err(err) => {
+            tracing::info!("polkit: no ConsoleKit session ({err}); registering for this process");
+            // SAFETY: getuid has no preconditions.
+            let uid = unsafe { libc::getuid() };
+            let (kind, details) = process_subject(pid, uid);
+            Ok((kind, details, format!("process {pid}")))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nss_lookups_grow_their_buffer_on_erange_up_to_a_cap() {
+        let mut sizes = Vec::new();
+        let found = nss_lookup(NSS_PASSWD_BUF, "test", |buf| {
+            sizes.push(buf.len());
+            if buf.len() < 4 * NSS_PASSWD_BUF { Err(libc::ERANGE) } else { Ok(Some(buf.len())) }
+        });
+        assert_eq!(found, Some(4 * NSS_PASSWD_BUF));
+        assert_eq!(sizes, [NSS_PASSWD_BUF, 2 * NSS_PASSWD_BUF, 4 * NSS_PASSWD_BUF]);
+        let mut largest = 0;
+        let never = nss_lookup::<()>(NSS_GROUP_BUF, "test", |buf| {
+            largest = buf.len();
+            Err(libc::ERANGE)
+        });
+        assert_eq!((never, largest), (None, NSS_BUF_MAX), "growth stops at the cap");
+        assert_eq!(nss_lookup::<()>(NSS_PASSWD_BUF, "test", |_| Err(libc::EIO)), None);
+        assert_eq!(nss_lookup::<u8>(NSS_PASSWD_BUF, "test", |_| Ok(None)), None);
+    }
+    use std::os::unix::net::UnixStream;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// General → Authentication dialogs off: no agent is registered and the
+    /// UI learns why; `stop` reaches every clone of a handle.
+    #[test]
+    fn disabled_agent_reports_and_handles_stop() {
+        let agent = spawn_polkit_agent(false);
+        assert!(matches!(agent.events.try_recv(), Ok(PolkitEvent::Status(AgentStatus::Disabled))));
+        let clone = agent.clone();
+        assert!(!clone.is_stopped());
+        agent.stop();
+        assert!(clone.is_stopped(), "stopping one handle stops the agent for all");
+        let (_etx, erx) = async_channel::bounded(1);
+        let (rtx, _rrx) = async_channel::bounded(1);
+        let preview = PolkitAgent::from_channels(erx, rtx);
+        assert!(!preview.is_stopped());
+        preview.stop();
+        assert!(preview.is_stopped());
+    }
+
+    /// The subjects polkitd parses (`a{sv}` with these exact types: `u`
+    /// pid, `t` start time, `i` uid; `s` session id).
+    #[test]
+    fn subjects_carry_polkits_types() {
+        let (kind, d) = process_subject(4242, 1001);
+        assert_eq!(kind, "unix-process");
+        assert_eq!(d["pid"], Value::from(4242u32));
+        assert_eq!(d["start-time"], Value::from(0u64));
+        assert_eq!(d["uid"], Value::from(1001i32));
+        let (kind, d) = session_subject("/org/freedesktop/ConsoleKit/Session2".into());
+        assert_eq!(kind, "unix-session");
+        assert_eq!(d["session-id"], Value::from("/org/freedesktop/ConsoleKit/Session2"));
+        assert_eq!(process_subject(1, u32::MAX).1["uid"], Value::from(-1i32), "an out-of-range uid lets polkitd look it up");
+    }
+
+    #[test]
+    fn parses_helper_lines() {
+        assert_eq!(parse_helper_line("PAM_PROMPT_ECHO_OFF Password: \n"), HelperLine::Prompt { text: "Password: ".into(), echo: false });
+        assert_eq!(parse_helper_line("PAM_PROMPT_ECHO_ON login:"), HelperLine::Prompt { text: "login:".into(), echo: true });
+        assert_eq!(parse_helper_line("PAM_ERROR_MSG Account locked\\nfor 10 minutes"), HelperLine::Error("Account locked\nfor 10 minutes".into()));
+        assert_eq!(parse_helper_line("PAM_TEXT_INFO caf\\303\\251 \\\"x\\\""), HelperLine::Info("café \"x\"".into()));
+        assert_eq!(parse_helper_line("SUCCESS\n"), HelperLine::Success);
+        assert_eq!(parse_helper_line("FAILURE"), HelperLine::Failure);
+        assert_eq!(parse_helper_line("weird"), HelperLine::Unknown("weird".into()));
+    }
+
+    const PASSWD: &str = "root:x:0:0:root:/root:/bin/bash\nlayla:x:1000:1000:Layla Nour,,,:/home/layla:/bin/fish\nsara:x:1001:998::/home/sara:/bin/bash\nbob:x:1002:1002:Bob:/home/bob:/bin/sh\n";
+    const GROUP: &str = "root:x:0:root\nwheel:x:998:layla,bob\nusers:x:100:\n";
+
+    #[test]
+    fn expands_identities_with_current_user_first() {
+        let users = expand_identities(&[Identity::User(0), Identity::Group(998)], PASSWD, GROUP, 1002);
+        let names: Vec<&str> = users.iter().map(|u| u.name.as_str()).collect();
+        // bob (me) first; sara is in wheel through her primary group.
+        assert_eq!(names, vec!["bob", "root", "layla", "sara"]);
+        assert_eq!(users[2].display, "Layla Nour");
+        assert!(expand_identities(&[Identity::Group(4242)], PASSWD, GROUP, 1000).is_empty());
+    }
+
+    #[test]
+    fn parses_identity_variants() {
+        let mut d = HashMap::new();
+        d.insert("uid".to_string(), OwnedValue::from(1000u32));
+        assert_eq!(parse_identity("unix-user", &d), Some(Identity::User(1000)));
+        let mut g = HashMap::new();
+        g.insert("gid".to_string(), OwnedValue::from(998u32));
+        assert_eq!(parse_identity("unix-group", &g), Some(Identity::Group(998)));
+        assert_eq!(parse_identity("unix-netgroup", &g), None);
+    }
+
+    /// A scripted stand-in for polkit-agent-helper-1: prompts once, then
+    /// accepts the password "right".
+    struct MockHelper {
+        spawns: Arc<Mutex<Vec<(String, String)>>>,
+        kills: Arc<AtomicUsize>,
+        /// Fail immediately without prompting.
+        broken: bool,
+    }
+
+    impl HelperSpawner for MockHelper {
+        fn spawn(&self, user: &str, cookie: &str) -> std::io::Result<HelperConn> {
+            let (ours, theirs) = UnixStream::pair()?;
+            self.spawns.lock().push((user.into(), cookie.into()));
+            let broken = self.broken;
+            std::thread::spawn(move || {
+                let mut out = theirs.try_clone().unwrap();
+                let mut input = BufReader::new(theirs);
+                if broken {
+                    let _ = writeln!(out, "FAILURE");
+                    return;
+                }
+                let _ = writeln!(out, "PAM_TEXT_INFO Touch nothing");
+                let _ = writeln!(out, "PAM_PROMPT_ECHO_OFF Password: ");
+                let mut answer = String::new();
+                if input.read_line(&mut answer).unwrap_or(0) == 0 {
+                    return;
+                }
+                let _ = writeln!(out, "{}", if answer.trim_end() == "right" { "SUCCESS" } else { "FAILURE" });
+            });
+            let kills = self.kills.clone();
+            let killer = ours.try_clone()?;
+            Ok(HelperConn {
+                reader: Box::new(BufReader::new(ours.try_clone()?)),
+                writer: Box::new(ours),
+                kill: Box::new(move || {
+                    kills.fetch_add(1, Ordering::SeqCst);
+                    let _ = killer.shutdown(std::net::Shutdown::Both);
+                }),
+            })
+        }
+    }
+
+    fn mock(broken: bool) -> MockHelper {
+        MockHelper { spawns: Arc::new(Mutex::new(Vec::new())), kills: Arc::new(AtomicUsize::new(0)), broken }
+    }
+
+    /// Plays the UI: answers prompts from `answers`, records events.
+    fn drive(helper: &MockHelper, answers: Vec<PolkitReply>) -> (Outcome, Vec<PolkitEvent>) {
+        let (etx, erx) = async_channel::unbounded();
+        let (rtx, rrx) = async_channel::unbounded();
+        let ui = std::thread::spawn(move || {
+            let mut answers = answers.into_iter();
+            let mut seen = Vec::new();
+            while let Ok(ev) = erx.recv_blocking() {
+                let done = matches!(ev, PolkitEvent::Close { .. });
+                if matches!(ev, PolkitEvent::Prompt { .. })
+                    && let Some(a) = answers.next()
+                {
+                    rtx.send_blocking(a).unwrap();
+                }
+                seen.push(ev);
+                if done {
+                    break;
+                }
+            }
+            seen
+        });
+        let outcome = futures::executor::block_on(run_session(helper, &etx, &rrx, "cookie-1", "layla".into()));
+        drop(etx);
+        (outcome, ui.join().unwrap())
+    }
+
+    fn answer(text: &str) -> PolkitReply {
+        PolkitReply::Answer { cookie: "cookie-1".into(), text: Zeroizing::new(text.into()) }
+    }
+
+    #[test]
+    fn correct_password_authorizes() {
+        let helper = mock(false);
+        let (outcome, events) = drive(&helper, vec![answer("right")]);
+        assert_eq!(outcome, Outcome::Authorized);
+        assert_eq!(helper.spawns.lock().as_slice(), &[("layla".to_string(), "cookie-1".to_string())]);
+        assert!(events.contains(&PolkitEvent::Message { cookie: "cookie-1".into(), text: "Touch nothing".into(), error: false }));
+        assert!(events.contains(&PolkitEvent::Prompt { cookie: "cookie-1".into(), user: "layla".into(), text: "Password: ".into(), echo: false }));
+        assert_eq!(events.last(), Some(&PolkitEvent::Close { cookie: "cookie-1".into(), outcome: Outcome::Authorized }));
+    }
+
+    #[test]
+    fn wrong_password_retries_with_a_fresh_helper() {
+        let helper = mock(false);
+        let (outcome, events) = drive(&helper, vec![answer("wrong"), answer("right")]);
+        assert_eq!(outcome, Outcome::Authorized);
+        assert_eq!(helper.spawns.lock().len(), 2);
+        assert_eq!(events.iter().filter(|e| matches!(e, PolkitEvent::Retry { .. })).count(), 1);
+    }
+
+    #[test]
+    fn switching_user_restarts_for_that_user() {
+        let helper = mock(false);
+        let switch = PolkitReply::SelectUser { cookie: "cookie-1".into(), user: "root".into() };
+        let (outcome, _) = drive(&helper, vec![switch, answer("right")]);
+        assert_eq!(outcome, Outcome::Authorized);
+        let spawns = helper.spawns.lock();
+        assert_eq!(spawns.iter().map(|(u, _)| u.as_str()).collect::<Vec<_>>(), vec!["layla", "root"]);
+    }
+
+    #[test]
+    fn cancel_kills_the_helper() {
+        let helper = mock(false);
+        let (outcome, events) = drive(&helper, vec![PolkitReply::Cancel { cookie: "cookie-1".into() }]);
+        assert_eq!(outcome, Outcome::Cancelled);
+        assert!(helper.kills.load(Ordering::SeqCst) >= 1);
+        assert_eq!(events.last(), Some(&PolkitEvent::Close { cookie: "cookie-1".into(), outcome: Outcome::Cancelled }));
+    }
+
+    #[test]
+    fn a_helper_that_fails_before_prompting_ends_the_request() {
+        let helper = mock(true);
+        let (outcome, _) = drive(&helper, vec![]);
+        assert_eq!(outcome, Outcome::Failed);
+        assert_eq!(helper.spawns.lock().len(), 1, "no retry loop on a broken helper");
+    }
+}

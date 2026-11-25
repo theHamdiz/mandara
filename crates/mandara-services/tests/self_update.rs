@@ -1,0 +1,575 @@
+//! End to end, against a local mock of GitHub (pointed at with
+//! `MANDARA_UPDATE_API` / `MANDARA_MARKETPLACE_API`): Mandara's self-update
+//! and marketplace plugin updates — check, delta install, fallback to the
+//! full download (corrupt patch, locally modified binary, release without
+//! update.json), signed releases (missing or wrong signature, tampered
+//! update.json), rollback, the check cache and offline mode. Everything is
+//! installed into a temporary folder; nothing real is touched.
+//!
+//! One test function: it sets process-wide environment variables.
+
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::{TcpListener, TcpStream};
+use std::path::Path;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use mandara_delta::{MANIFEST_FILE, Manifest, PLUGIN_TARGET, SCHEMA, SHELL_BINARY};
+use mandara_services::marketplace::{self, Class, Finding, Vetting};
+use mandara_services::self_update::{self as su, ApplyOptions, Method, install, plugins};
+
+const OLD: &str = "0.1.0";
+/// A release before OLD: an install that skipped OLD still gets a patch.
+const OLDER: &str = "0.0.9";
+const NEW: &str = "0.2.0";
+const PLUGIN_REPO: &str = "mock-author/mandara-demo";
+const PLUGIN_ID: &str = "demo";
+/// Size of the synthetic shell binary (a few MB, so the delta matters).
+const BINARY_LEN: usize = 4 << 20;
+const PLUGIN_WASM_LEN: usize = 300 << 10;
+
+/// path → body; the test swaps bodies to simulate broken releases.
+type Routes = Arc<Mutex<HashMap<String, Vec<u8>>>>;
+type Log = Arc<Mutex<Vec<String>>>;
+
+fn pass(_: &Path, _: &str) -> Result<(), Finding> {
+    Ok(())
+}
+/// Plugin updates with a compliance check that always passes.
+const PASS: Vetting = Vetting { check: &pass, force: false };
+
+/// An explicit local policy; the fixture never contacts the live registry.
+#[derive(Default)]
+struct TestPolicy(RefCell<String>);
+
+impl marketplace::moderation::PolicySource for TestPolicy {
+    fn policy(&self, _: bool) -> Result<marketplace::moderation::policy::Policy, String> {
+        marketplace::moderation::policy::Policy::parse(&self.0.borrow())
+    }
+}
+
+fn serve(stream: TcpStream, routes: &Routes, log: &Log) {
+    let mut reader = BufReader::new(stream.try_clone().unwrap());
+    let mut request_line = String::new();
+    if reader.read_line(&mut request_line).is_err() {
+        return;
+    }
+    loop {
+        let mut line = String::new();
+        if reader.read_line(&mut line).map_or(true, |n| n == 0) || line == "\r\n" {
+            break;
+        }
+    }
+    let target = request_line.split_whitespace().nth(1).unwrap_or("/").to_string();
+    log.lock().unwrap().push(target.clone());
+    let body = routes.lock().unwrap().get(target.split('?').next().unwrap_or_default()).cloned();
+    let (status, body) = match body {
+        Some(b) => ("200 OK", b),
+        None => ("404 Not Found", br#"{"message":"Not Found"}"#.to_vec()),
+    };
+    let mut out = stream;
+    let head = format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+    let _ = out.write_all(head.as_bytes()).and_then(|_| out.write_all(&body)).and_then(|_| out.flush());
+    let _ = reader.read(&mut [0u8; 1]);
+}
+
+fn start_mock(routes: Routes) -> (String, Log) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let log: Log = Arc::default();
+    let l = log.clone();
+    std::thread::spawn(move || {
+        for stream in listener.incoming().flatten() {
+            serve(stream, &routes, &l);
+        }
+    });
+    (base, log)
+}
+
+/// Deterministic pseudo-random bytes (xorshift).
+fn noise(len: usize, mut seed: u64) -> Vec<u8> {
+    (0..len)
+        .map(|_| {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed as u8
+        })
+        .collect()
+}
+
+/// Two "builds": the new one has insertions, a deletion, shifted code and
+/// scattered byte edits, like a real rebuild.
+fn binaries() -> (Vec<u8>, Vec<u8>) {
+    let mut old = b"\x7fELF".to_vec();
+    old.extend(noise(BINARY_LEN, 1));
+    let mut new = old.clone();
+    new.splice(10_000..10_000, noise(20_000, 2));
+    new.drain(1_000_000..1_050_000);
+    new.splice(2_000_000..2_000_000, noise(5_000, 3));
+    for i in (3_000_000..3_100_000).step_by(997) {
+        new[i] = new[i].wrapping_add(7);
+    }
+    (old, new)
+}
+
+fn tar_gz(files: &[(String, &[u8])]) -> Vec<u8> {
+    let mut b = tar::Builder::new(flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast()));
+    for (path, data) in files {
+        let mut h = tar::Header::new_gnu();
+        h.set_size(data.len() as u64);
+        h.set_mode(0o755);
+        h.set_cksum();
+        b.append_data(&mut h, path, *data).unwrap();
+    }
+    b.into_inner().unwrap().finish().unwrap()
+}
+
+fn asset(base: &str, name: &str, size: usize) -> serde_json::Value {
+    serde_json::json!({ "name": name, "browser_download_url": format!("{base}/download/{name}"), "size": size })
+}
+
+fn plugin_archive(version: &str, wasm: &[u8]) -> Vec<u8> {
+    let toml = format!("id = \"{PLUGIN_ID}\"\nname = \"Demo\"\nversion = \"{version}\"\n");
+    tar_gz(&[(format!("{PLUGIN_ID}/plugin.toml"), toml.as_bytes()), (format!("{PLUGIN_ID}/plugin.wasm"), wasm), (format!("{PLUGIN_ID}/locales/ar.toml"), format!("v = \"{version}\"\n").as_bytes())])
+}
+
+#[test]
+fn self_update_and_plugin_updates_end_to_end() {
+    let policy = TestPolicy::default();
+    let root = tempfile::tempdir().unwrap();
+    let routes: Routes = Arc::default();
+    let (base, log) = start_mock(routes.clone());
+    // SAFETY: set before any other thread reads them (the mock server never
+    // reads the environment).
+    unsafe {
+        std::env::set_var("XDG_DATA_HOME", root.path().join("data"));
+        std::env::set_var("XDG_CACHE_HOME", root.path().join("cache"));
+        std::env::set_var("XDG_CONFIG_HOME", root.path().join("config"));
+        std::env::set_var("LC_ALL", "C");
+        std::env::set_var(su::API_ENV, &base);
+        std::env::set_var(mandara_services::marketplace::API_ENV, &base);
+    }
+    mandara_services::offline::set(false);
+    assert_eq!(su::api_base(), base);
+
+    // ── The shell release ────────────────────────────────────────────────
+    let target = su::running_target();
+    let (old_bin, new_bin) = binaries();
+    let mut older_bin = old_bin.clone();
+    older_bin.splice(500_000..500_000, noise(7_000, 4));
+    let top = format!("mandara-{NEW}-{target}");
+    let tarball_name = format!("{top}.tar.gz");
+    let tarball = tar_gz(&[(format!("{top}/{SHELL_BINARY}"), &new_bin), (format!("{top}/README.md"), b"readme")]);
+    let (entry, patch) = mandara_delta::create::target_entry("mandara", NEW, Some(&target), &(tarball_name.clone(), tarball.clone()), SHELL_BINARY, &new_bin, &[(OLD, &old_bin), (OLDER, &older_bin)]).unwrap();
+    let mut patch = patch.into_iter();
+    let (patch_name, patch_bytes) = patch.next().unwrap();
+    let (older_patch_name, older_patch_bytes) = patch.next().unwrap();
+    assert!(patch_bytes.len() * 20 < tarball.len(), "patch {} vs tarball {}", patch_bytes.len(), tarball.len());
+    let mut manifest = Manifest { schema: SCHEMA, name: "mandara".into(), version: NEW.into(), ..Default::default() };
+    manifest.targets.insert(target.clone(), entry);
+    // The release also carries the other platform's build (FreeBSD on
+    // Linux, Linux on FreeBSD), with its own tarball and patch: each
+    // install must pick only its own.
+    let arch = std::env::consts::ARCH;
+    let sibling = if target.ends_with("-freebsd") { format!("{arch}-linux-gnu") } else { format!("{arch}-freebsd") };
+    let (mut sibling_old, mut sibling_new) = (old_bin.clone(), new_bin.clone());
+    sibling_old[64] ^= 0x5a;
+    sibling_new[64] ^= 0x5a;
+    let sibling_top = format!("mandara-{NEW}-{sibling}");
+    let sibling_tarball_name = format!("{sibling_top}.tar.gz");
+    let sibling_tarball = tar_gz(&[(format!("{sibling_top}/{SHELL_BINARY}"), &sibling_new)]);
+    let (sibling_entry, sibling_patches) = mandara_delta::create::target_entry("mandara", NEW, Some(&sibling), &(sibling_tarball_name.clone(), sibling_tarball.clone()), SHELL_BINARY, &sibling_new, &[(OLD, &sibling_old)]).unwrap();
+    let (sibling_patch_name, sibling_patch_bytes) = sibling_patches.into_iter().next().unwrap();
+    assert!(sibling_patch_name.ends_with(&format!("-{sibling}.patch.zst")), "{sibling_patch_name}");
+    manifest.targets.insert(sibling.clone(), sibling_entry);
+    // The release key: the mock release is signed like a real one.
+    let (private, _) = mandara_delta::signing::sign::generate().unwrap();
+    su::trust_keys_for_tests(vec![mandara_delta::signing::sign::public_key(&private).unwrap()]);
+    let manifest_json = manifest.to_json();
+    let sums = format!("{}  {tarball_name}\n{}  {sibling_tarball_name}\n{}  {MANIFEST_FILE}\n", mandara_delta::sha256_hex(&tarball), mandara_delta::sha256_hex(&sibling_tarball), mandara_delta::sha256_hex(manifest_json.as_bytes()));
+    let sig = mandara_delta::signing::sign::sign(&private, sums.as_bytes()).unwrap();
+    let release = |with_manifest: bool| {
+        let mut assets = vec![asset(&base, &tarball_name, tarball.len()), asset(&base, &patch_name, patch_bytes.len()), asset(&base, &older_patch_name, older_patch_bytes.len()), asset(&base, &sibling_tarball_name, sibling_tarball.len()), asset(&base, &sibling_patch_name, sibling_patch_bytes.len()), asset(&base, "SHA256SUMS", sums.len()), asset(&base, "SHA256SUMS.sig", sig.len())];
+        if with_manifest {
+            assets.push(asset(&base, MANIFEST_FILE, 1));
+        }
+        serde_json::json!({ "tag_name": format!("v{NEW}"), "html_url": "https://example.invalid/releases/v0.2.0", "assets": assets }).to_string().into_bytes()
+    };
+    {
+        let mut r = routes.lock().unwrap();
+        r.insert(format!("/repos/{}/releases/latest", su::REPO), release(true));
+        r.insert(format!("/download/{MANIFEST_FILE}"), manifest_json.clone().into_bytes());
+        r.insert(format!("/download/{tarball_name}"), tarball.clone());
+        r.insert(format!("/download/{patch_name}"), patch_bytes.clone());
+        r.insert(format!("/download/{older_patch_name}"), older_patch_bytes.clone());
+        r.insert(format!("/download/{sibling_tarball_name}"), sibling_tarball.clone());
+        r.insert(format!("/download/{sibling_patch_name}"), sibling_patch_bytes.clone());
+        r.insert("/download/SHA256SUMS".into(), sums.clone().into_bytes());
+        r.insert("/download/SHA256SUMS.sig".into(), sig.clone().into_bytes());
+    }
+
+    // A temporary install, as `mandara install` lays it out.
+    let exe = root.path().join("prefix/bin/mandara");
+    std::fs::create_dir_all(exe.parent().unwrap()).unwrap();
+    let reset = || std::fs::write(&exe, &old_bin).unwrap();
+    reset();
+    assert_eq!(install::classify(&exe, &|_| None), install::Install::SelfManaged(exe.clone()));
+
+    // Check: newer, with a patch from our version.
+    let info = su::check_with(&base, OLD, &target).unwrap();
+    assert!(info.available && info.latest == NEW);
+    assert_eq!(info.patch.as_ref().map(|p| p.download.size), Some(patch_bytes.len() as u64));
+    assert_eq!(info.download_size(false), Some(patch_bytes.len() as u64));
+    assert_eq!(info.download_size(true), Some(tarball.len() as u64));
+    assert!(info.signed_sums.as_deref() == Some(sums.as_str()));
+    assert!(!su::check_with(&base, NEW, &target).unwrap().available);
+    assert_eq!(info.full.as_ref().map(|f| f.file.as_str()), Some(tarball_name.as_str()));
+    assert_eq!(info.patch.as_ref().map(|p| p.download.file.as_str()), Some(patch_name.as_str()));
+
+    // The other platform's install gets its own tarball, patch and binary
+    // hash from the same release, and its patch rebuilds its own binary.
+    let other = su::check_with(&base, OLD, &sibling).unwrap();
+    assert!(other.available);
+    assert_eq!(other.full.as_ref().map(|f| f.file.as_str()), Some(sibling_tarball_name.as_str()));
+    assert_eq!(other.patch.as_ref().map(|p| p.download.file.as_str()), Some(sibling_patch_name.as_str()));
+    assert_eq!(other.binary_sha256, Some(mandara_delta::sha256_hex(&sibling_new)));
+    let other_exe = root.path().join("other/bin/mandara");
+    std::fs::create_dir_all(other_exe.parent().unwrap()).unwrap();
+    std::fs::write(&other_exe, &sibling_old).unwrap();
+    let report = su::apply(&other, &other_exe, ApplyOptions::default(), &|_| {}).unwrap();
+    assert_eq!((report.method, report.downloaded), (Method::Delta, sibling_patch_bytes.len() as u64));
+    assert_eq!(std::fs::read(&other_exe).unwrap(), sibling_new);
+
+    // Signed releases: no signature, a signature by another key, or a
+    // listing changed after signing → nothing is offered.
+    let swap = |path: &str, body: Option<Vec<u8>>| {
+        let mut r = routes.lock().unwrap();
+        match body {
+            Some(b) => r.insert(path.to_string(), b),
+            None => r.remove(path),
+        }
+    };
+    let latest_path = format!("/repos/{}/releases/latest", su::REPO);
+    let mut no_sig: serde_json::Value = serde_json::from_slice(&release(true)).unwrap();
+    no_sig["assets"].as_array_mut().unwrap().retain(|a| a["name"] != "SHA256SUMS.sig");
+    let signed_release = swap(&latest_path, Some(no_sig.to_string().into_bytes()));
+    assert!(su::check_with(&base, OLD, &target).unwrap_err().contains("isn't signed"));
+    swap(&latest_path, signed_release);
+    let unsigned = swap("/download/SHA256SUMS.sig", None);
+    assert!(su::check_with(&base, OLD, &target).is_err(), "a signature that can't be downloaded");
+    let (stranger, _) = mandara_delta::signing::sign::generate().unwrap();
+    swap("/download/SHA256SUMS.sig", Some(mandara_delta::signing::sign::sign(&stranger, sums.as_bytes()).unwrap().into_bytes()));
+    assert!(su::check_with(&base, OLD, &target).unwrap_err().contains("isn't signed"));
+    swap("/download/SHA256SUMS.sig", unsigned);
+    let listing = swap("/download/SHA256SUMS", Some(format!("{}  {tarball_name}\n", "0".repeat(64)).into_bytes()));
+    assert!(su::check_with(&base, OLD, &target).is_err(), "a listing changed after signing");
+    swap("/download/SHA256SUMS", listing);
+    // A replaced update.json (its own hash no longer listed) is ignored:
+    // the tarball's signed line is used, and no patch is trusted.
+    let mut forged = manifest.clone();
+    forged.version = NEW.into();
+    forged.targets.values_mut().for_each(|t| t.binary.size += 1);
+    let genuine = swap(&format!("/download/{MANIFEST_FILE}"), Some(forged.to_json().into_bytes()));
+    let forged_info = su::check_with(&base, OLD, &target).unwrap();
+    assert!(forged_info.patch.is_none() && forged_info.binary_size.is_none());
+    assert_eq!(forged_info.full.as_ref().and_then(|f| f.sha256.clone()), Some(mandara_delta::sha256_hex(&tarball)));
+    swap(&format!("/download/{MANIFEST_FILE}"), genuine);
+    // An answer without a checked signature (cached by an older build) is
+    // never installed.
+    let stale = su::UpdateInfo { signed_sums: None, ..info.clone() };
+    assert!(su::apply(&stale, &exe, ApplyOptions::default(), &|_| {}).is_err());
+    assert_eq!(std::fs::read(&exe).unwrap(), old_bin);
+
+    // Dry run: plans the patch, touches nothing.
+    let plan = su::apply(&info, &exe, ApplyOptions { dry_run: true, ..Default::default() }, &|_| {}).unwrap();
+    assert_eq!((plan.method, plan.dry_run), (Method::Delta, true));
+    assert_eq!(std::fs::read(&exe).unwrap(), old_bin);
+
+    // Delta: only the patch is downloaded; byte-exact result; rollback copy.
+    let steps = Mutex::new(Vec::new());
+    let report = su::apply(&info, &exe, ApplyOptions::default(), &|p| steps.lock().unwrap().push(p)).unwrap();
+    assert_eq!(report.method, Method::Delta);
+    assert_eq!(report.downloaded, patch_bytes.len() as u64);
+    assert_eq!(report.full_size, tarball.len() as u64);
+    assert!(report.fallback.is_none());
+    assert_eq!(std::fs::read(&exe).unwrap(), new_bin);
+    assert_eq!(std::fs::read(install::backup_path(&exe)).unwrap(), old_bin);
+    assert!(steps.lock().unwrap().iter().any(|p| matches!(p, su::Progress::Bytes { .. })));
+    install::rollback(&exe).unwrap();
+    assert_eq!(std::fs::read(&exe).unwrap(), old_bin);
+
+    // An install that skipped OLD takes its own patch (not the first one
+    // listed), downloads only that, and lands on the same new binary.
+    std::fs::write(&exe, &older_bin).unwrap();
+    let skipped = su::check_with(&base, OLDER, &target).unwrap();
+    assert_eq!(skipped.patch.as_ref().map(|p| (p.from.as_str(), p.download.file.as_str())), Some((OLDER, older_patch_name.as_str())));
+    let report = su::apply(&skipped, &exe, ApplyOptions::default(), &|_| {}).unwrap();
+    assert_eq!((report.method, report.downloaded), (Method::Delta, older_patch_bytes.len() as u64));
+    assert!(report.fallback.is_none());
+    assert_eq!(std::fs::read(&exe).unwrap(), new_bin);
+    install::rollback(&exe).unwrap();
+    assert_eq!(std::fs::read(&exe).unwrap(), older_bin);
+    reset();
+
+    // A corrupt patch fails its checksum → the full download, verified.
+    let mut corrupt = patch_bytes.clone();
+    let mid = corrupt.len() / 2;
+    corrupt[mid] ^= 0xff;
+    routes.lock().unwrap().insert(format!("/download/{patch_name}"), corrupt);
+    let report = su::apply(&info, &exe, ApplyOptions::default(), &|_| {}).unwrap();
+    assert_eq!(report.method, Method::Full);
+    assert!(report.fallback.is_some());
+    assert_eq!(report.downloaded, (patch_bytes.len() + tarball.len()) as u64);
+    assert_eq!(std::fs::read(&exe).unwrap(), new_bin);
+    routes.lock().unwrap().insert(format!("/download/{patch_name}"), patch_bytes.clone());
+
+    // A locally modified binary skips the patch without downloading it.
+    let mut modified = old_bin.clone();
+    modified[100] ^= 1;
+    std::fs::write(&exe, &modified).unwrap();
+    let report = su::apply(&info, &exe, ApplyOptions::default(), &|_| {}).unwrap();
+    assert_eq!((report.method, report.downloaded), (Method::Full, tarball.len() as u64));
+    assert!(report.fallback.as_deref().unwrap_or_default().contains(OLD));
+    assert_eq!(std::fs::read(&exe).unwrap(), new_bin);
+
+    // --full skips the patch.
+    reset();
+    let report = su::apply(&info, &exe, ApplyOptions { full_only: true, ..Default::default() }, &|_| {}).unwrap();
+    assert_eq!((report.method, report.fallback.clone()), (Method::Full, None));
+    assert_eq!(std::fs::read(&exe).unwrap(), new_bin);
+
+    // A tampered tarball fails verification and nothing is replaced.
+    reset();
+    let mut bad = tarball.clone();
+    let last = bad.len() - 10;
+    bad[last] ^= 0xff;
+    routes.lock().unwrap().insert(format!("/download/{tarball_name}"), bad);
+    assert!(su::apply(&info, &exe, ApplyOptions { full_only: true, ..Default::default() }, &|_| {}).is_err());
+    assert_eq!(std::fs::read(&exe).unwrap(), old_bin);
+    routes.lock().unwrap().insert(format!("/download/{tarball_name}"), tarball.clone());
+
+    // A release without update.json: tarball naming + SHA256SUMS.
+    routes.lock().unwrap().insert(format!("/repos/{}/releases/latest", su::REPO), release(false));
+    let bare = su::check_with(&base, OLD, &target).unwrap();
+    assert!(bare.available && bare.patch.is_none() && bare.full.as_ref().is_some_and(|f| f.sha256.as_deref() == Some(mandara_delta::sha256_hex(&tarball).as_str())));
+    let report = su::apply(&bare, &exe, ApplyOptions::default(), &|_| {}).unwrap();
+    assert_eq!(report.method, Method::Full);
+    assert_eq!(std::fs::read(&exe).unwrap(), new_bin);
+    routes.lock().unwrap().insert(format!("/repos/{}/releases/latest", su::REPO), release(true));
+
+    // Automatic checks reuse the cached answer within the interval.
+    let before = log.lock().unwrap().len();
+    su::check(true, Duration::from_secs(6 * 3600)).unwrap();
+    let after_forced = log.lock().unwrap().len();
+    assert!(after_forced > before);
+    su::check(false, Duration::from_secs(6 * 3600)).unwrap();
+    assert_eq!(log.lock().unwrap().len(), after_forced, "a fresh cached answer needs no request");
+    assert!(su::cached().is_some());
+    assert!(su::first_shell_announcement(NEW) && !su::first_shell_announcement(NEW), "each version is announced once");
+
+    // A release whose binary is smaller than the installed one (as when
+    // translations left the binary): the check reports a negative change,
+    // the patch rebuilds it byte for byte, and nothing underflows.
+    reset();
+    const SHRUNK: &str = "0.2.1";
+    let mut small_bin = old_bin.clone();
+    small_bin.drain(200_000..1_400_000);
+    small_bin.splice(50_000..50_000, noise(3_000, 31));
+    let shrink = small_bin.len() as i64 - old_bin.len() as i64;
+    assert!(shrink < 0);
+    let small_top = format!("mandara-{SHRUNK}-{target}");
+    let small_tarball_name = format!("{small_top}.tar.gz");
+    let small_tarball = tar_gz(&[(format!("{small_top}/{SHELL_BINARY}"), &small_bin)]);
+    let (small_entry, small_patches) = mandara_delta::create::target_entry("mandara", SHRUNK, Some(&target), &(small_tarball_name.clone(), small_tarball.clone()), SHELL_BINARY, &small_bin, &[(OLD, &old_bin)]).unwrap();
+    let (small_patch_name, small_patch) = small_patches.into_iter().next().unwrap();
+    let mut small_manifest = Manifest { schema: SCHEMA, name: "mandara".into(), version: SHRUNK.into(), ..Default::default() };
+    small_manifest.targets.insert(target.clone(), small_entry);
+    let small_json = small_manifest.to_json();
+    let small_sums = format!("{}  {small_tarball_name}\n{}  {MANIFEST_FILE}\n", mandara_delta::sha256_hex(&small_tarball), mandara_delta::sha256_hex(small_json.as_bytes()));
+    let small_sig = mandara_delta::signing::sign::sign(&private, small_sums.as_bytes()).unwrap();
+    let at = |name: &str| serde_json::json!({ "name": name, "browser_download_url": format!("{base}/shrunk/{name}"), "size": 1 });
+    let shrunk_release = serde_json::json!({ "tag_name": format!("v{SHRUNK}"), "html_url": "https://example.invalid/v0.2.1", "assets": [at(&small_tarball_name), at(&small_patch_name), at(MANIFEST_FILE), at("SHA256SUMS"), at("SHA256SUMS.sig")] });
+    {
+        let mut r = routes.lock().unwrap();
+        r.insert(format!("/shrunk/{small_tarball_name}"), small_tarball.clone());
+        r.insert(format!("/shrunk/{small_patch_name}"), small_patch.clone());
+        r.insert(format!("/shrunk/{MANIFEST_FILE}"), small_json.into_bytes());
+        r.insert("/shrunk/SHA256SUMS".into(), small_sums.into_bytes());
+        r.insert("/shrunk/SHA256SUMS.sig".into(), small_sig.into_bytes());
+    }
+    let genuine_latest = swap(&latest_path, Some(shrunk_release.to_string().into_bytes()));
+    let shrunk_info = su::check_with(&base, OLD, &target).unwrap();
+    assert_eq!(shrunk_info.binary_size, Some(small_bin.len() as u64));
+    assert_eq!(shrunk_info.size_change(su::binary_size(Some(&exe)).unwrap()), Some(shrink));
+    mandara_i18n::with_language(Some(mandara_i18n::Lang::En), || assert!(su::size_change_text(shrink).ends_with("smaller"), "{}", su::size_change_text(shrink)));
+    let report = su::apply(&shrunk_info, &exe, ApplyOptions::default(), &|_| {}).unwrap();
+    assert_eq!((report.method, report.downloaded), (Method::Delta, small_patch.len() as u64));
+    assert_eq!(std::fs::read(&exe).unwrap(), small_bin, "the smaller binary is rebuilt byte for byte");
+    install::rollback(&exe).unwrap();
+    assert_eq!(std::fs::read(&exe).unwrap(), old_bin);
+    swap(&latest_path, genuine_latest);
+
+    // Offline mode blocks every request.
+    mandara_services::offline::set(true);
+    let requests = log.lock().unwrap().len();
+    assert_eq!(su::check_with(&base, OLD, &target).unwrap_err(), mandara_services::offline::blocked());
+    assert!(su::check(true, Duration::from_secs(1)).is_err());
+    assert!(plugins::check_all(true, Duration::from_secs(1)).is_err());
+    assert_eq!(log.lock().unwrap().len(), requests);
+    mandara_services::offline::set(false);
+
+    // ── A marketplace plugin ─────────────────────────────────────────────
+    let old_wasm = noise(PLUGIN_WASM_LEN, 11);
+    let mut new_wasm = old_wasm.clone();
+    new_wasm.splice(1000..1000, noise(4000, 12));
+    let old_archive = plugin_archive(OLD, &old_wasm);
+    let new_archive_name = format!("{PLUGIN_ID}.mandara.tar.gz");
+    let new_archive = plugin_archive(NEW, &new_wasm);
+    let (pm, extra) = mandara_delta::create::plugin_release(&(new_archive_name.clone(), new_archive.clone()), Some(&old_archive)).unwrap();
+    let dir = mandara_services::marketplace::install_dir().join(PLUGIN_ID);
+    let install_plugin = || {
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("locales")).unwrap();
+        std::fs::write(dir.join("plugin.toml"), format!("id = \"{PLUGIN_ID}\"\nname = \"Demo\"\nversion = \"{OLD}\"\n")).unwrap();
+        std::fs::write(dir.join("plugin.wasm"), &old_wasm).unwrap();
+        std::fs::write(dir.join(".source"), format!("{PLUGIN_REPO}\nv{OLD}\n")).unwrap();
+    };
+    install_plugin();
+    let plugin_release_json = |with_manifest: bool| {
+        let mut assets = vec![asset(&base, &new_archive_name, new_archive.len())];
+        assets.extend(extra.iter().map(|(n, d)| asset(&base, n, d.len())));
+        if with_manifest {
+            // Its own path on the mock (the shell's update.json has the same name).
+            assets.push(serde_json::json!({ "name": MANIFEST_FILE, "browser_download_url": format!("{base}/plugin/{MANIFEST_FILE}"), "size": 1 }));
+        }
+        serde_json::json!({ "tag_name": format!("v{NEW}"), "html_url": "https://example.invalid/demo/v0.2.0", "assets": assets }).to_string().into_bytes()
+    };
+    {
+        let mut r = routes.lock().unwrap();
+        r.insert(format!("/repos/{PLUGIN_REPO}"), serde_json::json!({ "id": 42, "full_name": PLUGIN_REPO, "owner": { "id": 7, "login": "mock-author" } }).to_string().into_bytes());
+        r.insert(format!("/repos/{PLUGIN_REPO}/releases/latest"), plugin_release_json(true));
+        r.insert(format!("/plugin/{MANIFEST_FILE}"), pm.to_json().into_bytes());
+        r.insert(format!("/download/{new_archive_name}"), new_archive.clone());
+        for (n, d) in &extra {
+            r.insert(format!("/download/{n}"), d.clone());
+        }
+    }
+    let updates = plugins::check_all(true, Duration::from_secs(3600)).unwrap();
+    assert_eq!(updates.len(), 1);
+    let u = &updates[0];
+    assert!(u.available && u.id == PLUGIN_ID && u.latest == format!("v{NEW}"));
+    let (patch_size, meta_size) = (u.patch.as_ref().unwrap().download.size, u.meta.as_ref().unwrap().size);
+    assert_eq!(u.download_size(false), Some(patch_size + meta_size));
+    assert!(patch_size + meta_size < new_archive.len() as u64);
+    assert_eq!(plugins::cached().len(), 1);
+
+    let check_new = |dir: &Path| {
+        assert_eq!(std::fs::read(dir.join("plugin.wasm")).unwrap(), new_wasm);
+        assert!(std::fs::read_to_string(dir.join("plugin.toml")).unwrap().contains(NEW));
+        assert_eq!(std::fs::read_to_string(dir.join(".source")).unwrap(), format!("{PLUGIN_REPO}\nv{NEW}\n"));
+    };
+    // A newly banned publisher is checked against fresh repository IDs,
+    // even for a direct install or a cached update plan. Force only
+    // overrides compliance findings, never moderation.
+    *policy.0.borrow_mut() = "[[publishers]]\ngithub_id = 7\nlogin = 'previous-login'\nreason = 'fixture ban'".into();
+    let before = log.lock().unwrap().len();
+    let blocked = marketplace::install_with_policy(PLUGIN_REPO, &Vetting { check: &pass, force: true }, &|_| {}, &policy).unwrap_err();
+    assert!(blocked.to_string().contains("fixture ban"));
+    assert!(plugins::apply_with_policy(u, ApplyOptions::default(), &PASS, &|_| {}, &policy).unwrap_err().contains("fixture ban"));
+    assert_eq!(std::fs::read(dir.join("plugin.wasm")).unwrap(), old_wasm);
+    assert!(log.lock().unwrap()[before..].iter().all(|path| path == &format!("/repos/{PLUGIN_REPO}")));
+    // Searches reapply changed rules to their unfiltered response cache.
+    routes.lock().unwrap().insert("/search/repositories".into(), serde_json::json!({ "total_count": 1, "items": [{ "id": 42, "name": "mandara-demo", "full_name": PLUGIN_REPO, "html_url": "https://example.invalid/demo", "owner": { "id": 7, "login": "mock-author" } }] }).to_string().into_bytes());
+    assert!(marketplace::search_with_policy("policy-fixture", &policy).unwrap().items.is_empty());
+    policy.0.borrow_mut().clear();
+    let before = log.lock().unwrap().len();
+    assert_eq!(marketplace::search_with_policy("policy-fixture", &policy).unwrap().items.len(), 1);
+    assert_eq!(log.lock().unwrap().len(), before, "unblocking refilters cached search results");
+    *policy.0.borrow_mut() = "[[plugins]]\nrepository_id = 42\nrepository = 'previous/name'".into();
+    assert!(marketplace::search_with_policy("policy-fixture", &policy).unwrap().items.is_empty());
+    assert!(marketplace::install_with_policy(PLUGIN_REPO, &PASS, &|_| {}, &policy).is_err());
+    *policy.0.borrow_mut() = "[[plugins]]\nrepository = 'mock-author/mandara-demo'\ndeny_install = false".into();
+    marketplace::install_with_policy(PLUGIN_REPO, &PASS, &|_| {}, &policy).unwrap();
+    check_new(&dir);
+    install_plugin();
+    policy.0.borrow_mut().clear();
+    // Delta: patch + meta only.
+    let report = plugins::apply_with_policy(u, ApplyOptions::default(), &PASS, &|_| {}, &policy).unwrap();
+    assert_eq!((report.method, report.downloaded), (Method::Delta, patch_size + meta_size));
+    check_new(&dir);
+    assert!(plugins::can_roll_back(PLUGIN_ID));
+    assert!(plugins::cached().is_empty(), "an updated plugin drops out of the cached list");
+    plugins::rollback(PLUGIN_ID).unwrap();
+    assert_eq!(std::fs::read(dir.join("plugin.wasm")).unwrap(), old_wasm);
+
+    // A publisher can replace release assets. Resolve the same release again
+    // instead of following the obsolete URLs saved by an earlier check.
+    let mut stale_urls = u.clone();
+    stale_urls.full.as_mut().unwrap().url = format!("{base}/deleted/archive");
+    stale_urls.patch.as_mut().unwrap().download.url = format!("{base}/deleted/patch");
+    stale_urls.meta.as_mut().unwrap().url = format!("{base}/deleted/meta");
+    let before = log.lock().unwrap().len();
+    plugins::apply_with_policy(&stale_urls, ApplyOptions::default(), &PASS, &|_| {}, &policy).unwrap();
+    assert!(log.lock().unwrap()[before..].iter().all(|path| !path.starts_with("/deleted/")));
+    check_new(&dir);
+
+    // Corrupt patch → the full archive (checked against update.json).
+    let patch_file = u.patch.as_ref().unwrap().download.file.clone();
+    let good = routes.lock().unwrap().get(&format!("/download/{patch_file}")).cloned().unwrap();
+    let mut corrupt = good.clone();
+    corrupt[good.len() / 2] ^= 0xff;
+    routes.lock().unwrap().insert(format!("/download/{patch_file}"), corrupt);
+    install_plugin();
+    let report = plugins::apply_with_policy(u, ApplyOptions::default(), &PASS, &|_| {}, &policy).unwrap();
+    assert_eq!(report.method, Method::Full);
+    assert!(report.fallback.is_some());
+    check_new(&dir);
+
+    // A release without update.json or SHA256SUMS: the plain archive, as
+    // the marketplace installs it.
+    install_plugin();
+    routes.lock().unwrap().insert(format!("/repos/{PLUGIN_REPO}/releases/latest"), plugin_release_json(false));
+    let bare = plugins::check_all(true, Duration::from_secs(3600)).unwrap();
+    assert!(bare[0].available && bare[0].patch.is_none());
+    let report = plugins::apply_with_policy(&bare[0], ApplyOptions::default(), &PASS, &|_| {}, &policy).unwrap();
+    assert_eq!((report.method, report.downloaded), (Method::Full, new_archive.len() as u64));
+    check_new(&dir);
+
+    // A release that fails the compliance check isn't applied: the old
+    // version stays, the new tag is flagged, and forcing installs it with
+    // the flag kept. A passing check clears the flag.
+    install_plugin();
+    let reject = |_: &Path, _: &str| Err(Finding::new(Class::Placeholder, "it shows nothing"));
+    let err = plugins::apply_with_policy(&bare[0], ApplyOptions::default(), &Vetting { check: &reject, force: false }, &|_| {}, &policy).unwrap_err();
+    assert!(err.contains(&format!("v{NEW}")) && err.contains("it shows nothing"), "{err}");
+    assert_eq!(std::fs::read(dir.join("plugin.wasm")).unwrap(), old_wasm, "a rejected update leaves the installed version");
+    assert_eq!(marketplace::flag_for(PLUGIN_REPO, &format!("v{NEW}")).map(|f| f.class), Some(Class::Placeholder));
+    plugins::apply_with_policy(&bare[0], ApplyOptions::default(), &Vetting { check: &reject, force: true }, &|_| {}, &policy).unwrap();
+    check_new(&dir);
+    assert!(marketplace::flag_for(PLUGIN_REPO, &format!("v{NEW}")).is_some(), "a forced install keeps its warning");
+    install_plugin();
+    plugins::apply_with_policy(&bare[0], ApplyOptions::default(), &PASS, &|_| {}, &policy).unwrap();
+    assert!(marketplace::flags().is_empty());
+    assert!(pm.targets.contains_key(PLUGIN_TARGET));
+
+    // A stale plan must not replace a plugin that changed on disk.
+    install_plugin();
+    std::fs::write(dir.join(".source"), format!("{PLUGIN_REPO}\nv9.0.0\n")).unwrap();
+    let error = plugins::apply_with_policy(u, ApplyOptions::default(), &PASS, &|_| {}, &policy).unwrap_err();
+    assert!(error.contains("Check for updates again"), "{error}");
+    assert_eq!(std::fs::read(dir.join("plugin.wasm")).unwrap(), old_wasm);
+
+    // A removed/private repository retires the saved offer and preserves the install.
+    install_plugin();
+    routes.lock().unwrap().remove(&format!("/repos/{PLUGIN_REPO}"));
+    let error = plugins::apply_with_policy(u, ApplyOptions::default(), &PASS, &|_| {}, &policy).unwrap_err();
+    assert!(error.contains("unavailable on GitHub"), "{error}");
+    assert!(!error.contains("404"));
+    assert_eq!(std::fs::read(dir.join("plugin.wasm")).unwrap(), old_wasm);
+    assert!(plugins::cached().is_empty(), "a failed plan is not offered again after reopening");
+    routes.lock().unwrap().remove(&format!("/repos/{PLUGIN_REPO}/releases/latest"));
+    assert!(plugins::check_all(true, Duration::from_secs(3600)).unwrap().is_empty(), "missing releases do not retain stale cached offers");
+}

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <title>Desktop shortcuts and you</title>
+  <defs>
+    <linearGradient id="identity-tile" x1="64" y1="40" x2="448" y2="496" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1C1C22"/><stop offset="1" stop-color="#09090C"/>
+    </linearGradient>
+    <radialGradient id="identity-light" cx="0" cy="0" r="1" gradientTransform="translate(98 48) rotate(45) scale(440 354)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".22"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="identity-rim" x1="76" y1="28" x2="446" y2="482" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".72"/><stop offset=".5" stop-color="#FFFFFF" stop-opacity=".08"/><stop offset="1" stop-color="#FFFFFF" stop-opacity=".24"/>
+    </linearGradient>
+    <clipPath id="identity-clip"><rect x="16" y="16" width="480" height="480" rx="108"/></clipPath>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#identity-tile)"/>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#identity-light)"/>
+  <g clip-path="url(#identity-clip)">
+    <path d="M-28 324C126 476 349 518 544 274v238H-28z" fill="#FFFFFF" opacity=".045"/>
+  </g>
+  <rect x="19" y="19" width="474" height="474" rx="105" stroke="url(#identity-rim)" stroke-width="2"/>
+  <g id="identity-glyph">
+    <g id="identity-avatar" fill="#D9B061">
+      <circle cx="168" cy="200" r="46"/>
+      <path d="M88 344v-16a80 68 0 0 1 160 0v16a12 12 0 0 1-12 12H100a12 12 0 0 1-12-12z"/>
+    </g>
+    <g id="identity-shortcuts" fill="#34D399">
+      <rect x="284" y="174" width="64" height="64" rx="16"/>
+      <rect x="372" y="174" width="64" height="64" rx="16"/>
+      <rect x="284" y="274" width="64" height="64" rx="16"/>
+      <rect x="372" y="274" width="64" height="64" rx="16"/>
+    </g>
+  </g>
+</svg>

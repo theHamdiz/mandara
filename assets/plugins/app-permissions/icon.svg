@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <title>App permissions</title>
+  <defs>
+    <linearGradient id="tile" x1="64" y1="40" x2="448" y2="496" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#286B91"/><stop offset="1" stop-color="#103C63"/>
+    </linearGradient>
+    <radialGradient id="light" cx="0" cy="0" r="1" gradientTransform="translate(98 48) rotate(45) scale(440 354)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".22"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="violet" cx="0" cy="0" r="1" gradientTransform="translate(472 472) rotate(-135) scale(430 350)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7063B5" stop-opacity=".7"/><stop offset="1" stop-color="#7063B5" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="76" y1="28" x2="446" y2="482" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".72"/><stop offset=".5" stop-color="#FFFFFF" stop-opacity=".08"/><stop offset="1" stop-color="#40C8BD" stop-opacity=".3"/>
+    </linearGradient>
+    <clipPath id="tile-clip"><rect x="16" y="16" width="480" height="480" rx="108"/></clipPath>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#tile)"/>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#violet)"/>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#light)"/>
+  <g clip-path="url(#tile-clip)">
+    <path d="M-28 324C126 476 349 518 544 274v238H-28z" fill="#40C8BD" opacity=".05"/>
+  </g>
+  <rect x="19" y="19" width="474" height="474" rx="105" stroke="url(#rim)" stroke-width="2"/>
+  <g stroke="#FFF2D5" stroke-width="28" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="132" y="142" width="98" height="98" rx="24" fill="#FFF2D5" fill-opacity=".08"/>
+    <rect x="132" y="282" width="98" height="98" rx="24" fill="#7063B5" fill-opacity=".35"/>
+    <rect x="272" y="282" width="98" height="98" rx="24" fill="#40C8BD" fill-opacity=".12" stroke="#40C8BD"/>
+    <circle cx="321" cy="165" r="30"/>
+    <path d="M321 195v49m0-16h28"/>
+  </g>
+</svg>

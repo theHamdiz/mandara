@@ -1,0 +1,32 @@
+{
+  "deployments" : [
+    {
+      "id" : "fedora-9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b.0",
+      "osname" : "fedora",
+      "serial" : 0,
+      "checksum" : "9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b",
+      "base-checksum" : "1e2d3c4b5a6f7e8d9c0b1a2f3e4d5c6b7a8f9e0d1c2b3a4f5e6d7c8b9a0f1e2d",
+      "container-image-reference" : "ostree-image-signed:docker://quay.io/fedora/fedora-silverblue:44",
+      "version" : "44.20261103.0",
+      "timestamp" : 1793664000,
+      "booted" : true,
+      "staged" : false,
+      "pinned" : false,
+      "unlocked" : "none",
+      "requested-packages" : [
+        "gnome-keyring-pam"
+      ],
+      "requested-local-packages" : [],
+      "requested-base-removals" : [],
+      "requested-base-local-replacements" : [],
+      "packages" : [
+        "gnome-keyring-pam"
+      ],
+      "base-removals" : [],
+      "base-local-replacements" : []
+    }
+  ],
+  "transaction" : null,
+  "cached-update" : null,
+  "update-driver" : null
+}

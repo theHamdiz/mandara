@@ -1,0 +1,253 @@
+# Continuous integration: build, test, lint and package checks on every push
+# and pull request. Releases are made by release.yml.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  test:
+    name: Build & test (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: System libraries
+        run: |
+          # Ubuntu's mirrors sometimes stop resolving for a few minutes: retry
+          # the whole update + install with growing pauses (up to ~5 min).
+          for attempt in 1 2 3 4 5 6; do
+            sudo apt-get -o Acquire::Retries=3 update -qq && sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends build-essential pkg-config cmake libxkbcommon-dev libwayland-dev libvulkan-dev libfontconfig-dev libfreetype-dev && break
+            [ "$attempt" = 6 ] && exit 1
+            echo "apt-get failed (attempt $attempt); retrying in $((attempt * 20)) s"
+            sleep $((attempt * 20))
+          done
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.arch }}
+
+      - name: Build
+        run: cargo build --workspace --profile test --locked
+
+      - name: Test
+        run: cargo test --workspace --locked
+
+      # The installer is the binary itself (crates/mandara-install, whose
+      # unit tests run above): a dry run walks every step on the runner,
+      # changing nothing.
+      - name: Installer dry run
+        run: ./target/debug/mandara install --dry-run --no-deps --yes
+
+      # The default build uses the tuned system allocator (pure Rust); the C
+      # allocators (mimalloc, jemalloc — built with the cc toolchain above)
+      # stay selectable and must keep building.
+      - name: Alternative allocators
+        run: |
+          for f in alloc-mimalloc alloc-mimalloc-v2 alloc-jemalloc alloc-system; do
+            cargo check --locked -p mandara-app --no-default-features --features "$f"
+          done
+
+      # Warnings are errors ([workspace.lints] in Cargo.toml): any rustc or
+      # clippy warning fails the build, so this step gates the PR.
+      - name: Clippy
+        run: cargo clippy --workspace --locked --all-targets
+
+      - name: Component versions
+        run: cargo xtask status
+
+  musl:
+    name: Build (x86_64 musl, Alpine)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The release builds musl tarballs the same way (see release.yml).
+      - name: Build in Alpine
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src -e RUSTFLAGS="-C target-feature=-crt-static" \
+            rust:1-alpine sh -euc '
+              apk add --no-cache build-base pkgconf cmake perl git \
+                wayland-dev libxkbcommon-dev vulkan-loader-dev fontconfig-dev freetype-dev linux-pam-dev
+              git config --global --add safe.directory /src
+              cargo build --locked -p mandara-app
+              ./target/debug/mandara --version
+            '
+
+  # FreeBSD: the whole workspace, tests included, must check and pass Clippy
+  # for FreeBSD with no warnings ([workspace.lints] denies them), like the
+  # Linux build. It needs only Rust's FreeBSD standard library; no FreeBSD
+  # system root. Build scripts that ask pkg-config for C libraries
+  # (fontconfig, freetype) read the Ubuntu ones, which is fine for a check
+  # that never links. The FreeBSD VM build (docs/development.md) links it.
+  freebsd-check:
+    name: FreeBSD build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: System libraries
+        run: |
+          # Ubuntu's mirrors sometimes stop resolving for a few minutes: retry
+          # the whole update + install with growing pauses (up to ~5 min).
+          for attempt in 1 2 3 4 5 6; do
+            sudo apt-get -o Acquire::Retries=3 update -qq && sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends pkg-config libfontconfig-dev libfreetype-dev && break
+            [ "$attempt" = 6 ] && exit 1
+            echo "apt-get failed (attempt $attempt); retrying in $((attempt * 20)) s"
+            sleep $((attempt * 20))
+          done
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-freebsd
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: freebsd
+
+      - name: cargo clippy (x86_64-unknown-freebsd)
+        env:
+          PKG_CONFIG_ALLOW_CROSS: "1"
+        run: cargo clippy --workspace --locked --all-targets --target x86_64-unknown-freebsd
+
+  # NixOS (flake.nix, nix/): the package builds from source as Nix builds it
+  # for users, and the NixOS and Home Manager modules evaluate (the NixOS
+  # check builds a minimal system with the module and Mandara Login on).
+  nix:
+    name: Nix flake (${{ matrix.channel }}, x86_64)
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - channel: nixos-26.05
+            archive: tar.zst
+          - channel: nixos-unstable
+            archive: tar.zst
+          - channel: nixos-25.11
+            archive: tar.xz
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # A release build with fat LTO plus a NixOS system closure needs more
+      # room than the runner leaves free.
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+
+      # Use the release's adaptive swap setup for the stable toolchains too.
+      # Keep full optimization and leave space for the Nix build tree.
+      - name: Build memory
+        uses: ./.github/actions/lto-swap
+        with:
+          max-gb: "32"
+          keep-free-gb: "24"
+          min-gb: "16"
+
+      - uses: cachix/install-nix-action@v31
+
+      - name: Reserve runner memory
+        uses: ./.github/actions/nix-build-limits
+
+      - name: Host package isolation
+        run: nix eval --raw .#checks.x86_64-linux.host-packages.drvPath --override-input nixpkgs https://channels.nixos.org/${{ matrix.channel }}/nixexprs.${{ matrix.archive }} --no-write-lock-file --option abort-on-warn true
+
+      - name: Build
+        run: |
+          nix build .#mandara --override-input nixpkgs https://channels.nixos.org/${{ matrix.channel }}/nixexprs.${{ matrix.archive }} --no-write-lock-file --print-build-logs --max-jobs 1 --cores 1
+          ./result/bin/mandara --version
+
+      - name: Flake check
+        run: nix flake check --override-input nixpkgs https://channels.nixos.org/${{ matrix.channel }}/nixexprs.${{ matrix.archive }} --no-write-lock-file --print-build-logs --max-jobs 1 --cores 1
+
+      - name: Build resource diagnostics
+        if: always()
+        env:
+          CACHIX_AUTH_TOKEN: ""
+        run: |
+          cargo run --locked --quiet --package xtask -- nix-runner report
+
+  plugins:
+    name: Plugins (wasm32-wasip2)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip2
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            plugins/examples/moon-phase
+      - run: cargo xtask plugins --out dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: plugins
+          path: dist/*.mandara.tar.gz
+
+  # Every line Mandara writes into a compositor's config must pass that
+  # compositor's own checker. Sway and River ship in Arch, so their checker
+  # tests run for real here: Sway's drop-ins and include line through
+  # `sway --validate` (headless backend), the Config doctor's parser against
+  # the live checker and sway's own verdict on retired configs; River has no
+  # checker, so every command Mandara sends it goes to a headless River
+  # (river-classic, the line with river-control) through riverctl. Only
+  # those tests run, so the GUI crates aren't built.
+  compositor-checkers:
+    name: Compositor checkers (Sway, River)
+    runs-on: ubuntu-24.04
+    # It only reads the checkout; the token stays out of the container.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Checker tests in Arch
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src archlinux:latest sh -euc '
+            pacman -Syu --noconfirm --needed git rust gcc pkgconf libxkbcommon sway river-classic >/dev/null
+            # sway carries a file capability (cap_sys_nice) that a container
+            # cannot grant; a plain copy earlier on PATH runs without it.
+            cp /usr/bin/sway /usr/local/bin/sway
+            sway --version
+            river -version
+            cargo test --locked -p mandara-config -- --nocapture sway river real_checkers every_option_alone
+          '

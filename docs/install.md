@@ -1,0 +1,1170 @@
+# Install
+
+One command, from any shell (bash, zsh or fish):
+
+On the website, use **Copy** beside a command example to copy its text.
+
+```bash
+sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh
+```
+
+The small [download script](../install.sh) shows Mandara's phoenix and the
+download progress, chooses the build for your CPU and system (GNU or musl
+Linux, or [FreeBSD](#freebsd)), then checks the release's Ed25519 signature
+and the archive's SHA-256 **before extracting or running it**. It uses
+`curl`, `tar`, OpenSSL 3 or newer, `sha256sum` and the usual POSIX tools
+(on FreeBSD, the base system's `fetch` and `sha256` do when curl isn't
+installed); it tells you when one is missing. Downloads retry on temporary connection errors and stop if the
+connection stalls. The command runs the script only after the download
+succeeds. It removes temporary files on completion, failure or interruption.
+
+Five numbered stages cover the release signature, archive download, checksum,
+extraction and starting the installer. Each finished download reports its byte
+count. In a terminal, curl also shows the transferred and total sizes, speed
+and percentage when the server provides a total. Retry warnings stay visible
+in logs. A recovered request is followed by **Release signature verified.**
+before the archive download starts; failed signature downloads stop with
+**Nothing was installed.** Check your connection and run the same command
+again. No download fallback skips verification.
+
+The verified installer normally runs from your cache, and falls back to
+`/tmp` if the cache is unavailable. Setting `TMPDIR` overrides both: choose
+a writable folder on a filesystem that allows programs to run. A `noexec`
+mount on that folder prevents the extracted installer from starting.
+
+Its messages follow your terminal language, with the same twenty-one languages
+as Mandara.
+
+Installation, configuration and administrator prompts stay in the Rust
+`mandara install` command. Forward its options with `"$@"`:
+
+```bash
+sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh --dry-run
+```
+
+For an existing Plasma Wayland session:
+
+```bash
+sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh --compositor kwin --no-greeter
+```
+
+Options are forwarded unchanged, including paths with spaces. Temporary
+downloads stay private; the Rust installer receives your original file-permission
+mask. The bootstrap
+does not request administrator access or edit configuration itself. To read
+it before running it, download `install.sh` to a file and run `sh install.sh`
+with the same options.
+
+You can also download a tarball by hand:
+
+```bash
+curl -LO https://github.com/theHamdiz/mandara/releases/latest/download/mandara-x86_64-linux-gnu.tar.gz
+tar xf mandara-x86_64-linux-gnu.tar.gz
+./mandara-*/bin/mandara install
+```
+
+Pick the tarball that fits (or grab it from the
+[Releases page](https://github.com/theHamdiz/mandara/releases/latest) in a
+browser): `mandara-x86_64-linux-gnu-x86-64-v3` (AVX2-era CPUs, fastest),
+`mandara-x86_64-linux-gnu`, `mandara-aarch64-linux-gnu`, or the `-musl`
+builds for Alpine, Void musl and Chimera. `SHA256SUMS` sits next to them
+(`sha256sum -c SHA256SUMS --ignore-missing` checks a download by hand),
+signed by Mandara's release key in `SHA256SUMS.sig`: `mandara install` and
+every update check that signature and refuse a release without it.
+Installing a published binary also stops if its checksums cannot be reached
+and no signed archive is available beside it. Keep `SHA256SUMS`,
+`SHA256SUMS.sig` and the tarball together for an offline install; the download
+script already does this. Builds from your own source checkout do not need a
+published checksum. The existing `--no-verify` option is an explicit override
+for installing a binary yourself; the download script and release downloads
+still require valid signatures.
+
+Adding Mandara to PATH updates your shell profiles. The terminal that ran
+the installer keeps its old PATH: open a new terminal before running
+`mandara` commands, or open Mandara Studio from your application menu.
+
+`mandara install` copies itself to `~/.local/bin`, after **checking its own
+SHA-256** against the release's published checksums (and offers to put that
+folder on your PATH if it isn't). Then it installs the
+runtime packages your distribution needs (asking for sudo, doas, run0 or
+pkexec only for that), installs a root-owned **admin helper** (a copy of
+Mandara only root can change, the one Studio's administrator actions run,
+so your user-writable copy never runs as root), hooks into your compositor
+non-destructively and, if
+you agree, starts Mandara with it, switches your login screen to Mandara
+Login (greetd + cage, backed up and reversible) and unlocks GNOME Keyring /
+KWallet with your login password. Updates come later by binary patch
+(`mandara update`).
+
+It works on **Arch, Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo
+and Solus**, and on image-based systems such as Bazzite, Silverblue, Bluefin
+and Aeon (see [Immutable systems](#immutable-systems)); on NixOS, use the
+[flake](#nixos) instead. Besides the
+runtime libraries it installs, one by one so a missing package never stops
+it, fonts and colour emoji, Papirus icons, `xdg-utils`, the desktop portals
+of your compositors, and the services Studio talks to: PipeWire and
+WirePlumber (sound), NetworkManager and its OpenVPN plugin (Network panel,
+`.ovpn` import), BlueZ (Bluetooth, enabled for you), polkit, GNOME Keyring
+with its PAM module, AccountsService (Users), GeoClue (location), UDisks2
+(drives), UPower and power-profiles-daemon (battery, profiles), i2c-tools
+(DDC/CI monitor brightness) and the freedesktop sound theme (event sounds).
+
+Before installing anything it checks that your package databases can be
+used, and brings them up to date when they can't (see
+[Package databases missing or out of date](#package-databases-missing-or-out-of-date)).
+When no compositor Mandara runs on is installed yet, it offers to install
+one (see [No compositor yet](#no-compositor-yet)).
+
+| Option | Meaning |
+|---|---|
+| `--latest` | Download and install the latest release instead of this binary |
+| `--version X.Y.Z` | Download and install that release instead of this binary |
+| `--from-source` | Build from source (installs Rust and build tools) |
+| `--prefix DIR` | Install into `DIR/bin` (default `~/.local`) |
+| `--no-deps` | Skip system packages; shortcut checks still need libxkbcommon |
+| `--no-autostart` | Don't start Mandara with the compositor |
+| `--no-greeter` | Keep your login screen |
+| `--compositor mango\|niri\|hyprland\|umbriel\|sway\|river\|kwin\|aqueous\|labwc\|cosmic` | Pick the compositor to integrate with. Missing compositors can be installed from your distribution's repositories after asking (`--yes` accepts); KWin requires an existing Plasma installation. |
+| `--repo OWNER/NAME` | Releases and sources from another repository |
+| `--dry-run` | Show everything that would happen, change nothing |
+| `--yes` | Don't ask; take every default |
+| `--no-verify` | Install this binary even if its published checksum is unavailable or doesn't match |
+
+With a terminal, `mandara install` opens on its own screen: the MANDARA
+wordmark and an arrow-key menu that picks the compositor to integrate with
+(the cursor suggests one you already have; the row stays on *detect
+automatically* until you choose) and switches autostart and the login screen
+on or off before anything is installed. Every choice there is also a
+flag: one you pass is left out of the menu, and `--yes`, `--dry-run` or a
+run without a terminal skips the screen and prints the one-line plan
+instead. Dry runs also keep the installer heading on one line. Esc, `q`
+or Ctrl-C leaves it without changing anything.
+
+`mandara uninstall` removes the binary and desktop entry and empties the
+compositor drop-ins; your settings are kept.
+
+### Languages
+
+Translations aren't built into the binary: each language is a small
+**language pack** for exactly one Mandara version
+([details](languages.md#language-packs)). The tarballs carry every pack in
+`share/mandara/locales/<version>/`, and `mandara install` copies them to
+`~/.local/share/mandara/locales/<version>/`, so a fresh install speaks your
+language without going online. The `.deb`, `.rpm` and Arch packages
+install them in `/usr/share/mandara/locales/<version>/`. A self-installed
+Mandara that is missing a pack (an install from an older tarball, or a
+language picked later) downloads just that one from its own version's
+signed release, and every update brings the new version's packs for the
+languages you use.
+
+## No compositor yet
+
+The setup screen's *Compositor* row covers this in a terminal: leave it on
+*detect automatically* and, when nothing is installed, the installer falls
+back to this numbered list. It still needs an interactive terminal for your
+answer, but it does not need arrow keys or the setup screen.
+
+When none of MangoWM, Niri, Hyprland, Sway, River Classic, Umbriel, KWin, Aqueous, labwc or COSMIC is
+installed, the installer
+lists the ones your distribution's own repositories carry and asks which
+to install, with the first one as the recommended default:
+
+```text
+==> Installing a compositor
+    No supported compositor is installed (MangoWM, Niri, Hyprland, Sway, River Classic, Umbriel, KWin, Aqueous, labwc, COSMIC).
+      1) MangoWM (recommended) · mangowm
+      2) Niri · niri
+      3) Hyprland · hyprland
+      0) None: I'll install one myself
+    Install which one? [1]
+```
+
+It installs your pick with its desktop portal (screen sharing), then hooks
+Mandara into it as usual. Choose it on your login screen to start it. To
+skip the question, name one: `mandara install --compositor niri` installs
+Niri when it is missing (after asking; with `--yes` without asking). With
+`--yes` alone, or without a terminal to answer on, nothing is installed:
+the installer only says how.
+
+Only official repositories are used; the installer never adds one. Where
+a compositor comes only from a third-party source (the AUR, Copr, a PPA,
+Gentoo's GURU), install it yourself and run `mandara setup`.
+
+| | MangoWM | Niri | Hyprland |
+|---|---|---|---|
+| Arch and derivatives | `mangowm` | `niri` | `hyprland` |
+| Debian, Ubuntu | | | `hyprland` (Debian unstable, Ubuntu 26.04; not Debian 13) |
+| Fedora | | `niri` | |
+| openSUSE Tumbleweed | | `niri` | `hyprland` |
+| Void | | `niri` | |
+| Alpine | `mangowm` | `niri` | `hyprland` |
+
+Before offering one it also asks the package manager whether your release
+has it (pacman, apt, xbps and apk can say so quickly), so Debian stable,
+which has no Hyprland package, isn't offered one. Umbriel isn't packaged
+by any distribution yet.
+
+## Package databases missing or out of date
+
+A system whose package databases were never downloaded (a fresh install,
+a container, a cleared cache) can't install anything: pacman reports
+`database file for 'core' does not exist` and `target not found` for every
+package, apt says `Unable to locate package`. The installer checks the
+files before it installs anything, the same in every language:
+
+| | It checks | It runs |
+|---|---|---|
+| Arch (pacman) | a database in `/var/lib/pacman/sync/` for every repository in `pacman.conf` | `sudo pacman -Syu`, a full system upgrade, after asking |
+| Debian, Ubuntu (apt) | the package lists in `/var/lib/apt/lists/` | `sudo apt-get update` (every time; it changes no packages) |
+| Gentoo | the repository tree in `/var/db/repos/gentoo` | `sudo emerge --sync` |
+| Fedora, openSUSE, Alpine, Solus | nothing: they fetch their metadata themselves | `dnf makecache --refresh`, `zypper refresh`, `apk update` or `eopkg update-repo`, only if installing failed |
+
+On Arch it is always the full `pacman -Syu`, never `pacman -Sy` followed by
+an install: that is a partial upgrade, which Arch doesn't support. Since it
+upgrades the whole system, it is asked first:
+
+```text
+Your package databases are missing or out of date (core, extra). Update them now? This runs `sudo pacman -Syu`, a full system upgrade. [Y/n]
+```
+
+Answer no and the installer stops, telling you to run `sudo pacman -Syu`
+yourself and then `mandara install` again (or `mandara install --no-deps`
+to skip system packages). When the databases exist but installing still
+fails (they may be out of date and the mirror no longer has those package
+versions), it offers the same update once and tries again. `--dry-run`
+shows the question and the commands; `--yes` takes the default answer.
+
+## Arch Linux
+
+Three package recipes, pick one:
+
+| Package | What you get |
+|---|---|
+| `mandara-shell-bin` | the prebuilt release binary (fastest; x86_64 and aarch64) |
+| `mandara-shell` | the same release, built from source on your machine |
+| `mandara-shell-git` | the latest `main`, built from source |
+
+They are on their way to the **AUR** (new AUR accounts are paused right
+now; once the packages are published, `paru -S mandara-shell-bin` or
+`yay -S mandara-shell-bin` will do). Until then, build the same recipes
+from this repository with nothing but `git` and `base-devel`:
+
+```bash
+git clone https://github.com/theHamdiz/mandara.git
+```
+
+```bash
+cd mandara/packaging/aur/mandara-shell-bin && makepkg -si
+```
+
+Each release fills these recipes in with its version and checksums, so a
+fresh clone always builds the newest release. Every
+[release](https://github.com/theHamdiz/mandara/releases) also attaches a
+ready `PKGBUILD` for `mandara-shell-bin`: download it into an empty folder
+and run `makepkg -si`.
+
+The package installs the `mandara` binary, the Studio desktop entry and
+icon, and the lock screen's PAM file (`/etc/pam.d/mandara-lock`). Then hook
+Mandara into your compositor (non-destructive: one include line, with a
+backup) and start it:
+
+```bash
+mandara setup
+```
+
+The recipes live in [`packaging/aur/`](../packaging/aur) and follow the
+[AUR submission guidelines](https://wiki.archlinux.org/title/AUR_submission_guidelines).
+
+## FreeBSD
+
+Mandara runs on **FreeBSD 14+ (14.4 and newer, FreeBSD 15 included), on
+amd64**, under a Wayland compositor. Every release has a FreeBSD build,
+`mandara-<version>-x86_64-freebsd.tar.gz`, signed and checked like the
+Linux ones. Install it with the same kind of one-line command, using
+FreeBSD's own `fetch` (no curl needed):
+
+```sh
+sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && fetch -o "$f" https://thehamdiz.github.io/mandara/install.sh && sh "$f" "$@"' sh
+```
+
+The download script sees FreeBSD (`uname -s`), downloads the FreeBSD
+tarball, verifies its signature and checksum with the base system's
+OpenSSL and SHA-256 tools, and hands over to `mandara install`, as on
+Linux.
+The tarball holds the `mandara` binary, Studio's desktop entry and icon,
+the lock screen's PAM file and every language pack. The binary needs only
+FreeBSD's base libraries; Wayland, xkbcommon, Vulkan and fontconfig are
+opened at run time from packages. One build serves every supported
+release: it is built against FreeBSD 14.4's base system, and FreeBSD keeps
+running programs built for an earlier release, so the same binary runs
+unchanged on 14.4, newer 14.x releases and 15. The packages come from
+your own release's repository (`FreeBSD:14:amd64` or `FreeBSD:15:amd64`).
+
+`mandara install` knows FreeBSD 14 and 15 (and GhostBSD) by
+`/etc/os-release`. It installs everything with `pkg install -y` (a fresh
+system's pkg bootstraps itself without asking), from FreeBSD's own
+package names: Wayland, xkbcommon, Mesa and the Vulkan loader, fonts for
+every interface language, portals, PipeWire with its OSS plugin
+(`pipewire-spa-oss`) and WirePlumber, polkit, ConsoleKit2, D-Bus, seatd,
+UPower, AccountsService, GeoClue, BSDisks and GNOME Keyring. Then it:
+
+- enables and starts D-Bus and seatd in rc.conf (`sysrc dbus_enable=YES`,
+  `service dbus start`, the same for `seatd`), leaving any that are on
+  already alone;
+- adds you to the `video` group, seatd's, so a compositor can open the
+  seat (log in again afterwards);
+- once Mandara Login is set up, writes one polkit rule,
+  `/usr/local/etc/polkit-1/rules.d/50-mandara-greeter.rules` (backed up,
+  Mandara's own file), so the login screen's user may suspend, restart and
+  power off through ConsoleKit2 and do nothing else; the first time, it
+  also takes that user out of `operator`, which Mandara 0.24 and 0.25
+  added it to and which can read raw disks (see
+  [Login screen → FreeBSD](login-manager.md#freebsd));
+- puts the admin helper in `/usr/local/lib/mandara` (owned by
+  `root:wheel`), which Studio and the Updates panel run through pkexec.
+
+It can install Niri, Hyprland, Sway or River Classic (`river-classic`)
+from FreeBSD's packages. The Inter font isn't packaged for FreeBSD, so
+Mandara falls back to its other fonts. NetworkManager, BlueZ, UDisks2's
+own daemon and power-profiles-daemon don't exist on FreeBSD; Studio shows
+those panels locked with the reason. External monitor brightness over
+DDC/CI isn't set up there yet.
+
+greetd, which Mandara Login runs on, isn't packaged for FreeBSD yet: the
+installer says so and leaves your login screen as it is. Build it as
+[Mandara Login on FreeBSD](login-manager.md#freebsd) shows, then run
+`sudo mandara greeter use mandara --apply`.
+
+The installer runs as your user and asks for root through `sudo` (or
+`doas`) only for packages and system changes. Updates come from the
+Updates panel: [pkg and freebsd-update](apps-and-updates.md#freebsd).
+
+To use the tarball without the installer, install the libraries it opens
+at run time yourself:
+
+```sh
+pkg install wayland libxkbcommon vulkan-loader mesa-libs mesa-dri fontconfig freetype2 ca_root_nss dbus seatd
+```
+
+### What works on FreeBSD
+
+Mandara reads FreeBSD's own interfaces where Linux has procfs, sysfs or a
+Linux-only daemon:
+
+| Feature | On FreeBSD |
+|---|---|
+| Processes, CPU, memory, swap, load, uptime | `kern.proc`, `kern.cp_time(s)`, `vm.stats.vm`, `vm.swap_info`, `kern.boottime` (the process hunter, Resources, mini stats, the desktop system monitor, Studio → Performance) |
+| CPU temperature | `dev.cpu.N.temperature`, once `coretemp` (Intel) or `amdtemp` (AMD) is loaded: `kldload coretemp`, or `coretemp_load="YES"` in `/boot/loader.conf` |
+| Drives | `getfsstat`: UFS, ZFS pools, FAT, ext2 and exFAT mounts |
+| Battery and AC | UPower when it runs, else `hw.acpi.battery.*`, `hw.acpi.acline` and `acpiconf -i 0` |
+| Sound | PulseAudio or PipeWire when one runs; else the default OSS device through `mixer(8)` (volume and mute of output and input). Changing the default device runs `mixer -d` as root. Per-app volume and the visualizer need PulseAudio or PipeWire |
+| Network | `ifconfig`, the default route and a routing socket for changes; Wi-Fi through wpa_supplicant's control socket (`ctrl_interface_group=wheel` in `/etc/wpa_supplicant.conf` opens it to the `wheel` group). Joining hands wpa_supplicant the network's key, never your passphrase in a command line; `update_config=1` keeps it for the next boot. Turning Wi-Fi on or off runs `ifconfig wlan0 up/down` as root |
+| Brightness | backlight(9) devices in `/dev/backlight` (the `video` group may change them) |
+| Lock, sleep, restart, shut down | Mandara's own lock screen; ConsoleKit2 when it's on the system bus, else `shutdown -p now`, `shutdown -r now` and `acpiconf -s 3` through pkexec and Mandara's password dialog |
+
+Locked on FreeBSD, with the reason in Studio: Bluetooth (no BlueZ), power
+profiles (no power-profiles-daemon; `powerd` sets the CPU speed), the
+hotspot (no NetworkManager), hibernation (FreeBSD sleeps to RAM only),
+monitor brightness over DDC/CI, keyboard-light OSDs, and the Services,
+Crashes, Ports and App installer plugins, which manage Linux-only things.
+
+## Immutable systems
+
+Image-based ("immutable") systems boot a read-only image of `/usr` that
+their own tool replaces as a whole, so no package manager can install into
+the running system. The same one-line install works there:
+
+```bash
+sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh
+```
+
+The download script says it found an image-based system, downloads and
+verifies the release in your home folder's cache (nothing it does needs a
+writable `/usr`), and hands over to `mandara install`, which:
+
+- puts Mandara in your home folder as everywhere (`~/.local/bin/mandara`,
+  its desktop entry, icon and language packs), and hooks it into your
+  compositor (`~/.config/mandara/generated/`);
+- checks every package it would install elsewhere against the **running
+  image**, so nothing the image already ships is layered again. It asks
+  what *provides* each one (`rpm -q --whatprovides`, `pacman -T`;
+  `dpkg-query` on Vanilla OS), so a replacement the image ships under
+  another name counts: Bazzite's own BlueZ and WirePlumber builds, or
+  tuned-ppd standing in for power-profiles-daemon. On rpm-ostree, packages
+  that `rpm-ostree status` already requests for the next boot are skipped
+  too;
+- asks **once**, at the end, before adding what is missing in **one
+  transaction** with the system's own tool. One name a repository lacks
+  fails a whole transaction, so on rpm-ostree the optional packages are
+  first checked with `dnf repoquery` (as you, read-only) and those your
+  release doesn't carry are skipped with a note; should the transaction
+  still fail, it is retried with the essential packages (the runtime
+  libraries, greetd and cage) alone. ABRoot checks each name itself, so
+  there an unavailable optional package is skipped while it is recorded;
+- does everything that needs no reboot first, then says when a reboot is
+  needed.
+
+| System | Detected by | Missing packages are added with | Root-owned files that survive updates |
+|---|---|---|---|
+| Fedora Atomic: Silverblue, Kinoite, Sway Atomic and the others; Bazzite, Bluefin, Aurora | `/run/ostree-booted` | `rpm-ostree install --idempotent` (layering) | `/etc`, `/var`, `/usr/local` (a link to `/var/usrlocal`) |
+| openSUSE Aeon, Kalpa, MicroOS | `os-release` (`aeon`, `kalpa`, `microos` in `ID`/`ID_LIKE`) | `transactional-update pkg install` (a new snapshot) | `/etc`, `/var`, `/usr/local` (its own subvolume) |
+| Vanilla OS 2 | `abroot`, or `NAME="Vanilla OS"` | `abroot pkg add`, then `abroot pkg apply` once | `/etc`, `/var`, `/usr/local` (a link to `/var/usrlocal`) |
+| SteamOS | `ID=steamos` | nothing (see below) | `/etc`, `/var`, `/home` |
+
+The packages arrive with the **next boot**. Until then, Mandara already
+runs if the image had its runtime libraries (every desktop image above
+does); fonts, portals and services that were missing start working after
+the reboot. To see what would be added without changing anything, run the
+install with `--dry-run`. If you decline, the installer prints the exact
+command to run later.
+
+**The admin helper** (the root-owned copy Studio's administrator actions
+run) goes to `/usr/local/lib/mandara`, which survives updates on Fedora
+Atomic, openSUSE and Vanilla OS. **Mandara Login** needs greetd and cage, which come
+with the same transaction. The switch itself needs them installed, so it
+waits for the reboot: after restarting, Mandara Login is one click away in
+Studio → Login & Lock Screens → Login → Login manager, or run the
+`sudo ~/.local/bin/mandara greeter use mandara --apply` command the installer
+prints. It writes greetd's config in `/etc/greetd` (kept across updates), and
+its media folders go to `/usr/local/share/mandara/login` because
+`/usr/share` is read-only.
+
+**Updates.** Studio → About → *Update now* keeps Mandara itself current, as
+everywhere, because it lives in your home folder. The system updates with
+its own tool (`rpm-ostree upgrade`, `ujust update` on Universal Blue images,
+`transactional-update dup`, `abroot upgrade`), and Mandara's Updates panel
+leaves it to that tool: it shows Flatpak updates and says how the system
+updates, instead of offering dnf, zypper, apt or pacman, which can't write
+the image.
+
+**SteamOS** keeps its image read-only, and every SteamOS update replaces it,
+removing anything installed into it. Mandara installs only into your home
+folder there and lists what it couldn't add. The admin helper and Mandara
+Login live in `/usr/local`, which SteamOS replaces too, so they are skipped,
+and Studio's administrator actions stay unavailable. Desktop Mode's Plasma
+session runs Mandara with `--compositor kwin`.
+
+**Uninstalling** (`mandara uninstall`) removes Mandara from your home
+folder and leaves the packages it added to the image, which other apps may
+use too. Remove them with the system's own tool if you like:
+`rpm-ostree uninstall <packages>` (or `rpm-ostree reset` for every layered
+package), `transactional-update pkg remove <packages>`, or
+`abroot pkg remove <packages>` and `abroot pkg apply`.
+
+**Building from source** on an image-based system needs a compiler and
+build tools in the running image. The installer says which are missing;
+build inside a toolbox or distrobox container instead, or install a release.
+
+## NixOS
+
+The Updates plugin checks your default `/etc/nixos` configuration and hostname
+before offering native updates or rebuilds. A verified default flake or root
+NixOS channel keeps its supported actions enabled. A custom or unavailable
+source shows a reason instead of running a guessed command. Existing system
+generations can still be switched or rolled back independently of that source.
+Flatpak updates remain available when Flatpak is installed.
+
+Flake inspection uses cached inputs with networking disabled; it never updates
+the lock file or builds your configuration. The check uses NixOS's standard
+`unshare` utility. If the kernel prevents that isolated check, native build
+actions explain that the flake could not be verified; generation controls stay
+available independently.
+
+Mandara is a flake: Nix builds it from source (a release build, like the
+tarballs) and keeps it updated, so the built-in updater stays out of the
+way. Studio → About says "Installed by Nix" and `mandara update apply`
+refuses; update only the Mandara input with `nix flake update mandara` and
+rebuild your existing system configuration instead.
+
+Standalone runs use the official `nixos-unstable` channel, whose updates pass
+Hydra's NixOS tests. The package and modules are checked against
+`nixos-26.05`, `nixos-unstable` and the older `nixos-25.11` branch.
+The NixOS and Home Manager modules build Mandara with your host's package set.
+Preserve your system's Nixpkgs input and its locked revision when adding
+Mandara. Mandara is installed from
+this repository's flake; it is not currently a package in official Nixpkgs.
+
+Try it without installing anything:
+
+```bash
+nix run github:theHamdiz/mandara
+```
+
+Or install it into your profile with
+`nix profile install github:theHamdiz/mandara` (update with
+`nix profile upgrade mandara`).
+
+### Binary cache
+
+After every release, prebuilt Mandara goes to the binary cache
+`https://mandara.cachix.org`, built against the current `nixos-26.05`,
+`nixos-unstable` and `nixos-25.11` channels and against Mandara's own lock
+file. When your Nixpkgs revision matches one of those and that build has
+finished uploading, Nix downloads Mandara instead of compiling it; otherwise
+it builds from source as before.
+
+- `nix run` and `nix profile install` ask whether to use the cache. Nix only
+  honours the answer for
+  [trusted users](https://nix.dev/manual/nix/latest/command-ref/conf-file.html#conf-trusted-users);
+  everyone else adds it system-wide, as below.
+- On NixOS, set `programs.mandara.binaryCache.enable = true;` (see the
+  options below). It adds the cache beside your own and applies from the
+  rebuild after the one that turns it on.
+- Anywhere else, add it to `/etc/nix/nix.conf`:
+
+  ```ini
+  extra-substituters = https://mandara.cachix.org
+  extra-trusted-public-keys = mandara.cachix.org-1:oOp26vScHzVwCDKAGScpvgPFE8r06UQpDyCdA5u1gh8=
+  ```
+
+  then restart the Nix daemon with your service manager
+  (`sudo systemctl restart nix-daemon` on systemd). A single-user install
+  has no daemon and reads the file on its next run.
+
+### NixOS module
+
+The module sets up, system-wide, what `mandara install` sets up on other
+distributions. Add only these inputs to your existing system flake:
+
+```nix
+inputs.mandara.url = "github:theHamdiz/mandara";
+inputs.mandara.inputs.nixpkgs.follows = "nixpkgs";
+```
+
+Keep your existing `nixpkgs` declaration, hardware configuration, kernel and
+driver settings. Add `mandara` to your existing `outputs` arguments, then add
+these entries to your existing `nixosSystem` module list:
+
+```nix
+mandara.nixosModules.default
+{
+  programs.mandara.enable = true;
+  # programs.mandara.greeter.enable = true;  # Mandara Login
+}
+```
+
+Update only the Mandara input with `nix flake update mandara`. Review the lock
+diff before rebuilding: your root Nixpkgs revision should remain unchanged.
+Build first with `sudo nixos-rebuild build --flake .#your-host`, using your
+existing flake and configuration name. Activate it with your usual rebuild
+command once you have reviewed the result.
+
+If an earlier channel change left a generation unable to boot, select the last
+working generation in your boot menu first. Restore your prior system input
+and its locked revision from your configuration history before rebuilding.
+Changing `flake.lock` alone does not replace an existing boot generation; see
+[NixOS rollback guidance](https://nixos.org/manual/nixos/stable/#sec-rollback).
+
+With `programs.mandara.enable` you get:
+
+| | |
+|---|---|
+| The package | `mandara` on your `PATH`, Mandara Studio in your app launcher |
+| Lock screen | the `mandara-lock` PAM service `mandara lock` checks your password with |
+| polkit | enabled; Mandara is your session's authentication agent, so don't run another one |
+| Desktop portals | `xdg.portal` with GTK's portal as the fallback; your compositor's NixOS module adds its own |
+| Fonts and icons | Inter, JetBrains Mono, Noto (with CJK and colour emoji), Papirus icons, the freedesktop sound theme |
+| Services | AccountsService, GeoClue, UDisks2, UPower, power-profiles-daemon (unless TLP or auto-cpufreq is on) and GNOME Keyring, each a default you can override |
+
+| Option | Default | Meaning |
+|---|---|---|
+| `programs.mandara.enable` | `false` | Everything in the table above |
+| `programs.mandara.package` | built with host Nixpkgs | The Mandara package |
+| `programs.mandara.fonts.enable` | `true` | Install the fonts |
+| `programs.mandara.services.enable` | `true` | Enable the services Studio talks to |
+| `programs.mandara.binaryCache.enable` | `false` | Download prebuilt Mandara from `mandara.cachix.org` when your Nixpkgs revision matches one it was built with ([Binary cache](#binary-cache)) |
+| `programs.mandara.monitorBrightness.enable` | `false` | Load `i2c-dev` for external monitor brightness (DDC/CI); add yourself to the `i2c` group |
+| `programs.mandara.greeter.enable` | `false` | Mandara Login on greetd, in `cage`, listing the sessions of every compositor you enabled; turn your other display manager off |
+| `programs.mandara.greeter.unlockKeyring` | GNOME Keyring's state | Unlock GNOME Keyring with the password you type at Mandara Login |
+
+The module doesn't enable a compositor (`programs.hyprland.enable`,
+`programs.niri.enable`, … stay yours), PipeWire, NetworkManager or
+Bluetooth: turn those on as usual for the sound, Network and Bluetooth
+panels. The Alexandria and Cairo display fonts are Google Fonts; add them
+with `fonts.packages = [ (pkgs.google-fonts.override { fonts = [ "Alexandria" "Cairo" ]; }) ];`.
+
+Then hook Mandara into your compositor, as on any distribution:
+
+```bash
+mandara setup --autostart
+```
+
+That adds the one include line to your compositor config and starts
+Mandara with it (see [below](#compositors)). If Home
+Manager writes your compositor config, add the line there instead (next
+section).
+
+### Home Manager
+
+For per-user settings, import the Home Manager module:
+
+```nix
+{
+  imports = [ inputs.mandara.homeManagerModules.default ];
+
+  programs.mandara = {
+    enable = true;
+    # Optional: start Mandara as a systemd user service with your session.
+    systemd.enable = true;
+    # Optional: manage ~/.config/mandara/config.toml from Nix (see below).
+    # settings = { bar.height = 30; };
+  };
+}
+```
+
+| Option | Default | Meaning |
+|---|---|---|
+| `programs.mandara.enable` | `false` | Install Mandara for this user |
+| `programs.mandara.package` | built with host Nixpkgs | The Mandara package |
+| `programs.mandara.settings` | `{ }` | Settings written to `~/.config/mandara/config.toml` ([configuration.md](configuration.md)) |
+| `programs.mandara.systemd.enable` | `false` | Start Mandara as a systemd user service |
+| `programs.mandara.systemd.target` | `graphical-session.target` | The user target that starts and stops it |
+
+**Settings and Studio.** Studio edits `config.toml` live. While
+`settings` is empty (the default) Home Manager leaves the file alone and
+everything you change in Studio is kept. Once you set `settings`, the file
+belongs to Home Manager: Studio's changes still preview live, but they
+aren't saved, and the next `home-manager switch` brings your Nix settings
+back. Keys you leave out keep Mandara's defaults.
+
+**Starting Mandara.** Either let your compositor start it
+(`mandara setup --autostart`, or a line in your Home Manager compositor
+config), or use `systemd.enable`, not both. The service needs your
+compositor to start `graphical-session.target` and pass `WAYLAND_DISPLAY`
+and its socket variables to the systemd user manager: Niri does, and so
+does Hyprland's Home Manager module with its systemd integration
+(`wayland.windowManager.hyprland.systemd.enable`); for others, check your
+compositor's documentation.
+
+**Your compositor config.** Mandara writes its rules, binds and border
+colours to `~/.config/mandara/generated/` and never edits a file Home
+Manager made (it can't: those live in the read-only Nix store). Add the
+include line to your compositor's Home Manager config yourself:
+
+| Compositor | Add to your Home Manager config |
+|---|---|
+| **MangoWM** | `source_optional=~/.config/mandara/generated/mango.conf` in the config text |
+| **Niri** 25.11+ | `include optional=true "/home/you/.config/mandara/generated/niri.kdl"` in `config.kdl` (plain `include` before 26.04) |
+| **Hyprland 0.57+** | `pcall(dofile, "/home/you/.config/mandara/generated/hyprland.lua")` in `hyprland.lua` |
+| **Hyprland ≤ 0.56** | `source = ~/.config/mandara/generated/hyprland.conf`, e.g. `wayland.windowManager.hyprland.settings.source = [ "~/.config/mandara/generated/hyprland.conf" ];` |
+| **Umbriel** | `"/home/you/.config/mandara/generated/umbriel.toml"` in `[include.optional] files` of `config.toml` |
+| **Sway** | `include ~/.config/mandara/generated/sway.conf` at the end, e.g. `wayland.windowManager.sway.extraConfig` |
+| **River Classic** | no include line: add `riverctl spawn mandara` to your `init` |
+
+After `home-manager switch`, run `mandara setup` once: it finds your line
+and writes the drop-in. Run it before adding the line and it changes
+nothing in the read-only config; it prints the line to add instead.
+
+## Compositors
+
+Mandara supports **MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin, Aqueous, labwc and COSMIC** (River 0.3, `river-classic`; see below).
+`mandara setup` (run by the installer) hooks Mandara into your compositor
+with **one include line** in your own config, writes everything else to
+`~/.config/mandara/generated/`, starts Mandara at login with an absolute
+path, and checks the result with the compositor's own validator
+(`mango -p`, `niri validate`, `Hyprland --verify-config`,
+`umbriel config validate`, `sway --validate`), rolling back if it objects
+(see [Config doctor](#config-doctor)). **River, KWin, Aqueous, labwc and COSMIC do not use include lines.** River’s
+`init` is a program, not a config file, so there is no include line and
+no checker. Mandara never edits `init`; it sends River's settings over
+`river-control` while it runs, and you add the one autostart line
+yourself (the table below shows it). KWin uses the native Plasma protocols
+for workspaces and windows; its settings remain in Plasma System Settings.
+Aqueous is followed over its own IPC socket and keeps its settings in its
+own files ([see below](#aqueous)). labwc and COSMIC are followed over
+standard Wayland protocols; their settings stay in labwc's own files and in
+COSMIC Settings ([labwc](#labwc), [COSMIC](#cosmic)).
+
+| | Include line in your config | Autostart |
+|---|---|---|
+| **MangoWM** | `source_optional=~/.config/mandara/generated/mango.conf`, or a source in TOML's `[global]` | `exec_once=` |
+| **Niri** 25.11+ | `include optional=true "…/mandara/generated/niri.kdl"` (plain `include` before 26.04) | `spawn-at-startup` |
+| **Hyprland 0.57+** (Lua only) | `pcall(dofile, "…/mandara/generated/hyprland.lua")` in `hyprland.lua` | `hl.on("hyprland.start", …)` |
+| **Hyprland ≤ 0.56** | `source = ~/.config/mandara/generated/hyprland.conf` | `exec-once =` |
+| **Umbriel** | `"…/mandara/generated/umbriel.toml"` in `[include.optional] files` of `~/.config/umbriel/config.toml` (added to your list if you have one) | `general.autostart` |
+| **Sway** | `include …/mandara/generated/sway.conf` at the end of `~/.config/sway/config` (or whichever file sway reads: `~/.sway/config`, `~/.i3/config`…) | `exec` |
+| **River** 0.3 | none: Mandara never edits `~/.config/river/init` | the one line you add to `init`: `riverctl spawn /path/to/mandara` |
+| **KWin / Plasma (Wayland)** | none: Mandara leaves `kwinrc` unchanged | its own `org.mandara.shell.desktop` XDG autostart entry, only for KDE |
+| **Aqueous** | none: Mandara writes nothing in `~/.config/aqueous` | a systemd user unit you add ([see below](#aqueous)) |
+| **labwc** 0.8.3+ | none for shell settings; imported app colours can use `themerc-override` | the line you add to `~/.config/labwc/autostart`: `mandara &` |
+| **COSMIC** | none: COSMIC's settings stay in COSMIC Settings | add `mandara` in COSMIC Settings → Applications → Startup applications |
+
+The setup picker offers KWin only when `kwin_wayland` is installed, and
+the installer warns when Plasma’s login session is missing
+([Plasma / KWin](#plasma--kwin)). A
+failed KWin availability check is reported directly; it does not offer to
+retire shortcuts or label the failure a compositor-configuration error.
+
+MangoWM reads `~/.config/mango/config.conf`, then `config.toml`, even when
+`XDG_CONFIG_HOME` points elsewhere. When neither user file exists, setup
+starts one from `/etc/mango/config.conf` or `config.toml` and connects
+Mandara's generated file with the matching syntax. Existing user configs
+and symlinks stay in place; changes have backups and native validation.
+The system file stays unchanged. Automatic setup requires one of these
+default user paths. An explicitly selected custom config is reported
+without creating another default or editing the custom file.
+The generated file uses `$XDG_CONFIG_HOME/mandara/generated/mango.conf`
+when `XDG_CONFIG_HOME` is set; setup writes the full absolute path.
+System configs whose include targets would change when copied require
+manual preparation of the user config and its supporting files first.
+
+If an older installation left MangoWM starting without Mandara, update,
+then run `mandara setup --compositor mango --autostart`. Log out and back
+in after setup succeeds: `exec_once` runs at session startup, not on reload.
+
+Mandara detects the installed version and speaks its dialect, including
+Hyprland 0.57's Lua dispatches. On Niri the drop-in makes workspace
+backgrounds transparent so the wallpaper shows outside the Overview; night
+light needs a real Niri session on a tty (a nested Niri has no gamma
+control).
+
+On **Umbriel**, your own `config.toml` is applied after its includes, so a
+value you set there wins over Mandara's drop-in (window and layer rules
+from both files are kept, and binds merge by key). Two things follow from
+that: live border colours only show when your config doesn't set
+`[colors.border]`, and Mandara's autostart entry only counts when your
+config has no `general.autostart` list of its own (add Mandara to that list
+instead). Mandara reaches Umbriel over `$UMBRIEL_SOCKET`; the bar shows each
+output's workspaces, the active workspace's layout (click to cycle
+scrolling → dwindle → master → stacking) and the active keybind submap.
+
+On **Sway**, Mandara talks to the compositor over its IPC socket
+(`$SWAYSOCK`): the bar shows each output's workspaces (occupied, urgent,
+the visible one), the windows on them, the workspace's container layout
+(click to cycle stacking → tabbed → split) and the binding mode while it
+isn't `default`. Sway reads its config in order, and the include line sits
+at the end, so Mandara's border colours, gaps, window rules, input,
+display and key settings apply on top of yours (binds you already have stay
+yours: Mandara skips its own on those keys). If you have no config of your
+own yet, `mandara setup` starts `~/.config/sway/config` as a copy of
+`/etc/sway/config` (what sway asks you to do) before adding the line. Sway
+has no rounded corners, blur, shadows, animations or per-focus opacity, so
+those Studio rows are locked while it runs; `bar { … }` blocks (swaybar)
+and `output * bg …` (swaybg) are found as another bar and wallpaper (see
+below).
+
+**River**'s config is its `init` file, an executable program (usually a
+shell script of `riverctl` commands), so Mandara never edits it and adds no
+include line. Instead the shell sends River its settings over River's own
+`river-control` protocol when it starts and on every change: border colours
+and width, window rules (`rule-add` float / no-float and `tags` for windows
+on every tag; River matches with simple globs, so a rule whose regex needs
+more than a `*` at either end is left out and reported), keyboard layout
+and repeat, mouse and touchpad settings (every pointer first, then devices
+named `…Touchpad…`), the cursor, focus-follows-cursor and its keys (`map
+normal …`). Before each sync it takes its own previous binds and rules back
+(`unmap`, `rule-del`), and keys your `init` maps are left alone; a record of
+what it sent is kept in `~/.config/mandara/generated/river.conf` (River
+doesn't read that file). To start Mandara with River, add one line to your
+`init`:
+
+```sh
+riverctl spawn /home/you/.local/bin/mandara
+```
+
+The bar follows River over its `river-status` protocol: each output's tags
+as a bitmask, like MangoWM's (click shows a tag, right-click adds it to the
+view, middle-click toggles it on the focused window), which are in use or
+urgent, the layout generator's name (with rivertile, the pill moves the
+main area round the screen) and the active mode. River's protocols don't
+say which window is on which tag, so the tag pills show no app icons;
+windows come from the foreign-toplevel protocol. River has no gaps (they are
+the layout generator's), rounded corners, blur, shadows, animations,
+opacity rules, output settings or Num Lock option, so those Studio rows are
+locked while it runs. This is River's classic line, 0.3 (`river-classic` in
+Arch): River 0.4 moved window management into separate programs and dropped
+`river-control` and `river-status`, so on 0.4 and later Mandara can't
+drive it, and the Config doctor says so.
+
+### External monitor brightness
+
+The installer offers to enable external-monitor brightness through DDC/CI.
+Accepting loads `i2c-dev` when needed, records it for future boots, and
+adds your user to the device group if necessary. Log in again after a group
+change, and enable DDC/CI in your monitor's own menu. Existing access in the
+current boot does not skip the startup-module check. Studio → Displays →
+External brightness shows module and permission diagnostics.
+
+### Plasma / KWin
+
+Start Mandara inside a **Plasma Wayland** session. The installer recognizes
+an existing KWin installation; it does not install a complete Plasma desktop
+as a standalone window-manager choice.
+
+**KWin alone is not a login session.** Most distributions package KWin by
+itself: that package brings `kwin_wayland` but not Plasma’s session file
+(`wayland-sessions/plasma.desktop`), so Mandara Login and other login screens
+have nothing to offer. `mandara setup --compositor kwin` and `mandara install`
+check for it and, when it is missing, name the package that adds it:
+
+| Distribution | Package with Plasma’s login session |
+|---|---|
+| Arch, Debian, Fedora, Void, Alpine, Solus | `plasma-workspace` |
+| Ubuntu and distributions built on it | `plasma-session-wayland` |
+| openSUSE | `plasma6-session` |
+| Gentoo | `kde-plasma/plasma-workspace` |
+| FreeBSD | `plasma6-plasma-workspace` |
+
+Install it, then choose **Plasma** at the login screen.
+
+**Starting Mandara inside Plasma.** KWin has no drop-in, so a plain
+`mandara setup --compositor kwin` writes nothing, and setup says so. Add
+`--autostart` to create Mandara’s startup entry:
+
+```bash
+mandara setup --compositor kwin --autostart
+```
+
+The native KWin driver follows virtual desktops, focused windows, window
+state and outputs through Plasma’s Wayland protocols. Workspace clicks,
+window moves, the dock and the switcher use those same protocols. Clipboard
+history uses ext-data-control, with the same privacy and size limits as on
+the other compositors. No KWin
+scripts or helper shell are installed. Mandara writes only its own XDG
+autostart entry; a custom entry with the same filename is left alone.
+Disable Mandara’s **Compositor → Integration → Start at login** setting to turn off that entry.
+
+Keep resolution, scaling, arrangement, input, window rules, effects and
+shortcuts in **Plasma System Settings**. Studio explains these limits; its
+**Displays → Shell on each display** controls still select where Mandara’s
+bar, dock and other surfaces appear. The Config doctor can report KWin’s
+availability, but KWin has no standalone configuration checker. Screenshots
+use KWin's native ScreenShot2 service; keep its screenshot effect available.
+A failed
+availability probe makes `mandara setup --check --compositor kwin` exit with
+status 13, just as a missing KWin executable does.
+
+Lock requests use **Plasma’s secure lock screen**, including confirmation
+before sleep, because KWin does not expose the lock-surface protocol used
+by Mandara’s own locker. The Mandara lock preview remains available. Choose
+lock-screen fonts and the unlock grace period in Plasma System Settings;
+Studio marks Mandara’s own locker controls unavailable on KWin. Plasma’s
+own controls also choose which panels and desktop components to keep;
+Mandara does not remove or disable them automatically.
+
+### Aqueous
+
+Start Mandara inside an Aqueous session. Aqueous exports `AQUEOUS_SOCKET`
+to the programs it starts, and Mandara finds it only there: it never
+guesses or searches for a socket, so start Mandara from that session (a
+new Aqueous instance needs a new Mandara). Aqueous is packaged by its own
+project rather than distribution repositories, so the installer supports
+it once it is installed but doesn't offer to install it.
+
+The native driver follows Aqueous's workspaces on every output, windows,
+the focused window, outputs and the keyboard layout through Aqueous's IPC
+socket: one full snapshot, then acknowledged changes. Clicking a workspace
+pill switches to it, and window moves, keyboard-layout switching and the Overview
+hot-corner action use Aqueous's own commands. Commands run on a background
+thread, so the bar never waits for the compositor. If Aqueous goes away,
+Mandara reconnects with growing pauses and starts again from a fresh
+snapshot.
+
+Aqueous keeps its settings in its own files in `~/.config/aqueous` (it
+checks and reloads them itself) and documents no include line, so Mandara
+writes nothing there and Studio's compositor controls say so. `mandara
+setup --compositor aqueous` only reports this. The bar's layout
+pill can't change Aqueous layouts: its IPC has no layout command. The Config
+doctor reports whether `aqueous` is installed; Aqueous has no standalone
+configuration checker.
+
+**Starting Mandara with Aqueous.** Aqueous starts its desktop shell through
+systemd user units and picks which one in `~/.config/aqueous/session.toml`.
+To run Mandara instead of Pearl, DMS or Noctalia:
+
+1. Turn Aqueous's own shell off, so two bars don't start, in
+   `~/.config/aqueous/session.toml`:
+
+   ```toml
+   version = 1
+   shell = "none"
+   ```
+
+2. Add a user unit for Mandara, `~/.config/systemd/user/mandara.service`
+   (use `/usr/bin/mandara` instead if Mandara came from a package):
+
+   ```ini
+   [Unit]
+   Description=Mandara desktop shell (Aqueous sessions)
+   PartOf=graphical-session.target
+   After=graphical-session.target
+   # Only in Aqueous: other sessions start Mandara their own way.
+   ConditionEnvironment=AQUEOUS_SOCKET
+
+   [Service]
+   ExecStart=%h/.local/bin/mandara
+   Restart=on-failure
+
+   [Install]
+   WantedBy=graphical-session.target
+   ```
+
+3. Turn it on, then log out and back in to Aqueous:
+
+   ```sh
+   systemctl --user enable mandara.service
+   ```
+
+Aqueous passes `AQUEOUS_SOCKET` to the services of its session, so Mandara
+started this way finds it, and the `ConditionEnvironment` line keeps the unit
+from starting a second Mandara when you log in to another compositor. The session choice takes effect at the next
+login.
+
+### labwc
+
+labwc has no IPC socket. It sets `LABWC_PID` for the programs it starts,
+which is how Mandara recognises it (a compositor nested inside labwc is
+still found by its own variables). Workspaces need labwc 0.8.3 or later,
+which added the standard `ext-workspace-v1` protocol; the installer can
+install labwc from your distribution's repositories.
+
+Mandara follows labwc's workspaces (labwc shows the same set on every
+output) and switches them over `ext-workspace-v1`, and lists windows, the
+focused window and their outputs over the wlr foreign-toplevel protocol. A
+dedicated background thread keeps one Wayland connection, so the bar never
+waits for the compositor. labwc's window protocols don't say which
+workspace a window is on, so workspace pills don't show which ones have
+windows, and the bar can't move a window to another workspace. The layout
+pill, keyboard-layout switching and the Overview hot-corner action aren't
+available on labwc.
+
+labwc keeps its settings in `~/.config/labwc` (`rc.xml`, `autostart`), and
+`rc.xml` has no include Mandara's drop-in could use safely, so Studio leaves
+labwc's shell settings unmanaged. Opt-in app templates can apply colours to
+`themerc-override`, with backups, native validation and undo. `mandara
+setup --compositor labwc` only reports the unmanaged shell settings; to start Mandara with labwc,
+add this line to `~/.config/labwc/autostart`:
+
+```sh
+mandara &
+```
+
+The Config doctor reports whether `labwc` is installed; labwc has no
+standalone configuration checker.
+
+### COSMIC
+
+COSMIC has no IPC socket either. Its session sets
+`XDG_CURRENT_DESKTOP=COSMIC`, which is how Mandara recognises it (a
+compositor nested inside COSMIC is still found by its own variables).
+COSMIC is a whole desktop session, like Plasma, so the installer supports
+it once it is installed but doesn't offer to install it.
+
+Mandara follows COSMIC's workspaces on every output and switches them over
+the standard `ext-workspace-v1` protocol. Windows come from
+`ext-foreign-toplevel-list-v1` with COSMIC's own toplevel protocols on top:
+the focused window, each window's outputs and workspaces (so workspace
+pills show which ones have windows) and moving a window to another
+workspace. A dedicated background thread keeps one Wayland connection, so
+the bar never waits for the compositor. COSMIC adds and removes workspaces
+as you use them, and the bar follows. The layout pill, keyboard-layout
+switching and the Overview hot-corner action aren't available on COSMIC.
+
+COSMIC keeps its settings in COSMIC Settings, so Mandara writes nothing
+there and Studio's compositor controls say so. `mandara setup --compositor
+cosmic` only reports this; to start Mandara with COSMIC, add `mandara` in
+COSMIC Settings → Applications → Startup applications. To keep only
+Mandara's bar and dock, switch COSMIC's dock off in COSMIC Settings →
+Desktop → Dock, and set COSMIC's panel to hide automatically in Desktop →
+Panel. The Config doctor reports whether `cosmic-comp` is installed;
+COSMIC has no standalone configuration checker.
+
+## Coming from another setup
+
+Mandara never rewrites your compositor config; it only adds one include
+line. Leftovers from a previous setup can still fight it:
+
+- an old launcher or wallpaper switcher on Super+Space or Ctrl+Shift+W;
+- another bar (waybar, ironbar, Quickshell shells, AGS…);
+- another notification daemon (mako, dunst, swaync);
+- another wallpaper daemon (swww, hyprpaper, swaybg).
+
+The installer finds them in your config **and every file it sources or
+includes**, for MangoWM, Niri, Hyprland (`.conf` and `.lua`), Umbriel
+(`[include]` lists, `[keybinds]` and `general.autostart`) and Sway
+(`include` globs such as `/etc/sway/config.d/*`, `set $var` variables,
+`bindsym` lines and blocks, `exec` / `exec_always`, `bar { … }` blocks and
+`output … bg` lines). River's `init` is read too (`riverctl map`,
+`riverctl spawn`, programs started with `&`) but never changed: what it
+finds there is reported for you to remove.
+
+```bash
+mandara setup --check            # list conflicts, change nothing
+mandara setup --fix-conflicts    # retire them
+mandara setup --restore latest   # undo
+```
+
+`mandara setup --restore latest` restores the backup without regenerating
+the drop-in or requiring keyboard libraries. If you combine restoration
+with shortcut checks or changes, prerequisites are checked before any file
+is restored.
+
+What `--fix-conflicts` does:
+
+- Each conflicting line is commented out with a `mandara-retired:` marker,
+  after a timestamped backup of every file it touches. On Umbriel only the
+  program's entry leaves the `general.autostart` list; the rest of the list
+  stays. On Sway a `bar { … }` block is retired whole.
+- Keys an old tool used (an extra launcher shortcut, say) are re-bound to the
+  Mandara equivalent.
+- The compositor then validates the result (`mango -p`, `niri validate`,
+  `Hyprland --verify-config`, `umbriel config validate`,
+  `sway --validate`). If it reports more problems than before, everything
+  is rolled back.
+
+Binds that are yours, like quitting the compositor or launching your VPN,
+are never touched; Mandara skips its own shortcut on those keys. Studio →
+Maintenance shows the same check with a one-click fix.
+
+## Config doctor
+
+Compositors change their config languages between releases: an option is
+renamed, a value tightens, a section moves. The **Config doctor** asks the
+compositor itself: it runs its own checker (`mango -p`, `niri validate`,
+`Hyprland --verify-config`, `umbriel config validate --json`,
+`sway --validate --verbose`) on your real config and every file it
+includes, read-only (a private runtime folder, no display, a time limit),
+and explains each problem it reports (River has no checker; see below):
+
+- **where**: the file and line, with the line itself;
+- **whose**: your own files, or Mandara's generated drop-in;
+- **what**: an unknown option (and whether it was *removed in the update*
+  you just installed), a deprecated one, a syntax error, an invalid value,
+  a duplicate keybind, a missing included file, or something Mandara wrote
+  that this compositor version doesn't support.
+
+Each problem offers fixes, and none of them is final:
+
+- **Open in editor** at that line (`$VISUAL`, else `$EDITOR` in your
+  terminal, else your default app for the file).
+- **Comment out** (with the file's own comment syntax and a
+  `mandara-doctor:` marker; a whole Niri node or TOML table when the problem
+  spans several lines) or **Remove line**. The file is backed up first
+  (`~/.local/share/mandara/doctor-backups/`), written atomically and checked
+  again; if the compositor then reports more problems, the backup is put
+  back by itself.
+- **Regenerate** for problems in Mandara's drop-in. An option the installed
+  compositor version rejects is left out of the drop-in for that version
+  from then on (an update gets to try it again).
+- **Remind me later**: no reminders about these problems until your config or
+  the compositor changes.
+
+It runs when `mandara setup` runs (before and after it writes anything: a
+drop-in or include line the compositor rejects is rolled back), every time
+the shell rewrites the drop-in, and once at start-up when your config files
+or the compositor's version changed since the last check (off the UI
+thread). New problems are announced with one notification whose button opens
+Studio → Compositor → Config doctor; turn that off with *Tell me about config
+problems* on the same page.
+
+```bash
+mandara setup --check                  # report only; exit statuses are listed below
+mandara setup --fix 1a2b3c4d=comment   # fix by id from the report: comment, remove or regenerate
+mandara msg --json compositor check    # the same report from the running shell, for agents
+```
+
+`mandara setup --check` leaves compositor files unchanged. It exits with 10
+for shortcut conflicts, 11 for compositor configuration errors, missing
+configs or disconnected MangoWM autostart, 12 when a
+required keyboard library is unavailable, or 13 for failed KWin availability
+checks. The installer offers conflict retirement only after status 10.
+
+
+MangoWM, Niri, Umbriel and Sway output is read as those checkers print it
+(tested against MangoWM 0.18.4, Niri 26.04, Umbriel 0.1.0 and Sway 1.12).
+Hyprland's is read from its documented format and hasn't been tested
+against a real Hyprland yet; an output the doctor doesn't recognise is
+still shown as it is.
+
+Sway sets up its backend before it reads a config, even to validate one,
+so the doctor runs `sway --validate` with a headless backend and software
+rendering (`WLR_BACKENDS=headless`, `WLR_RENDERER=pixman`) in its private
+runtime folder: nothing touches your screens, seat or GPU. Sway names no
+line for a key bound twice (it says "Overwriting binding"), so the doctor
+finds that line by its key combination; and it skips an `include` that
+matches no file without a word, so a missing include isn't reported.
+
+River has no config checker, so for River the doctor checks what it can,
+without ever changing `init`: that River's version still has the protocols
+Mandara needs (0.3; it explains what changed in 0.4), that `init` is
+executable, that it starts Mandara (and the one line to add if it
+doesn't), and which keys it maps that Mandara binds too. Those findings
+offer no comment or remove fixes. Mandara's own tests run every River
+command it can send in a headless River.
+
+## Packages
+
+Every [release](https://github.com/theHamdiz/mandara/releases) is built by
+CI for each distribution family and CPU, with build provenance
+attestations:
+
+| | x86_64 | x86_64-v3 (AVX2-era CPUs) | aarch64 (ARM64) |
+|---|---|---|---|
+| Any glibc distribution (tarball) | ✓ | ✓ | ✓ |
+| Alpine, Void musl, Chimera (musl tarball) | ✓ | | ✓ |
+| Debian, Ubuntu, Mint, Pop!_OS (`.deb`) | ✓ | | ✓ |
+| Fedora, openSUSE, RHEL family (`.rpm`) | ✓ | | ✓ |
+| Arch, Manjaro, EndeavourOS, CachyOS (`PKGBUILD`) | ✓ | | ✓ |
+| FreeBSD 14.4 and newer, 15 included (tarball) | ✓ (amd64) | | |
+
+Plus the bundled plugins, a build manifest per binary (source fingerprint,
+toolchain, SHA-256, lines of code), binary patches from the last five
+releases for [smart updates](apps-and-updates.md#updates-by-binary-patch), one language
+pack per language (`mandara-<v>-<code>.mlang`, and the compressed
+`.mlang.zst` the shell downloads), `update.json` and `SHA256SUMS`. Every
+package and tarball ships all language packs. The installer picks the right build for your system (glibc,
+musl or FreeBSD, x86-64-v3 when your CPU supports it); Gentoo, Solus and other glibc
+systems use the tarball. NixOS builds from source with the
+[flake](#nixos).
+
+From a clone, `cargo xtask build && target/release/mandara install`
+installs that checkout (or `mandara install --from-source` builds it).
+
+**Requirements:** Linux or [FreeBSD](#freebsd) with a Wayland compositor (MangoWM, Niri,
+Hyprland, Sway, River Classic, Umbriel, KWin, Aqueous, labwc or COSMIC; the installer can install one), a Vulkan-capable
+GPU, and PipeWire or PulseAudio for sound features.
+
+## Versioning
+
+Every crate, plugin and the shell carry their own semantic version, tracked by
+content hash. Each push to `main` bumps exactly the components whose build
+changed: Conventional Commits pick patch, minor or major. When the shell's
+version changes, CI builds and publishes a release. `mandara --version` shows
+the exact build. Details are in [docs/releasing.md](releasing.md).
+
+## Optional connected plugins
+
+The bundled Translator, Phone Connect, Feeds and Home Assistant plugins
+start switched off. Their [setup guide](integrations.md) covers providers
+and accounts. Translator and Home Assistant use the Secret Service keyring
+that the installer already supplies. Phone Connect additionally needs your
+distribution’s KDE Connect package and the companion app on your phone;
+it is not a required dependency of the shell.
+
+## Optional sign-in widgets
+
+After installation, optional sign-in widgets live in **Studio → Login
+screen → Layout → Widgets** and **Lock appearance → Widgets**. Installation
+leaves both collections empty. Login changes use the existing **Apply to
+login screen** flow; see [login and lock widgets](lock-and-login.md#widgets-on-login-and-lock-screens).
+
+If application icons are missing after installation, open **Studio →
+Maintenance** and refresh its health checks. A missing icon theme links to
+**Themes → Icons**; install the named theme or select one already present.
+The check does not reset your choice.
+
+
+### Optional storage and permission tools
+
+The **Backups** plugin uses restic for encrypted copies, `btrfs-progs` for
+native Btrfs snapshots and maintenance, and `fstrim` for discard on supported
+filesystems and devices. **App permissions** uses Flatpak. The Rust installer
+includes these in its optional package group, using `btrfsprogs` on openSUSE,
+full package atoms on Gentoo and Alpine's separate `fstrim` package. FreeBSD
+receives restic; native filesystem maintenance and Flatpak controls require
+Linux. None of these plugins is enabled by installation.
+
+On NixOS, add `pkgs.restic`, `pkgs.btrfs-progs` and `pkgs.util-linux` to your
+system packages and enable Flatpak separately if you use it. Mandara's source
+package includes zstd's development output so `zstd-sys` can find `libzstd`
+through pkg-config; a custom dependency override is not needed.

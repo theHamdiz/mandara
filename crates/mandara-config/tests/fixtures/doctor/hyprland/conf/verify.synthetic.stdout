@@ -1,0 +1,10 @@
+[LOG] Using config @FIXTURES@/hyprland/conf/hyprland.conf
+
+
+======== Config parsing result:
+
+Config error in file @FIXTURES@/hyprland/conf/hyprland.conf at line 3: config option <general:blur_optimized> does not exist.
+Config error in file @FIXTURES@/hyprland/conf/hyprland.conf at line 5: windowrulev2 is deprecated. Correct syntax can be found on the wiki.
+Config error in file @FIXTURES@/hyprland/conf/hyprland.conf at line 6: Config error in file @FIXTURES@/hyprland/conf/binds.conf at line 2: Invalid dispatcher, requested "notadispatcher" does not exist
+Config error in file @FIXTURES@/hyprland/conf/hyprland.conf at line 7: source= globbing error: found no match
+Something Hyprland might print one day that no parser knows

@@ -1,0 +1,22 @@
+id = "montaza-twilight"
+name = "Montaza Twilight"
+description = "Royal indigo dusk over the palace gardens, coral sky and an amber lighthouse."
+signature = true
+
+[dark]
+surface = "#130e22"
+surface_variant = "#211938"
+on_surface = "#efe8ff"
+primary = "#ff9d7d"
+secondary = "#ffc56e"
+tertiary = "#b9a0ff"
+error = "#ff6f8e"
+
+[light]
+surface = "#fbf6ff"
+surface_variant = "#eee5fa"
+on_surface = "#211637"
+primary = "#bd4228"
+secondary = "#955800"
+tertiary = "#6a45c6"
+error = "#ba1a4a"

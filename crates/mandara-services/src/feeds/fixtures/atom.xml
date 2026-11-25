@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:base="https://journal.example/articles/">
+  <title type="html">Journal &lt;i&gt;of&lt;/i&gt; Light</title>
+  <id>urn:journal</id>
+  <updated>2026-11-04T10:00:00Z</updated>
+  <icon>https://journal.example/favicon.png</icon>
+  <link rel="alternate" type="text/html" href="https://journal.example/"/>
+  <link rel="self" href="https://journal.example/atom.xml"/>
+  <entry>
+    <title>A morning walk</title>
+    <id>urn:morning</id>
+    <updated>2026-11-04T10:00:00Z</updated>
+    <author><name>Salma</name></author>
+    <link rel="enclosure" href="audio.mp3" type="audio/mpeg"/>
+    <link rel="alternate" href="morning"/>
+    <summary type="html">&lt;p&gt;Sun over the &lt;a href="harbour"&gt;harbour&lt;/a&gt;.&lt;/p&gt;</summary>
+    <content type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml"><h2>Walking</h2><p>Sun over the <a href="harbour">harbour</a>.</p><iframe src="https://ads.example/"></iframe></div></content>
+  </entry>
+  <entry>
+    <title>Future dated</title>
+    <id>urn:future</id>
+    <updated>2099-01-01T00:00:00Z</updated>
+    <link href="https://journal.example/future"/>
+  </entry>
+</feed>

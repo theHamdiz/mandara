@@ -1,0 +1,63 @@
+{
+  "deployments" : [
+    {
+      "id" : "default-7c1f0a3e5b2d9e48f6a1c0b7d3e2f9a4c5b6d7e8f9a0b1c2d3e4f5a6b7c8d9e0.0",
+      "osname" : "default",
+      "serial" : 0,
+      "checksum" : "7c1f0a3e5b2d9e48f6a1c0b7d3e2f9a4c5b6d7e8f9a0b1c2d3e4f5a6b7c8d9e0",
+      "base-checksum" : "3b9d6a1f0e2c4d5b6a7f8e9d0c1b2a3f4e5d6c7b8a9f0e1d2c3b4a5f6e7d8c9b",
+      "container-image-reference" : "ostree-image-signed:docker://ghcr.io/ublue-os/bazzite:stable",
+      "container-image-reference-digest" : "sha256:5f0c1e2d3b4a59687766554433221100ffeeddccbbaa99887766554433221100",
+      "version" : "43.20261105",
+      "timestamp" : 1793836800,
+      "booted" : false,
+      "staged" : true,
+      "finalization-locked" : false,
+      "pinned" : false,
+      "unlocked" : "none",
+      "regenerate-initramfs" : false,
+      "initramfs-etc" : [],
+      "initramfs-args" : [],
+      "requested-packages" : [
+        "greetd",
+        "cage"
+      ],
+      "requested-local-packages" : [],
+      "requested-base-removals" : [],
+      "requested-base-local-replacements" : [],
+      "packages" : [
+        "cage",
+        "greetd"
+      ],
+      "base-removals" : [],
+      "base-local-replacements" : [],
+      "modules" : [],
+      "requested-modules" : [],
+      "requested-modules-enabled" : []
+    },
+    {
+      "id" : "default-3b9d6a1f0e2c4d5b6a7f8e9d0c1b2a3f4e5d6c7b8a9f0e1d2c3b4a5f6e7d8c9b.0",
+      "osname" : "default",
+      "serial" : 0,
+      "checksum" : "3b9d6a1f0e2c4d5b6a7f8e9d0c1b2a3f4e5d6c7b8a9f0e1d2c3b4a5f6e7d8c9b",
+      "container-image-reference" : "ostree-image-signed:docker://ghcr.io/ublue-os/bazzite:stable",
+      "container-image-reference-digest" : "sha256:5f0c1e2d3b4a59687766554433221100ffeeddccbbaa99887766554433221100",
+      "version" : "43.20261105",
+      "timestamp" : 1793836800,
+      "booted" : true,
+      "staged" : false,
+      "pinned" : false,
+      "unlocked" : "none",
+      "requested-packages" : [],
+      "requested-local-packages" : [],
+      "requested-base-removals" : [],
+      "requested-base-local-replacements" : [],
+      "packages" : [],
+      "base-removals" : [],
+      "base-local-replacements" : []
+    }
+  ],
+  "transaction" : null,
+  "cached-update" : null,
+  "update-driver" : null
+}

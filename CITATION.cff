@@ -1,0 +1,39 @@
+cff-version: 1.2.0
+message: "If you refer to Mandara Shell in your work, please cite it like this."
+title: "Mandara Shell"
+abstract: >-
+  Mandara Shell is a responsive native Linux Wayland desktop shell written
+  in Rust on GPUI, with spring motion, live settings and optional offline
+  AI control in natural language. Ask the launcher to switch to dark mode
+  or change your volume, review the action, then press Enter. CPU inference
+  runs off the UI thread in a temporary worker that exits when finished or
+  closed. Historical release samples built frames in about 0.1 ms; current
+  memory use and AI response time depend on the workload and hardware.
+  Native drivers support MangoWM, Niri, Hyprland, Umbriel, Sway, River
+  Classic, KWin, Aqueous, labwc and COSMIC. Sandboxed WebAssembly plugins and documented commands
+  with JSON replies extend the desktop. It includes 19 bar presets,
+  19 Looks, 88 built-in plugins and 32 pages of live settings.
+url: "https://thehamdiz.github.io/mandara/"
+type: software
+authors:
+  - given-names: Ahmad
+    family-names: Hamdi
+    alias: theHamdiz
+repository-code: "https://github.com/theHamdiz/mandara"
+license: GPL-3.0-or-later
+keywords:
+  - wayland
+  - desktop shell
+  - status bar
+  - rust
+  - gpui
+  - hyprland
+  - niri
+  - mangowm
+  - umbriel
+  - sway
+  - river
+  - webassembly plugins
+  - natural language control
+  - local AI
+  - offline inference

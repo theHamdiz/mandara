@@ -1,0 +1,110 @@
+Updating and loading repositories:
+Repositories loaded.
+Package                          Arch   Version          Repository                            Size
+Upgrading:
+ curl                            x86_64 0:8.21.0-9.fc45  updates                          487.9 KiB
+   replacing curl                x86_64 0:8.21.0-8.fc45  b704409885364945b3d86ac354cb16b4 487.9 KiB
+ dnf5                            x86_64 0:5.4.7.0-1.fc45 updates                            3.7 MiB
+   replacing dnf5                x86_64 0:5.4.6.0-3.fc45 f18332a422324da9b45596b39ceaf28a   3.4 MiB
+ dnf5-plugins                    x86_64 0:5.4.7.0-1.fc45 updates                            1.8 MiB
+   replacing dnf5-plugins        x86_64 0:5.4.6.0-3.fc45 f18332a422324da9b45596b39ceaf28a   1.6 MiB
+ elfutils-libelf                 x86_64 0:0.197-1.fc45   updates                            1.6 MiB
+   replacing elfutils-libelf     x86_64 0:0.196-1.fc45   f18332a422324da9b45596b39ceaf28a   1.4 MiB
+ elfutils-libs                   x86_64 0:0.197-1.fc45   updates                          719.5 KiB
+   replacing elfutils-libs       x86_64 0:0.196-1.fc45   f18332a422324da9b45596b39ceaf28a 719.6 KiB
+ libcurl                         x86_64 0:8.21.0-9.fc45  updates                            1.1 MiB
+   replacing libcurl             x86_64 0:8.21.0-8.fc45  b704409885364945b3d86ac354cb16b4   1.1 MiB
+ libdnf5                         x86_64 0:5.4.7.0-1.fc45 updates                            5.0 MiB
+   replacing libdnf5             x86_64 0:5.4.6.0-3.fc45 f18332a422324da9b45596b39ceaf28a   4.8 MiB
+ libdnf5-cli                     x86_64 0:5.4.7.0-1.fc45 updates                            1.1 MiB
+   replacing libdnf5-cli         x86_64 0:5.4.6.0-3.fc45 f18332a422324da9b45596b39ceaf28a   1.1 MiB
+ librepo                         x86_64 0:1.22.0-1.fc45  updates                          257.0 KiB
+   replacing librepo             x86_64 0:1.21.2-2.fc45  f18332a422324da9b45596b39ceaf28a 253.2 KiB
+ openldap                        x86_64 0:2.6.16-1.fc45  updates                          683.9 KiB
+   replacing openldap            x86_64 0:2.6.15-1.fc45  b704409885364945b3d86ac354cb16b4 683.4 KiB
+ pcre2                           x86_64 0:10.49-1.fc45   updates                          726.6 KiB
+   replacing pcre2               x86_64 0:10.47-1.fc45.2 f18332a422324da9b45596b39ceaf28a 718.5 KiB
+ pcre2-syntax                    noarch 0:10.49-1.fc45   updates                          292.5 KiB
+   replacing pcre2-syntax        noarch 0:10.47-1.fc45.2 f18332a422324da9b45596b39ceaf28a 281.9 KiB
+ tpm2-tss                        x86_64 0:4.2.1-1.fc45   updates                            1.7 MiB
+   replacing tpm2-tss            x86_64 0:4.2.0-1.fc45   f18332a422324da9b45596b39ceaf28a   1.7 MiB
+ tzdata                          noarch 0:2026f-1.fc45   updates                            1.3 MiB
+   replacing tzdata              noarch 0:2026e-1.fc45   b704409885364945b3d86ac354cb16b4   1.3 MiB
+Installing weak dependencies:
+ libdnf5-plugin-expired-pgp-keys x86_64 0:5.4.7.0-1.fc45 updates                           94.6 KiB
+Transaction Summary:
+ Installing:         1 package
+ Upgrading:         14 packages
+ Replacing:         14 packages
+Total size of inbound packages is 7 MiB. Need to download 0 B.
+After this operation, 1 MiB extra will be used (install 20 MiB, remove 19 MiB).
+[ 1/15] libdnf5-plugin-expired-pgp-keys 100% |   0.0   B/s |   0.0   B |  00m00s
+>>> Already downloaded
+[ 2/15] curl-0:8.21.0-9.fc45.x86_64     100% |   0.0   B/s |   0.0   B |  00m00s
+>>> Already downloaded
+[ 3/15] libcurl-0:8.21.0-9.fc45.x86_64  100% |   0.0   B/s |   0.0   B |  00m00s
+>>> Already downloaded
+[ 4/15] dnf5-0:5.4.7.0-1.fc45.x86_64    100% |   0.0   B/s |   0.0   B |  00m00s
+>>> Already downloaded
+[ 5/15] libdnf5-0:5.4.7.0-1.fc45.x86_64 100% |   0.0   B/s |   0.0   B |  00m00s
+>>> Already downloaded
+[ 6/15] libdnf5-cli-0:5.4.7.0-1.fc45.x8 100% |   0.0   B/s |   0.0   B |  00m00s
+>>> Already downloaded
+[ 7/15] dnf5-plugins-0:5.4.7.0-1.fc45.x 100% |   0.0   B/s |   0.0   B |  00m00s
+>>> Already downloaded
+[ 8/15] elfutils-libelf-0:0.197-1.fc45. 100% |   0.0   B/s |   0.0   B |  00m00s
+>>> Already downloaded
+[ 9/15] elfutils-libs-0:0.197-1.fc45.x8 100% |   0.0   B/s |   0.0   B |  00m00s
+>>> Already downloaded
+[10/15] librepo-0:1.22.0-1.fc45.x86_64  100% |   0.0   B/s |   0.0   B |  00m00s
+>>> Already downloaded
+[11/15] openldap-0:2.6.16-1.fc45.x86_64 100% |   0.0   B/s |   0.0   B |  00m00s
+>>> Already downloaded
+[12/15] pcre2-0:10.49-1.fc45.x86_64     100% |   0.0   B/s |   0.0   B |  00m00s
+>>> Already downloaded
+[13/15] pcre2-syntax-0:10.49-1.fc45.noa 100% |   0.0   B/s |   0.0   B |  00m00s
+>>> Already downloaded
+[14/15] tpm2-tss-0:4.2.1-1.fc45.x86_64  100% |   0.0   B/s |   0.0   B |  00m00s
+>>> Already downloaded
+[15/15] tzdata-0:2026f-1.fc45.noarch    100% |   0.0   B/s |   0.0   B |  00m00s
+>>> Already downloaded
+--------------------------------------------------------------------------------
+[15/15] Total                           100% |   0.0   B/s |   0.0   B |  00m00s
+Running transaction
+[ 1/31] Verify package files            100% |   1.0 KiB/s |  15.0   B |  00m00s
+[ 2/31] Prepare transaction             100% |   1.2 KiB/s |  29.0   B |  00m00s
+[ 3/31] Upgrading pcre2-syntax-0:10.49- 100% | 288.1 MiB/s | 295.0 KiB |  00m00s
+[ 4/31] Upgrading openldap-0:2.6.16-1.f 100% | 335.8 MiB/s | 687.7 KiB |  00m00s
+[ 5/31] Upgrading libcurl-0:8.21.0-9.fc 100% | 529.1 MiB/s |   1.1 MiB |  00m00s
+[ 6/31] Upgrading librepo-0:1.22.0-1.fc 100% | 252.2 MiB/s | 258.3 KiB |  00m00s
+[ 7/31] Upgrading libdnf5-0:5.4.7.0-1.f 100% | 713.8 MiB/s |   5.0 MiB |  00m00s
+[ 8/31] Upgrading libdnf5-cli-0:5.4.7.0 100% | 552.2 MiB/s |   1.1 MiB |  00m00s
+[ 9/31] Upgrading dnf5-0:5.4.7.0-1.fc45 100% | 176.3 MiB/s |   3.7 MiB |  00m00s
+[10/31] Upgrading elfutils-libelf-0:0.1 100% | 818.1 MiB/s |   1.6 MiB |  00m00s
+[11/31] Upgrading elfutils-libs-0:0.197 100% | 352.2 MiB/s | 721.4 KiB |  00m00s
+[12/31] Upgrading dnf5-plugins-0:5.4.7. 100% | 108.7 MiB/s |   1.8 MiB |  00m00s
+[13/31] Installing libdnf5-plugin-expir 100% |  93.4 MiB/s |  95.7 KiB |  00m00s
+[14/31] Upgrading curl-0:8.21.0-9.fc45. 100% |  43.6 MiB/s | 490.6 KiB |  00m00s
+[15/31] Upgrading pcre2-0:10.49-1.fc45. 100% | 177.7 MiB/s | 728.0 KiB |  00m00s
+[16/31] Upgrading tzdata-0:2026f-1.fc45 100% |  24.6 MiB/s |   1.5 MiB |  00m00s
+>>> Running sysusers scriptlet: tpm2-tss-0:4.2.1-1.fc45.x86_64
+>>> Finished sysusers scriptlet: tpm2-tss-0:4.2.1-1.fc45.x86_64
+>>> Scriptlet output:
+>>> Failed to connect to audit log, ignoring: Invalid argument
+>>> 
+[17/31] Upgrading tpm2-tss-0:4.2.1-1.fc 100% | 334.6 MiB/s |   1.7 MiB |  00m00s
+[18/31] Removing elfutils-libs-0:0.196- 100% |  11.7 KiB/s |  12.0   B |  00m00s
+[19/31] Removing dnf5-plugins-0:5.4.6.0 100% |  15.9 KiB/s | 277.0   B |  00m00s
+[20/31] Removing dnf5-0:5.4.6.0-3.fc45. 100% |  15.7 KiB/s | 177.0   B |  00m00s
+[21/31] Removing libdnf5-cli-0:5.4.6.0- 100% |  22.5 KiB/s |  46.0   B |  00m00s
+[22/31] Removing libdnf5-0:5.4.6.0-3.fc 100% |  41.0 KiB/s |  84.0   B |  00m00s
+[23/31] Removing librepo-0:1.21.2-2.fc4 100% |   1.3 KiB/s |   8.0   B |  00m00s
+[24/31] Removing curl-0:8.21.0-8.fc45.x 100% |   2.9 KiB/s |  18.0   B |  00m00s
+[25/31] Removing libcurl-0:8.21.0-8.fc4 100% |   0.0   B/s |   7.0   B |  00m00s
+[26/31] Removing pcre2-0:10.47-1.fc45.2 100% |   0.0   B/s |   9.0   B |  00m00s
+[27/31] Removing pcre2-syntax-0:10.47-1 100% |  15.6 KiB/s |  16.0   B |  00m00s
+[28/31] Removing tzdata-0:2026e-1.fc45. 100% |   1.8 MiB/s |   1.8 KiB |  00m00s
+[29/31] Removing openldap-0:2.6.15-1.fc 100% |   0.0   B/s |  26.0   B |  00m00s
+[30/31] Removing elfutils-libelf-0:0.19 100% |  15.6 KiB/s |  16.0   B |  00m00s
+[31/31] Removing tpm2-tss-0:4.2.0-1.fc4 100% |   2.2 KiB/s |  86.0   B |  00m00s
+Complete!

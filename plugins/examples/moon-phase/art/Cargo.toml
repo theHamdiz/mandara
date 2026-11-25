@@ -1,0 +1,16 @@
+[package]
+name = "moon-phase-art"
+version = "0.1.0"
+edition = "2024"
+description = "Renders the moon-phase example's moon images (assets/moon-*.png)"
+license = "GPL-3.0-or-later"
+publish = false
+
+[dependencies]
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+[profile.release]
+opt-level = 3
+
+# Built on its own, outside the Mandara workspace and the plugin.
+[workspace]

@@ -1,0 +1,17 @@
+id = "eldritch"
+name = "Eldritch"
+description = "Cosmic neon green and cyan on deep indigo (light variant derived)."
+
+[dark]
+surface = "#212337"
+surface_dim = "#171928"
+surface_variant = "#323449"
+on_surface = "#ebfafa"
+on_surface_variant = "#a5afd4"
+outline = "#7081d0"
+primary = "#37f499"
+secondary = "#04d1f9"
+tertiary = "#a48cf2"
+error = "#f16c75"
+success = "#37f499"
+warning = "#f7c67f"

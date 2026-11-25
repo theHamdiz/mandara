@@ -1,0 +1,49 @@
+[package]
+name = "mandara-studio"
+description = "Mandara Studio: the live settings and design app (org.mandara.studio)"
+version = "0.38.5"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+gpui.workspace = true
+mandara-core.workspace = true
+mandara-theme.workspace = true
+mandara-config.workspace = true
+mandara-i18n.workspace = true
+mandara-plugins.workspace = true
+mandara-ui.workspace = true
+mandara-greeter.workspace = true
+serde.workspace = true
+# The wallpaper generator's previews (Studio → Wallpaper → Generator).
+mandara-wallgen.workspace = true
+image.workspace = true
+smallvec.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+rustix.workspace = true
+mandara-compositor.workspace = true
+mandara-services.workspace = true
+mandara-version.workspace = true
+toml = { workspace = true, features = ["display"] }
+ureq.workspace = true
+sha2.workspace = true
+chrono.workspace = true
+chrono-tz = "0.10"
+dirs.workspace = true
+notify.workspace = true
+async-channel.workspace = true
+qrcodegen.workspace = true
+anyhow.workspace = true
+# The layout designer's plugin search (fuzzy, like the launcher).
+nucleo-matcher.workspace = true
+# Wipes typed passwords from memory once they are used.
+zeroize = "1"
+
+[dev-dependencies]
+tempfile.workspace = true
+kdl.workspace = true
+
+[lints]
+workspace = true

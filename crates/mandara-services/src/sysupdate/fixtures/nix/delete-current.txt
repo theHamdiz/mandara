@@ -1,0 +1,1 @@
+error: cannot delete current version of profile "/nix/var/nix/profiles/system"

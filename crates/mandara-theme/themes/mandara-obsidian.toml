@@ -1,0 +1,23 @@
+id = "mandara-obsidian"
+name = "Mandara Obsidian"
+description = "True OLED onyx with precious warm gold and emerald speculars."
+signature = true
+oled = true
+
+[dark]
+surface = "#000000"
+surface_variant = "#121110"
+on_surface = "#f3efe7"
+primary = "#ebc56a"
+secondary = "#3fdc9a"
+tertiary = "#f2e2c0"
+error = "#ff7b6b"
+
+[light]
+surface = "#fbfaf6"
+surface_variant = "#eeeae2"
+on_surface = "#1c1913"
+primary = "#875f00"
+secondary = "#00775a"
+tertiary = "#6c582a"
+error = "#b3261e"

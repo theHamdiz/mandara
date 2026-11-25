@@ -1,0 +1,154 @@
+[package]
+name = "mandara-services"
+description = "zbus service actors for Mandara Shell: MPRIS2 media with album-art mood extraction, notifications, tray, power, network, polkit"
+version = "0.38.3"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[features]
+# Sandbox tests only, never in a shipped build: also trust the release keys
+# in MANDARA_MOCK_RELEASE_KEYS, so a mock release can be signed locally
+# (screenshots of updates and language-pack downloads).
+mock-release = []
+# Sandbox screenshots only, never in a shipped build (also gated on
+# debug_assertions): MANDARA_FAKE_SYSTEM_UPDATE replays recorded package
+# manager output instead of running pkexec (sysupdate/fake.rs).
+fake-system-update = []
+
+[dependencies]
+# CPU inference only. The short-lived command worker owns all model state.
+candle-nn = { version = "0.11.1", default-features = false }
+candle-core = { version = "0.11.1", default-features = false }
+candle-transformers = { version = "0.11.1", default-features = false }
+# Zero-copy GGUF weights (already in the tree through candle-core).
+memmap2 = "0.9.12"
+half = "2.7.1"
+llguidance = { version = "1.9.1", default-features = false, features = ["lark"] }
+toktrie_hf_tokenizers = "1.9.1"
+# Match the grammar adapter's tokenizer; no native regex or HTTP backend.
+tokenizers = { version = "0.21.2", default-features = false, features = ["fancy-regex"] }
+mandara-compositor.workspace = true
+wayland-protocols-plasma.workspace = true
+mandara-theme.workspace = true
+mandara-config.workspace = true
+mandara-i18n.workspace = true
+zbus.workspace = true
+oo7.workspace = true
+async-io.workspace = true
+# One shared executor for every service actor (see runtime.rs).
+async-executor = "1.14.1"
+async-lock = "3.5"
+blocking = "1"
+futures.workspace = true
+async-channel.workspace = true
+ureq.workspace = true
+# RSS, Atom and JSON Feed share one parser and link-resolution model.
+feed-rs = "3"
+# Feeds: relative links in articles and discovery pages, and feeds whose
+# bytes contradict their declared encoding. Both already in the tree
+# (feed-rs uses url, its quick-xml uses encoding_rs).
+url = "2.5"
+encoding_rs = "0.8"
+pure-onnx-ocr.workspace = true
+tract-onnx.workspace = true
+image.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+parking_lot.workspace = true
+chrono.workspace = true
+cssparser.workspace = true
+dirs.workspace = true
+wayland-client.workspace = true
+# `staging`: ext-idle-notify-v1 (idle.rs).
+wayland-protocols = { workspace = true, features = ["staging"] }
+wayland-protocols-wlr.workspace = true
+wayland-protocols-misc.workspace = true
+wl-clipboard-rs.workspace = true
+tiny-skia.workspace = true
+# Boot look: rasterises your SVG for the boot splash (same resvg as GPUI;
+# no text or system fonts, nothing loaded from outside the file).
+resvg = { version = "0.46", default-features = false }
+sha-crypt.workspace = true
+ab_glyph = "0.2"
+# 0.23: the fontdb cosmic-text 0.19 (GPUI's text stack) uses.
+fontdb = "0.23"
+rav1e.workspace = true
+pulseaudio.workspace = true
+# Qur'an recitation (MP3) and internet radio (MP3, AAC/ADTS, Ogg Vorbis),
+# decoded in pure Rust.
+symphonia.workspace = true
+# Internet radio streams: the TLS stack, roots and response parser `ureq`
+# already links, used directly for long-lived, interruptible ICY streams.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+webpki-roots = "1"
+httparse = "1"
+rustfft.workspace = true
+flate2.workspace = true
+tar.workspace = true
+toml = { workspace = true, features = ["display"] }
+toml_edit.workspace = true
+rustix = { workspace = true, features = ["event", "time"] }
+serde = { workspace = true, features = ["rc"] }
+serde_json.workspace = true
+# world clock, net speed, authenticator, color picker plugins
+chrono-tz = "0.10"
+# hmac / sha1 (TOTP) and hkdf / aes / cbc below stay on the RustCrypto
+# generation GPUI's oo7 links (digest 0.10, cipher 0.4): their new majors
+# would add a second digest / cipher stack (see sha2 in the workspace).
+hmac = { version = "0.12", default-features = false }
+sha1 = { version = "0.10", default-features = false }
+sha2.workspace = true
+md-5.workspace = true
+tempfile.workspace = true
+rqrr = { version = "0.11", default-features = false }
+palette.workspace = true
+libc.workspace = true
+# Notification rules; shell event sounds (pure-Rust Vorbis / WAV decoders).
+regex = "1"
+lewton = "0.10"
+hound = "3.5"
+# Self-update (self_update.rs): the delta format's apply side (pure-Rust
+# bipatch + ruzstd), semver ordering (already in the lock tree), and the
+# running build's version.
+mandara-delta.workspace = true
+semver.workspace = true
+mandara-version.workspace = true
+# System updates (sysupdate/): the installer's distribution families.
+mandara-install.workspace = true
+# Keyring prompter (keyring_prompt/exchange.rs): gcr's sx-aes-1 secret
+# exchange — DH (num-bigint-dig: zeroizable big integers), HKDF-SHA256,
+# AES-128-CBC. All already in the lock tree via gpui's oo7.
+num-bigint-dig = { version = "0.9", features = ["zeroize"] }
+hkdf = "0.12"
+aes = "0.8"
+cbc = { version = "0.1", features = ["zeroize"] }
+base64 = { version = "0.23", default-features = false, features = ["alloc"] }
+zeroize = "1"
+getrandom = "0.4"
+# Share to phone (share.rs): the QR code of the share link.
+qrcodegen.workspace = true
+# App installer (app_install/): AppImage type-2 payloads are squashfs
+# images, read in-process (never executed) with backhand. Its default
+# xz/zstd codecs link C libraries, so only its pure-Rust gzip and lz4
+# codecs are enabled and xz / zstd blocks are decoded by lzma-rs and
+# ruzstd (both pure Rust; ruzstd is already in the tree via
+# mandara-delta). lzma-rs and ruzstd also unpack .tar.xz / .tar.zst
+# portable apps; zip (deflate only, through flate2's pure-Rust backend; no
+# zopfli encoder, since Mandara only reads zips) reads .zip.
+backhand = { version = "0.25", default-features = false, features = ["gzip", "lz4"] }
+lzma-rs = "0.3"
+ruzstd = "0.9"
+zip = { version = "9.4", default-features = false, features = ["deflate-flate2"] }
+# Cursor themes (cursors/): Phinger ships its release as .tar.bz2; bzip2
+# 0.6 decodes with the pure-Rust libbz2-rs-sys by default.
+bzip2 = "0.6"
+
+[dev-dependencies]
+zbus = { workspace = true, features = ["p2p"] }
+# Tests create real patches (bidiff + zstd) and sign their mock releases,
+# as the release does.
+mandara-delta = { workspace = true, features = ["create", "sign"] }
+
+[lints]
+workspace = true

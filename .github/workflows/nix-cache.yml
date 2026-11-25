@@ -1,0 +1,124 @@
+# Nix binary cache (https://mandara.cachix.org): builds Mandara the way
+# NixOS users get it and uploads it, so `nix run github:theHamdiz/mandara`,
+# the flake's package and the NixOS / Home Manager modules can download it
+# instead of compiling it.
+#
+# It runs when the Release workflow finishes, on the tip of main: that is
+# the commit `nix flake update mandara` locks (the release and AUR recipe
+# commits are pushed with GITHUB_TOKEN, so CI never builds them). Every
+# commit is its own derivation, and the modules build with the host's
+# Nixpkgs, so it builds against each channel CI tests plus Mandara's own
+# lock file; a user whose Nixpkgs revision matches one of them downloads.
+# Run it by hand to fill the cache for the current tip.
+#
+# Needs the CACHIX_AUTH_TOKEN secret: a Cachix auth token with write access
+# to the `mandara` cache. Without it the run builds, warns and uploads
+# nothing.
+name: Nix cache
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+
+# Only the newest tip matters; a later release supersedes a running build.
+concurrency:
+  group: nix-cache
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  cache:
+    name: Cache Mandara (${{ matrix.channel }}, x86_64)
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion != 'cancelled' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - channel: nixos-26.05
+            nixpkgs: https://channels.nixos.org/nixos-26.05/nixexprs.tar.zst
+          - channel: nixos-unstable
+            nixpkgs: https://channels.nixos.org/nixos-unstable/nixexprs.tar.zst
+          - channel: nixos-25.11
+            nixpkgs: https://channels.nixos.org/nixos-25.11/nixexprs.tar.xz
+          # flake.lock's Nixpkgs: `nix run`, `nix profile install` and
+          # flakes that don't make Mandara follow their own Nixpkgs.
+          - channel: flake.lock
+            nixpkgs: ""
+    env:
+      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      NIXPKGS: ${{ matrix.nixpkgs }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: main
+
+      # A release build with fat LTO needs more room than the runner
+      # leaves free.
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+
+      # Leave headroom for the runner and Nix during release linking.
+      - name: Build memory
+        uses: ./.github/actions/lto-swap
+        with:
+          max-gb: "32"
+          keep-free-gb: "24"
+          min-gb: "16"
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Reserve runner memory
+        uses: ./.github/actions/nix-build-limits
+
+      # Pull only: the push below uploads just Mandara's runtime closure, not
+      # the toolchain and sources the build fetched.
+      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: mandara
+          skipPush: true
+
+      # Built exactly as users get it: the flake fetched from GitHub at this
+      # commit (so `self.rev` is set, as in their lock), and for a channel
+      # through the NixOS module's overlay with that channel's packages.
+      # `nix build .#mandara --override-input nixpkgs …` would not match:
+      # an override drops `self.rev`, so the package records "unknown".
+      - name: Build
+        run: |
+          flake="github:${GITHUB_REPOSITORY}/$(git rev-parse HEAD)"
+          if [ -n "$NIXPKGS" ]; then
+            nix build --impure --print-build-logs --max-jobs 1 --cores 1 --expr "
+              let
+                mandara = builtins.getFlake \"$flake\";
+                pkgs = (builtins.getFlake \"$NIXPKGS\").legacyPackages.x86_64-linux;
+              in (mandara.overlays.default pkgs pkgs).mandara"
+          else
+            nix build "$flake#mandara" --print-build-logs --max-jobs 1 --cores 1
+          fi
+          ./result/bin/mandara --version
+
+      - name: Upload
+        if: env.CACHIX_AUTH_TOKEN != ''
+        run: cachix push mandara ./result
+
+      - name: No token
+        if: env.CACHIX_AUTH_TOKEN == ''
+        run: echo "::warning::CACHIX_AUTH_TOKEN is not set, so nothing was uploaded to mandara.cachix.org"
+
+      - name: Build resource diagnostics
+        if: always()
+        env:
+          CACHIX_AUTH_TOKEN: ""
+        run: |
+          cargo run --locked --quiet --package xtask -- nix-runner report

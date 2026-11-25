@@ -1,0 +1,138 @@
+//! One running read with one replaceable request waiting behind it.
+
+pub(crate) struct Request<T> {
+    pub key: T,
+    revision: u64,
+}
+
+pub(crate) struct Latest<T> {
+    desired: Option<T>,
+    active: Option<u64>,
+    revision: u64,
+    finished: u64,
+}
+
+impl<T> Default for Latest<T> {
+    fn default() -> Self {
+        Self {
+            desired: None,
+            active: None,
+            revision: 0,
+            finished: 0,
+        }
+    }
+}
+
+impl<T: Clone + PartialEq> Latest<T> {
+    pub fn desired(&self) -> Option<&T> {
+        self.desired.as_ref()
+    }
+
+    pub fn set(&mut self, desired: Option<T>) {
+        if self.desired != desired {
+            self.desired = desired;
+            self.refresh();
+        }
+    }
+
+    /// Drops the desired input and frees the active slot so a replacement
+    /// request can [`begin`](Self::begin) immediately (the cancelled worker's
+    /// [`finish`](Self::finish) then no-ops).
+    pub fn abort(&mut self) {
+        self.desired = None;
+        self.active = None;
+        self.refresh();
+    }
+
+    pub fn refresh(&mut self) {
+        self.revision = self.revision.wrapping_add(1);
+    }
+
+    pub fn begin(&mut self) -> Option<Request<T>> {
+        if self.active.is_some() || self.finished == self.revision {
+            return None;
+        }
+        let key = self.desired.clone()?;
+        self.active = Some(self.revision);
+        Some(Request {
+            key,
+            revision: self.revision,
+        })
+    }
+
+    /// Check streamed results without completing their single owned job.
+    pub fn is_current(&self, request: &Request<T>) -> bool {
+        self.active == Some(request.revision) && self.revision == request.revision && self.desired.as_ref() == Some(&request.key)
+    }
+
+    /// Reject a result from before cancellation, refresh, or a newer request.
+    pub fn finish(&mut self, request: Request<T>) -> bool {
+        if self.active != Some(request.revision) {
+            return false;
+        }
+        let current = self.is_current(&request);
+        self.active = None;
+        self.finished = request.revision;
+        current
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn repeated_requests_keep_one_running_job_and_only_the_latest_waiter() {
+        let mut queue = Latest::default();
+        queue.set(Some("first"));
+        let first = queue.begin().unwrap();
+        for next in ["second", "third", "latest"] {
+            queue.set(Some(next));
+        }
+        assert!(queue.begin().is_none());
+        assert!(!queue.finish(first));
+        let next = queue.begin().unwrap();
+        assert_eq!(next.key, "latest");
+        assert!(queue.finish(next));
+        assert!(queue.begin().is_none());
+    }
+
+    #[test]
+    fn cancellation_drops_the_pending_owner_and_rejects_a_late_result() {
+        let value = std::rc::Rc::new("source");
+        let weak = std::rc::Rc::downgrade(&value);
+        let mut queue = Latest::default();
+        queue.set(Some(value));
+        let request = queue.begin().unwrap();
+        queue.set(None);
+        assert!(!queue.finish(request));
+        assert!(queue.begin().is_none());
+        assert!(weak.upgrade().is_none());
+    }
+
+    #[test]
+    fn abort_frees_the_active_slot_so_a_replacement_can_start_immediately() {
+        let mut queue = Latest::default();
+        queue.set(Some("old"));
+        let previous = queue.begin().unwrap();
+        queue.abort();
+        queue.set(Some("new"));
+        let next = queue.begin().expect("abort must free the active slot");
+        assert_eq!(next.key, "new");
+        assert!(!queue.finish(previous), "the aborted job must not publish");
+        assert!(queue.finish(next));
+    }
+
+    #[test]
+    fn refresh_of_the_same_input_does_not_accept_the_previous_result() {
+        let mut queue = Latest::default();
+        queue.set(Some("source"));
+        let previous = queue.begin().unwrap();
+        assert!(queue.is_current(&previous));
+        queue.refresh();
+        assert!(!queue.is_current(&previous), "streamed snapshots from the old generation must stop");
+        assert!(!queue.finish(previous));
+        let current = queue.begin().unwrap();
+        assert!(queue.finish(current));
+    }
+}

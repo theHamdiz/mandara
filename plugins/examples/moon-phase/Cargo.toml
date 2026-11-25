@@ -1,0 +1,19 @@
+[package]
+name = "moon-phase"
+version = "0.3.3"
+edition = "2024"
+description = "Example Mandara plugin: the current moon phase"
+license = "GPL-3.0-or-later"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# Only what the generated bindings need: the `generate!` macro, the
+# canonical-ABI `cabi_realloc` export and std (no async, flags or futures).
+wit-bindgen = { version = "0.63", default-features = false, features = ["macros", "realloc", "std"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

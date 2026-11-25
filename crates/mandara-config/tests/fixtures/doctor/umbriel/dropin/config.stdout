@@ -1,0 +1,1 @@
+{"diagnostics":[{"column":18,"file":"@FIXTURES@/umbriel/dropin/mandara/generated/umbriel.toml","line":4,"message":"unknown key layout.blur_optimized","severity":"warning"}],"path":"@FIXTURES@/umbriel/dropin/config.toml","valid":false}

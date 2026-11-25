@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <title>Wallpaper depth</title>
+  <defs>
+    <linearGradient id="wallpaper-depth-tile" x1="64" y1="40" x2="448" y2="496" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0E3A5B"/><stop offset="1" stop-color="#072238"/>
+    </linearGradient>
+    <radialGradient id="wallpaper-depth-light" cx="0" cy="0" r="1" gradientTransform="translate(98 48) rotate(45) scale(440 354)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".22"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="wallpaper-depth-rim" x1="76" y1="28" x2="446" y2="482" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".72"/><stop offset=".5" stop-color="#FFFFFF" stop-opacity=".08"/><stop offset="1" stop-color="#FFFFFF" stop-opacity=".24"/>
+    </linearGradient>
+    <clipPath id="wallpaper-depth-tile-clip"><rect x="16" y="16" width="480" height="480" rx="108"/></clipPath>
+    <clipPath id="wallpaper-depth-digits">
+      <path d="M96 112h320v248l-62-116-46 45-70-75L96 370z"/>
+    </clipPath>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#wallpaper-depth-tile)"/>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#wallpaper-depth-light)"/>
+  <g clip-path="url(#wallpaper-depth-tile-clip)">
+    <path d="M-28 324C126 476 349 518 544 274v238H-28z" fill="#FFFFFF" opacity=".045"/>
+  </g>
+  <rect x="19" y="19" width="474" height="474" rx="105" stroke="url(#wallpaper-depth-rim)" stroke-width="2"/>
+  <g stroke="#FFF2D5" stroke-width="30" stroke-linecap="round" stroke-linejoin="round" clip-path="url(#wallpaper-depth-digits)">
+    <path d="m158 180 36-28v132m70-104c0-39 78-40 78 0 0 35-76 61-78 104"/>
+  </g>
+  <path d="m110 374 128-140 70 76 44-46 50 110z" fill="#FFF2D5" stroke="#FFF2D5" stroke-width="12" stroke-linejoin="round"/>
+  <path d="m238 234 16 140h-144z" fill="#5EEAD4"/>
+  <path d="m352 264 50 110h-94z" fill="#F2D7A6"/>
+</svg>

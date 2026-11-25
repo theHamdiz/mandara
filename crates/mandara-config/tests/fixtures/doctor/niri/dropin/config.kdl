@@ -1,0 +1,3 @@
+input {
+}
+include "mandara/generated/niri.kdl"

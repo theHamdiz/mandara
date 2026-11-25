@@ -1,0 +1,21 @@
+Checking for upgrades (6 candidates): .......... done
+Processing candidates (6 candidates): .......... done
+The following 6 package(s) will be affected (of 0 checked):
+
+Installed packages to be UPGRADED:
+	curl: 8.22.0 -> 8.23.0 [FreeBSD]
+	drm-61-kmod: 6.1.128.1404000_10 -> 6.1.128.1404000_11 [FreeBSD-kmods]
+	git: 2.55.1 -> 2.56.0 [FreeBSD]
+	libnghttp2: 1.69.0 -> 1.70.0 [FreeBSD]
+	pipewire: 1.6.8 -> 1.6.9 [FreeBSD]
+	sqlite3: 3.54.0,1 -> 3.54.1,1 [FreeBSD]
+
+Number of packages to be upgraded: 6
+
+21 MiB to be downloaded.
+[1/6] Fetching curl-8.23.0: .......... done
+[2/6] Fetching drm-61-kmod-6.1.128.1404000_11: .......... done
+[3/6] Fetching git-2.56.0: .......... done
+[4/6] Fetching libnghttp2-1.70.0: .......... done
+[5/6] Fetching pipewire-1.6.9: .......... done
+[6/6] Fetching sqlite3-3.54.1,1: .......... done

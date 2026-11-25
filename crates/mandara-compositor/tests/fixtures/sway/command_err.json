@@ -1,0 +1,7 @@
+[
+ {
+  "success": false,
+  "parse_error": true,
+  "error": "Unknown/invalid command 'frobnicate'"
+ }
+]

@@ -1,0 +1,29 @@
+Looking up update.FreeBSD.org mirrors... 3 mirrors found.
+Fetching metadata signature for 14.4-RELEASE from update2.freebsd.org... done.
+Fetching metadata index... done.
+Fetching 2 metadata patches.. done.
+Applying metadata patches... done.
+Fetching 2 metadata files... done.
+Inspecting system... done.
+Preparing to download files... done.
+Fetching 14 patches.....10.. done.
+Applying patches... done.
+Fetching 1 files... done.
+
+The following files will be updated as part of updating to
+14.4-RELEASE-p4:
+/bin/freebsd-version
+/boot/kernel/kernel
+/boot/kernel/zfs.ko
+/lib/libc.so.7
+/usr/bin/ssh
+/usr/lib/libssl.so.30
+/usr/lib/libcrypto.so.30
+/usr/lib32/libc.so.7
+/usr/libexec/sshd-session
+/usr/sbin/sshd
+/usr/share/man/man1/ssh.1.gz
+/usr/share/man/whatis
+/usr/src/crypto/openssh/version.h
+/usr/src/sys/conf/newvers.sh
+/usr/src/sys/kern/vfs_syscalls.c

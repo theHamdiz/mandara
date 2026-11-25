@@ -1,0 +1,372 @@
+//! Sleep, lid and restart targets over logind / UPower (pure D-Bus).
+//!
+//! * **Lock before sleep** — [`watch_sleep`] holds a logind *delay*
+//!   inhibitor (`Inhibit("sleep", …, "delay")`). When `PrepareForSleep(true)`
+//!   arrives the `before` callback runs (lock the screen, before-sleep
+//!   hooks) and only then is the inhibitor released, so the machine never
+//!   suspends showing an unlocked desktop. After resume a fresh inhibitor
+//!   is taken and `after` runs.
+//! * **Lid** — [`watch_lid`] follows UPower's `LidIsClosed`.
+//! * **Sleep modes** — suspend, hibernate, suspend-then-hibernate, hybrid.
+//! * **Restart targets** — firmware setup (`SetRebootToFirmwareSetup`),
+//!   boot-loader entries (`BootLoaderEntries`, `SetRebootToBootLoaderEntry`),
+//!   and soft reboot (`systemctl soft-reboot`).
+//!
+//! `MANDARA_POWER_DRY_RUN=1` turns every action into a log line (tests and
+//! demos must never suspend or restart the machine).
+
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::OnceLock;
+
+use futures::StreamExt as _;
+use mandara_config::power::SuspendMode;
+use mandara_i18n::{t, tf};
+use serde::Serialize;
+use zbus::zvariant::OwnedValue;
+
+use crate::actor::proxy;
+
+/// logind (ConsoleKit2 on FreeBSD: the same manager API).
+const LOGIND: &str = crate::logind::bus::DEST;
+const LOGIND_PATH: &str = crate::logind::bus::MANAGER_PATH;
+const MANAGER_IFACE: &str = crate::logind::bus::MANAGER;
+const UPOWER: &str = "org.freedesktop.UPower";
+const UPOWER_PATH: &str = "/org/freedesktop/UPower";
+const PROPERTIES_IFACE: &str = "org.freedesktop.DBus.Properties";
+/// Environment switch for dry runs.
+const DRY_RUN_ENV: &str = "MANDARA_POWER_DRY_RUN";
+/// Delays between [`watch_sleep`]'s reconnect attempts.
+const RECONNECT_MIN: std::time::Duration = std::time::Duration::from_secs(2);
+const RECONNECT_MAX: std::time::Duration = std::time::Duration::from_secs(120);
+/// Retries of a failed sleep `Inhibit` before waiting for the next signal
+/// or re-check (logind may be briefly busy right after a resume).
+const INHIBIT_RETRIES: u32 = 6;
+/// First delay between those retries; each one doubles it.
+const INHIBIT_RETRY_MIN: std::time::Duration = std::time::Duration::from_secs(2);
+/// Longest delay between those retries.
+const INHIBIT_RETRY_MAX: std::time::Duration = std::time::Duration::from_secs(60);
+/// Who holds the inhibitor, as `systemd-inhibit --list` shows it.
+const INHIBITOR_WHO: &str = "Mandara Shell";
+
+/// Whether power actions only log (`MANDARA_POWER_DRY_RUN=1`).
+pub fn dry_run() -> bool {
+    static DRY: OnceLock<bool> = OnceLock::new();
+    *DRY.get_or_init(|| std::env::var(DRY_RUN_ENV).is_ok_and(|v| !v.is_empty() && v != "0"))
+}
+
+fn bus_error(e: zbus::Error) -> String {
+    match e {
+        zbus::Error::MethodError(name, msg, _) => crate::power::friendly_error(name.as_str(), msg.as_deref().unwrap_or_default()),
+        other => other.to_string(),
+    }
+}
+
+async fn manager(conn: &zbus::Connection) -> zbus::Result<zbus::Proxy<'static>> {
+    proxy(conn, LOGIND, LOGIND_PATH, MANAGER_IFACE).await
+}
+
+/// Calls a logind manager method taking only `interactive: bool`.
+async fn call_interactive(method: &'static str) -> Result<(), String> {
+    if dry_run() {
+        tracing::info!("dry run: {}.Manager.{method}", crate::logind::bus::SHORT);
+        return Ok(());
+    }
+    let result = async {
+        let conn = crate::runtime::system().await?;
+        manager(&conn).await?.call::<_, _, ()>(method, &(true,)).await
+    }
+    .await;
+    // FreeBSD without ConsoleKit2: `acpiconf -s 3` through pkexec.
+    #[cfg(target_os = "freebsd")]
+    if let Err(e) = &result
+        && crate::freebsd::power::bus_missing(e)
+        && crate::freebsd::power::command(method).is_some()
+    {
+        return crate::runtime::unblock(move || crate::freebsd::power::run(method, crate::freebsd::power::Via::Pkexec)).await;
+    }
+    result.map_err(bus_error)
+}
+
+/// Sleeps the computer the way `mode` says (polkit may prompt). Blocks the
+/// calling thread until logind answers: call it off the UI thread.
+pub fn sleep(mode: SuspendMode) -> Result<(), String> {
+    crate::runtime::block_on(call_interactive(mode.logind_method())).map_err(|e| tf("Could not sleep ({mode}): {error}", &[("mode", &mode.id()), ("error", &e)]))
+}
+
+/// Whether logind allows `mode` (`CanSuspend`, …): `yes`, `no`, `challenge`, `na`.
+pub fn can_sleep(mode: SuspendMode) -> String {
+    let method = match mode {
+        SuspendMode::Suspend => "CanSuspend",
+        SuspendMode::Hibernate => "CanHibernate",
+        SuspendMode::SuspendThenHibernate => "CanSuspendThenHibernate",
+        SuspendMode::HybridSleep => "CanHybridSleep",
+    };
+    crate::runtime::block_on(async move {
+        let conn = crate::runtime::system().await.ok()?;
+        manager(&conn).await.ok()?.call::<_, _, String>(method, &()).await.ok()
+    })
+    .unwrap_or_else(|| "na".into())
+}
+
+/// Restart targets the machine offers.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct RebootTargets {
+    /// `CanRebootToFirmwareSetup`: `yes`, `no`, `challenge` or `na`.
+    pub firmware: String,
+    /// `CanRebootToBootLoaderEntry`.
+    pub boot_entries_supported: String,
+    /// Boot-loader entry ids (systemd-boot `LoaderEntries`).
+    pub boot_entries: Vec<String>,
+}
+
+/// Reads the firmware / boot-entry capabilities (blocking).
+pub fn reboot_targets() -> RebootTargets {
+    crate::runtime::block_on(async {
+        let Ok(conn) = crate::runtime::system().await else { return RebootTargets::default() };
+        let Ok(m) = manager(&conn).await else { return RebootTargets::default() };
+        RebootTargets {
+            firmware: m.call::<_, _, String>("CanRebootToFirmwareSetup", &()).await.unwrap_or_else(|_| "na".into()),
+            boot_entries_supported: m.call::<_, _, String>("CanRebootToBootLoaderEntry", &()).await.unwrap_or_else(|_| "na".into()),
+            boot_entries: m.get_property::<Vec<String>>("BootLoaderEntries").await.unwrap_or_default(),
+        }
+    })
+}
+
+/// Restarts into the firmware (UEFI) setup.
+pub fn reboot_to_firmware() -> Result<(), String> {
+    crate::runtime::block_on(async {
+        if dry_run() {
+            tracing::info!("dry run: SetRebootToFirmwareSetup(true) + Reboot");
+            return Ok(());
+        }
+        let conn = crate::runtime::system().await.map_err(bus_error)?;
+        let m = manager(&conn).await.map_err(bus_error)?;
+        m.call::<_, _, ()>("SetRebootToFirmwareSetup", &(true,)).await.map_err(bus_error)?;
+        m.call::<_, _, ()>("Reboot", &(true,)).await.map_err(bus_error)
+    })
+    .map_err(|e| tf("Could not restart into the firmware setup: {error}", &[("error", &e)]))
+}
+
+/// Restarts into boot-loader entry `id` (once).
+pub fn reboot_to_entry(id: &str) -> Result<(), String> {
+    let id = id.trim().to_string();
+    if id.is_empty() {
+        return Err(t("No boot entry chosen").into());
+    }
+    crate::runtime::block_on(async move {
+        if dry_run() {
+            tracing::info!("dry run: SetRebootToBootLoaderEntry({id}) + Reboot");
+            return Ok(());
+        }
+        let conn = crate::runtime::system().await.map_err(bus_error)?;
+        let m = manager(&conn).await.map_err(bus_error)?;
+        let entries: Vec<String> = m.get_property("BootLoaderEntries").await.unwrap_or_default();
+        if !entries.is_empty() && !entries.contains(&id) {
+            return Err(tf("Unknown boot entry “{id}”", &[("id", &id)]));
+        }
+        m.call::<_, _, ()>("SetRebootToBootLoaderEntry", &(id.as_str(),)).await.map_err(bus_error)?;
+        m.call::<_, _, ()>("Reboot", &(true,)).await.map_err(bus_error)
+    })
+}
+
+/// Restarts userspace only (`systemctl soft-reboot`, systemd ≥ 254).
+pub fn soft_reboot() -> Result<(), String> {
+    if dry_run() {
+        tracing::info!("dry run: systemctl soft-reboot");
+        return Ok(());
+    }
+    let status = std::process::Command::new("systemctl").arg("soft-reboot").status().map_err(|e| format!("systemctl: {e}"))?;
+    if status.success() { Ok(()) } else { Err(tf("systemctl soft-reboot failed ({status})", &[("status", &status)])) }
+}
+
+/// Wakes [`watch_sleep`] to re-check whether its inhibitor is wanted.
+static RECHECK: std::sync::LazyLock<(async_channel::Sender<()>, async_channel::Receiver<()>)> = std::sync::LazyLock::new(|| async_channel::bounded(1));
+
+/// Tells [`watch_sleep`] that the `enabled` setting may have changed: it
+/// takes or releases the inhibitor now instead of on a timer.
+pub fn recheck() {
+    let _ = RECHECK.0.try_send(());
+}
+
+/// Whether the "no delay inhibitor" warning was already logged since the
+/// last successful one (a denied `Inhibit` repeats on every re-check).
+static INHIBIT_WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Takes a logind delay inhibitor for `what` (`sleep`, `shutdown`).
+async fn delay_inhibitor(m: &zbus::Proxy<'_>, what: &str, why: &str) -> Option<std::os::fd::OwnedFd> {
+    match m.call::<_, _, zbus::zvariant::OwnedFd>("Inhibit", &(what, INHIBITOR_WHO, why, "delay")).await {
+        Ok(fd) => {
+            INHIBIT_WARNED.store(false, std::sync::atomic::Ordering::Relaxed);
+            Some(fd.into())
+        }
+        Err(e) => {
+            // FreeBSD without ConsoleKit2 has no login manager to ask; say
+            // so once rather than on every re-check.
+            let manager = if cfg!(target_os = "freebsd") { "ConsoleKit" } else { "logind" };
+            if INHIBIT_WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                tracing::debug!("{manager}: no {what} delay inhibitor: {e}");
+            } else {
+                tracing::warn!("{manager}: no {what} delay inhibitor: {e}");
+            }
+            None
+        }
+    }
+}
+
+type Check = Arc<dyn Fn() -> bool + Send + Sync>;
+type Hook = Arc<dyn Fn() + Send + Sync>;
+
+/// One connection's worth of [`watch_sleep`]; returns when logind's signal
+/// stream ends.
+async fn sleep_session(enabled: &Check, before: &Hook, after: &Hook, backoff: &mut crate::runtime::Backoff) -> zbus::Result<()> {
+    use futures::FutureExt as _;
+    let conn = crate::runtime::system().await?;
+    let m = manager(&conn).await?;
+    let mut signals = m.receive_signal("PrepareForSleep").await?;
+    backoff.reset();
+    let why = t("Lock the screen before sleeping");
+    let mut held = if enabled() { delay_inhibitor(&m, "sleep", why).await } else { None };
+    // A failed `Inhibit` is retried a few times, further apart each time,
+    // while the inhibitor is wanted; each signal or re-check starts over.
+    let mut retry = crate::runtime::Backoff::new(INHIBIT_RETRY_MIN, INHIBIT_RETRY_MAX);
+    let mut retries_left = INHIBIT_RETRIES;
+    let mut suspending = false;
+    loop {
+        let wait = (held.is_none() && !suspending && retries_left > 0 && enabled()).then(|| retry.next_delay());
+        let retry_timer = async {
+            match wait {
+                Some(delay) => crate::runtime::sleep(delay).await,
+                None => futures::future::pending().await,
+            }
+        };
+        futures::select! {
+            msg = signals.next().fuse() => {
+                let Some(msg) = msg else { return Ok(()) };
+                let starting: bool = msg.body().deserialize().unwrap_or(false);
+                suspending = starting;
+                retry.reset();
+                retries_left = INHIBIT_RETRIES;
+                if starting {
+                    if enabled() {
+                        let f = before.clone();
+                        crate::runtime::unblock(move || f()).await;
+                    }
+                    // Releasing the fd lets the suspend proceed.
+                    held = None;
+                } else {
+                    if held.is_none() && enabled() {
+                        held = delay_inhibitor(&m, "sleep", why).await;
+                    }
+                    let f = after.clone();
+                    crate::runtime::unblock(move || f()).await;
+                }
+            }
+            _ = RECHECK.1.recv().fuse() => {
+                retry.reset();
+                retries_left = INHIBIT_RETRIES;
+                // Follow the setting: hold the inhibitor only while wanted.
+                match (enabled(), held.is_some()) {
+                    (true, false) => held = delay_inhibitor(&m, "sleep", why).await,
+                    (false, true) => held = None,
+                    _ => {}
+                }
+            }
+            _ = retry_timer.fuse() => {
+                retries_left -= 1;
+                if held.is_none() && enabled() {
+                    held = delay_inhibitor(&m, "sleep", why).await;
+                }
+            }
+        }
+    }
+}
+
+/// Runs `before` when the machine is about to sleep (holding the sleep
+/// back until it returns, within logind's `InhibitDelayMaxUSec`) and
+/// `after` once it woke up. `enabled()` is asked each time: while it is
+/// false no inhibitor is held and `before` is skipped. Call [`recheck`]
+/// when the setting changes. Reconnects with backoff if logind goes away.
+pub fn watch_sleep(enabled: impl Fn() -> bool + Send + Sync + 'static, before: impl Fn() + Send + Sync + 'static, after: impl Fn() + Send + Sync + 'static) {
+    let (enabled, before, after): (Check, Hook, Hook) = (Arc::new(enabled), Arc::new(before), Arc::new(after));
+    crate::runtime::spawn("logind-sleep", async move {
+        let mut backoff = crate::runtime::Backoff::new(RECONNECT_MIN, RECONNECT_MAX);
+        let mut warned = false;
+        loop {
+            match sleep_session(&enabled, &before, &after, &mut backoff).await {
+                Ok(()) => tracing::debug!("logind: the sleep signal stream ended; reconnecting"),
+                Err(err) if !warned => {
+                    warned = true;
+                    tracing::warn!("logind: not watching for sleep: {err}");
+                }
+                Err(err) => tracing::debug!("logind: not watching for sleep: {err}"),
+            }
+            crate::runtime::sleep(backoff.next_delay()).await;
+        }
+    });
+}
+
+/// Logind's `InhibitDelayMaxUSec`: how long a delay inhibitor may hold a
+/// sleep back (5 s unless configured).
+pub fn inhibit_delay_max() -> std::time::Duration {
+    const FALLBACK_US: u64 = 5_000_000;
+    let us = crate::runtime::block_on(async {
+        let conn = crate::runtime::system().await.ok()?;
+        manager(&conn).await.ok()?.get_property::<u64>("InhibitDelayMaxUSec").await.ok()
+    });
+    std::time::Duration::from_micros(us.unwrap_or(FALLBACK_US))
+}
+
+/// Calls `on_change(closed)` whenever the laptop lid opens or closes
+/// (UPower `LidIsClosed`). Does nothing on machines without a lid.
+pub fn watch_lid(on_change: impl Fn(bool) + Send + Sync + 'static) {
+    let on_change = Arc::new(on_change);
+    crate::runtime::spawn("upower-lid", async move {
+        let result: zbus::Result<()> = async {
+            let conn = crate::runtime::system().await?;
+            let root = proxy(&conn, UPOWER, UPOWER_PATH, UPOWER).await?;
+            if !root.get_property::<bool>("LidIsPresent").await.unwrap_or(false) {
+                return Ok(());
+            }
+            let rule = zbus::MatchRule::builder()
+                .msg_type(zbus::message::Type::Signal)
+                .sender(UPOWER)?
+                .path(UPOWER_PATH)?
+                .interface(PROPERTIES_IFACE)?
+                .member("PropertiesChanged")?
+                .build();
+            let mut stream = zbus::MessageStream::for_match_rule(rule, &conn, Some(crate::actor::SIGNAL_QUEUE)).await?;
+            let mut last = root.get_property::<bool>("LidIsClosed").await.unwrap_or(false);
+            while let Some(Ok(msg)) = stream.next().await {
+                let Ok((iface, changed, _)) = msg.body().deserialize::<(String, HashMap<String, OwnedValue>, Vec<String>)>() else { continue };
+                if iface != UPOWER {
+                    continue;
+                }
+                if let Some(closed) = changed.get("LidIsClosed").and_then(|v| bool::try_from(v).ok())
+                    && closed != last
+                {
+                    last = closed;
+                    let f = on_change.clone();
+                    crate::runtime::unblock(move || f(closed)).await;
+                }
+            }
+            Ok(())
+        }
+        .await;
+        if let Err(err) = result {
+            tracing::warn!("upower: not watching the lid: {err}");
+        }
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn suspend_modes_map_to_logind() {
+        assert_eq!(SuspendMode::SuspendThenHibernate.logind_method(), "SuspendThenHibernate");
+        assert_eq!(SuspendMode::HybridSleep.logind_method(), "HybridSleep");
+        assert!(reboot_to_entry("  ").is_err());
+    }
+}

@@ -1,0 +1,34 @@
+dlstatus:1:0.0000:Retrieving file 1 of 3
+Get:1 http://deb.debian.org/debian bookworm InRelease [151 kB]
+dlstatus:1:0.0000:Retrieving file 1 of 3
+Get:2 http://deb.debian.org/debian bookworm-updates InRelease [55.4 kB]
+dlstatus:3:0.0000:Retrieving file 3 of 5
+Get:3 http://deb.debian.org/debian-security bookworm-security InRelease [34.8 kB]
+dlstatus:5:0.0000:Retrieving file 5 of 7
+Get:4 http://deb.debian.org/debian bookworm/main amd64 Packages [8790 kB]
+dlstatus:7:21.5331:Retrieving file 7 of 9
+dlstatus:7:35.4429:Retrieving file 7 of 9
+dlstatus:7:44.2243:Retrieving file 7 of 9 (11s remaining)
+dlstatus:7:48.8375:Retrieving file 7 of 9 (10s remaining)
+dlstatus:7:56.7174:Retrieving file 7 of 9 (13s remaining)
+dlstatus:7:63.9767:Retrieving file 7 of 9 (10s remaining)
+dlstatus:7:69.6319:Retrieving file 7 of 9 (8s remaining)
+dlstatus:7:74.0929:Retrieving file 7 of 9 (7s remaining)
+dlstatus:7:76.5517:Retrieving file 7 of 9 (6s remaining)
+dlstatus:7:77.4883:Retrieving file 7 of 9 (13s remaining)
+dlstatus:7:78.5538:Retrieving file 7 of 9 (12s remaining)
+dlstatus:7:79.4320:Retrieving file 7 of 9 (37s remaining)
+dlstatus:7:80.3101:Retrieving file 7 of 9 (34s remaining)
+dlstatus:7:81.2000:Retrieving file 7 of 9 (32s remaining)
+dlstatus:7:83.0850:Retrieving file 7 of 9 (25s remaining)
+dlstatus:7:85.2628:Retrieving file 7 of 9 (19s remaining)
+dlstatus:7:87.5226:Retrieving file 7 of 9 (6s remaining)
+dlstatus:7:89.5482:Retrieving file 7 of 9 (4s remaining)
+Get:5 http://deb.debian.org/debian bookworm-updates/main amd64 Packages [6924 B]
+dlstatus:7:90.2437:Retrieving file 7 of 9 (3s remaining)
+Get:6 http://deb.debian.org/debian-security bookworm-security/main amd64 Packages [363 kB]
+dlstatus:8:92.9225:Retrieving file 8 of 9 (3s remaining)
+dlstatus:9:97.1586:Retrieving file 9 of 9
+dlstatus:9:100.0000:Retrieving file 9 of 9
+Fetched 9402 kB in 49s (191 kB/s)
+Reading package lists...

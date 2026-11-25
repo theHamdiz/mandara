@@ -1,0 +1,950 @@
+//! `mandara` — the Mandara Shell binary.
+//!
+//! * `mandara` — start the shell under a supervisor that restarts it if it
+//!   ever dies (crash-loop protected); `mandara run` starts it directly.
+//!   The shell is one full-screen `mandara-bar` layer per output (bar,
+//!   plugin panels, sidebar) plus exclusion strips and wallpaper layers.
+//! * `mandara msg <command…>` — run any shell command over IPC
+//!   (`--json` prints the raw `{"ok", "data"|"error"}` response).
+//! * `mandara commands [--json]` — the documented command catalog.
+//! * `mandara themes` — list built-in palettes.
+//! * `mandara studio [section] [--plugin ID [--settings]]` — open Mandara
+//!   Studio (its own process, single instance; live-applies settings to the
+//!   shell over IPC), optionally on a plugin's detail or settings modal.
+//! * `mandara update [check|apply|rollback|plugins]` — self-update by binary
+//!   patch (full download as the fallback) and marketplace plugin updates.
+//! * `mandara install` / `mandara uninstall` — install this binary (or a
+//!   downloaded release, or a source build) with its system packages,
+//!   compositor integration and login screen; remove it again.
+
+mod alloc;
+mod changelog_cli;
+mod config_mirror;
+mod ipc;
+mod plugin_relay;
+mod journal;
+mod logging;
+mod setup_cli;
+mod supervisor;
+mod surfaces;
+mod update_cli;
+
+use std::time::Duration;
+
+use anyhow::{Context as _, Result};
+use clap::{Parser, Subcommand};
+use gpui::App;
+use mandara_config::{ConfigStore, paths};
+use mandara_plugins::PluginRegistry;
+use mandara_theme::catalog;
+use mandara_ui::{Fonts, MandaraAssets};
+
+use crate::ipc::{Request, WireResponse};
+
+#[derive(Parser)]
+#[command(name = "mandara", version, about = "Mandara Shell — a design-first Wayland desktop shell")]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Cmd>,
+}
+
+#[derive(Subcommand)]
+enum Cmd {
+    /// Private filesystem helper; accepts only fixed, revalidated storage actions.
+    #[command(hide = true)]
+    StorageAdmin { args: Vec<String> },
+    /// Private inference worker; never starts the shell or connects to IPC.
+    #[command(hide = true)]
+    AgentWorker,
+    /// Private panel capture worker; never creates a UI or connects to shell IPC.
+    #[command(hide = true)]
+    PanelCaptureWorker,
+    /// Private: the root side of a system update, started by the shell
+    /// through pkexec with the root-owned admin helper. Accepts only
+    /// fixed actions (`apply`, `nixos …`, `--protocol`).
+    #[command(hide = true)]
+    SystemUpdate {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+    /// Private: the root side of Boot look (boot menu and splash themes),
+    /// started through pkexec with the root-owned admin helper. Accepts
+    /// only `apply <request.json>` and `restore <latest|ID>`.
+    #[command(hide = true)]
+    BootAdmin {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+    /// Start the shell directly, without the restart supervisor.
+    Run,
+    /// Run a shell command, e.g. `mandara msg audio volume set 40`.
+    Msg {
+        /// Print the raw JSON response (for scripts and agents).
+        #[arg(long)]
+        json: bool,
+        /// Command words.
+        #[arg(trailing_var_arg = true, required = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+    /// List every command with arguments and examples.
+    Commands {
+        /// Machine-readable catalog.
+        #[arg(long)]
+        json: bool,
+    },
+    /// List built-in theme presets.
+    Themes,
+    /// Open Mandara Studio, optionally on a section (e.g. `themes`).
+    Studio {
+        section: Option<String>,
+        /// Open this plugin's detail modal (`mandara studio plugins --plugin weather`).
+        #[arg(long, value_name = "ID")]
+        plugin: Option<String>,
+        /// With `--plugin`: open its settings modal instead.
+        #[arg(long, requires = "plugin")]
+        settings: bool,
+        /// Open a tab: Plugins (discover, installed, updates, community,
+        /// develop — `mandara studio plugins --tab develop`; the older
+        /// `marketplace` / `local` still work), Applications (installed,
+        /// defaults, startup, launching — `mandara studio applications --tab
+        /// startup`) or Wallpaper (wallpaper, slideshow, effects, generator,
+        /// online — `mandara studio wallpaper --tab slideshow`), or Bars (bar,
+        /// sidebars, panels, edges; the older side-bars and sidebar open
+        /// Sidebars at their section).
+        #[arg(long, value_name = "TAB", conflicts_with = "plugin")]
+        tab: Option<String>,
+        /// With `--tab develop`: scroll to a section (folders, format,
+        /// architecture, contract, quick-start, validate); with `bars --tab
+        /// sidebars`: side-bar or sidebar.
+        #[arg(long, value_name = "SECTION", requires = "tab")]
+        scroll: Option<String>,
+        /// Demo data instead of the real system (`mandara studio users
+        /// --demo`: fictional accounts; `mandara studio date --demo`: a
+        /// fictional clock). Nothing on the system changes.
+        #[arg(long)]
+        demo: bool,
+    },
+    /// Hook Mandara into your compositor without a running shell: writes
+    /// the generated drop-in and adds the single include line to your
+    /// config (backup kept). Used by `mandara install`.
+    Setup {
+        /// Also start Mandara with the compositor (from the drop-in).
+        #[arg(long)]
+        autostart: bool,
+        /// mango, niri, hyprland, umbriel, sway, river, kwin, aqueous, labwc or cosmic (default: the running one, else every
+        /// compositor that has a config file).
+        #[arg(long)]
+        compositor: Option<String>,
+        /// Only report: the Config doctor's check of your compositor config
+        /// (with the compositor's own checker) and conflicts (old launcher
+        /// binds, other bars, notification or wallpaper daemons); change
+        /// nothing. Exits 10 when there are conflicts, else 11 when the
+        /// compositor reports errors.
+        #[arg(long)]
+        check: bool,
+        /// Fix a Config doctor problem by its id: `ID=comment`, `ID=remove`
+        /// (your files: backed up, re-checked, rolled back if worse) or
+        /// `ID=regenerate` (Mandara's drop-in). Repeatable.
+        #[arg(long, value_name = "ID=comment|remove|regenerate")]
+        fix: Vec<String>,
+        /// Retire conflicting lines in your config (commented out with a
+        /// `mandara-retired:` marker, every touched file backed up first),
+        /// validate with the compositor, and roll back if it objects.
+        #[arg(long)]
+        fix_conflicts: bool,
+        /// Undo a retire: restore a backup folder (or `latest`).
+        #[arg(long, value_name = "BACKUP|latest")]
+        restore: Option<String>,
+    },
+    /// Mandara Login, the greetd greeter: `mandara greeter` (started by
+    /// greetd), `--demo` (preview on this session), `install` / `uninstall`.
+    Greeter(mandara_greeter::cli::GreeterArgs),
+    /// Lock the screen (ext-session-lock-v1 + PAM). `--demo` previews the
+    /// lock screen without locking anything.
+    Lock {
+        /// Preview on overlay surfaces: nothing is locked, any password works.
+        #[arg(long)]
+        demo: bool,
+        /// Demo only: close after this many seconds (default 60).
+        #[arg(long, value_name = "SECONDS")]
+        timeout: Option<u64>,
+    },
+    /// What changed in each release, in plain words: this version by
+    /// default, `mandara changelog 0.1.1`, `--all`, or `--since 0.1.0` for
+    /// everything an update brought.
+    Changelog(changelog_cli::ChangelogArgs),
+    /// Update Mandara (binary patch first, full download as the fallback),
+    /// roll back, or update marketplace plugins: `mandara update apply`.
+    Update(update_cli::UpdateArgs),
+    /// Install Mandara: this binary into ~/.local/bin (checked against its
+    /// release's SHA-256), the system packages it needs (sudo / doas / run0 /
+    /// pkexec, asked), compositor integration, Mandara Login and keyring
+    /// unlock. `--dry-run` shows everything and changes nothing.
+    Install(mandara_install::InstallArgs),
+    /// Remove the binary and desktop entry and empty the compositor
+    /// drop-ins (your settings are kept).
+    Uninstall(mandara_install::UninstallArgs),
+    /// Internal: owns a live renderer and cleans up after its controller.
+    #[command(hide = true)]
+    RendererWorker {
+        program: std::path::PathBuf,
+        #[arg(last = true)]
+        args: Vec<std::ffi::OsString>,
+    },
+    /// Internal: isolated depth inference.
+    #[command(hide = true)]
+    DepthWorker {
+        model: std::path::PathBuf,
+        image: std::path::PathBuf,
+        out: std::path::PathBuf,
+    },
+}
+
+/// Initialize process services and dispatch the shell, Studio or a dedicated CLI worker.
+fn main() -> Result<()> {
+    run().inspect_err(|error| tracing::error!("{error:#}"))
+}
+
+fn run() -> Result<()> {
+    alloc::init();
+    if mandara_services::app_themes::firefox::launched(std::env::args().skip(1)) {
+        return mandara_services::app_themes::firefox::host();
+    }
+    // Started by sudo as the AUR step's askpass, or by an AUR helper as
+    // that step's `sudo -A` wrapper (links in the step's private folder).
+    {
+        use mandara_services::sysupdate::askpass;
+        let mut argv = std::env::args_os();
+        if let Some(argv0) = argv.next() {
+            if askpass::invoked_as_askpass(&argv0) {
+                let prompt = argv.next().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+                std::process::exit(askpass::client_main(&prompt));
+            }
+            if askpass::invoked_as_sudo(&argv0) {
+                std::process::exit(askpass::sudo_main(argv));
+            }
+        }
+    }
+    use tracing_subscriber::util::SubscriberInitExt as _;
+    let long = Box::leak(mandara_version::long_version().into_boxed_str()) as &'static str;
+    let journal = journal::Journal::connect(long);
+    let route = logging::route(logging::stderr_is_vt(), journal.is_some());
+    logging::subscriber(
+        std::io::stderr,
+        journal,
+        tracing_subscriber::EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| "info,naga=warn,wgpu=warn,wgpu_hal=error,blade=warn".into()),
+        route,
+    )
+        .init();
+    mandara_plugins::install_panic_hook();
+    // A write past RLIMIT_FSIZE (e.g. a large screencopy buffer under a
+    // restrictive ulimit) must fail with EFBIG, not kill the shell.
+    // SAFETY: setting a signal disposition to SIG_IGN has no preconditions.
+    unsafe {
+        libc::signal(libc::SIGXFSZ, libc::SIG_IGN);
+    }
+
+    mandara_i18n::set_language(mandara_i18n::Lang::from_env());
+    let matches = <Cli as clap::CommandFactory>::command().version(mandara_version::version()).long_version(long).get_matches();
+    let cli = <Cli as clap::FromArgMatches>::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
+    match cli.command {
+        Some(Cmd::StorageAdmin { args }) => std::process::exit(mandara_services::backups::filesystem::admin::main(&args)),
+        Some(Cmd::AgentWorker) => {
+            mandara_services::command_agent::worker_main(mandara_studio::agent_settings_catalog)
+        }
+        Some(Cmd::PanelCaptureWorker) => mandara_services::screencopy::panel::worker_main(),
+        Some(Cmd::SystemUpdate { args }) => {
+            std::process::exit(mandara_services::sysupdate::helper::main(&args))
+        }
+        Some(Cmd::BootAdmin { args }) => {
+            std::process::exit(mandara_services::boot::helper::main(&args))
+        }
+        Some(Cmd::Setup { autostart, compositor, check, fix_conflicts, restore, fix }) => setup_cli::setup(setup_cli::Options { autostart, compositor, check, fix_conflicts, restore, fix }),
+        Some(Cmd::Msg { json, args }) => {
+            use std::io::Write as _;
+            let args = absolute_install_paths(args);
+            let response = ipc::send(&paths::ipc_socket(), &args)?;
+            // Locked writes that stop quietly on a closed pipe (`| head`).
+            let mut out = std::io::stdout().lock();
+            if json {
+                let _ = writeln!(out, "{}", serde_json::to_string(&response)?);
+            } else if response.ok {
+                let _ = match response.data {
+                    Some(serde_json::Value::String(s)) => writeln!(out, "{s}"),
+                    Some(serde_json::Value::Null) | None => writeln!(out, "ok"),
+                    Some(other) => writeln!(out, "{}", serde_json::to_string_pretty(&other)?),
+                };
+            } else {
+                eprintln!("error: {}", response.error.clone().unwrap_or_default());
+            }
+            if !response.ok {
+                std::process::exit(1);
+            }
+            Ok(())
+        }
+        Some(Cmd::Commands { json }) => {
+            let registry = build_registry();
+            if json {
+                println!("{}", serde_json::to_string_pretty(&registry.commands.catalog_json())?);
+            } else {
+                use std::io::Write as _;
+                // Write through a locked handle and stop quietly on a closed
+                // pipe (`mandara commands | head`).
+                let mut out = std::io::stdout().lock();
+                let mut owner = String::new();
+                for c in registry.commands.all() {
+                    if c.owner != owner {
+                        owner = c.owner.clone();
+                        if writeln!(out, "\n[{owner}]").is_err() {
+                            return Ok(());
+                        }
+                    }
+                    if writeln!(out, "  {:<48} {}", c.usage(), c.summary).is_err() {
+                        return Ok(());
+                    }
+                }
+                let _ = writeln!(out, "\nRun with `mandara msg <command>`; add --json for structured output.");
+            }
+            Ok(())
+        }
+        Some(Cmd::Themes) => {
+            for t in catalog::all() {
+                let (d, l) = (t.palette(true), t.palette(false));
+                println!(
+                    "{:<18} {:<18} dark {} on {}   light {} on {}{}",
+                    t.id,
+                    t.name,
+                    d.primary,
+                    d.surface_base,
+                    l.primary,
+                    l.surface_base,
+                    if t.signature { "   (Mandara signature)" } else { "" }
+                );
+            }
+            Ok(())
+        }
+        Some(Cmd::Studio { section, plugin, settings, tab, scroll, demo }) => {
+            if demo {
+                mandara_studio::app::set_users_demo();
+                mandara_studio::app::set_time_demo();
+            }
+            run_studio(match (plugin, tab) {
+                // Studio's target syntax: `plugins/<id>[/settings]` and
+                // `plugins/<tab>[/<section>]`.
+                (Some(id), _) => Some(format!("plugins/{id}{}", if settings { "/settings" } else { "" })),
+                // `applications --tab startup` → `applications/startup`;
+                // without a section the tab is a Plugins tab.
+                (None, Some(tab)) => Some(format!("{}/{tab}{}", section.as_deref().filter(|s| !s.eq_ignore_ascii_case("plugins")).unwrap_or("plugins"), scroll.map(|s| format!("/{s}")).unwrap_or_default())),
+                (None, None) => section,
+            })
+        }
+        Some(Cmd::Greeter(args)) => mandara_greeter::cli::main(args),
+        Some(Cmd::Lock { demo, timeout }) => mandara_ui::lock::run(mandara_ui::lock::LockOptions { demo, timeout: timeout.map(Duration::from_secs) }),
+        Some(Cmd::Update(args)) => update_cli::main(args),
+        Some(Cmd::Changelog(args)) => changelog_cli::main(args),
+        Some(Cmd::Install(args)) => {
+            mandara_install::install(args, &mandara_greeter::install_probe::InstallerProbe).map_err(anyhow::Error::msg)
+        }
+        Some(Cmd::Uninstall(args)) => {
+            mandara_install::uninstall(args, &mandara_greeter::install_probe::InstallerProbe).map_err(anyhow::Error::msg)
+        }
+        Some(Cmd::Run) => run_shell(),
+        Some(Cmd::RendererWorker { program, args }) => {
+            mandara_services::renderer_worker::run(&program, &args)?;
+            Ok(())
+        }
+        Some(Cmd::DepthWorker { model, image, out }) => std::process::exit(mandara_services::depth_model::worker_main(&model, &image, &out)),
+        None => supervisor::supervise(),
+    }
+}
+
+/// Background workers GPUI starts. It sizes its pool by the CPUs the process
+/// may run on — 32 idle threads on a 16-core machine, each a stack and a
+/// potential malloc arena — while a shell's background work (image decode,
+/// IPC replies, file reads) never needs more than a few at once.
+const GPUI_WORKERS: usize = 4;
+
+/// The GPUI application, with its worker pool capped at [`GPUI_WORKERS`]:
+/// the platform is created while this thread may only run on that many
+/// CPUs (GPUI reads the affinity mask to size the pool), then every thread
+/// gets the full mask back, so nothing is pinned.
+fn application() -> gpui::Application {
+    use std::mem::zeroed;
+    // SAFETY: the CPU set is plain data; the libc calls get valid pointers and
+    // its exact size, and only change scheduling affinity.
+    unsafe {
+        let mut full: affinity::CpuSet = zeroed();
+        if !affinity::get(&mut full) {
+            return gpui_platform::application();
+        }
+        let mut capped: affinity::CpuSet = zeroed();
+        let cpus = (0..libc::CPU_SETSIZE as usize).filter(|cpu| libc::CPU_ISSET(*cpu, &full)).take(GPUI_WORKERS);
+        let mut count = 0;
+        for cpu in cpus {
+            libc::CPU_SET(cpu, &mut capped);
+            count += 1;
+        }
+        if count < GPUI_WORKERS || !affinity::cap(&capped) {
+            return gpui_platform::application();
+        }
+        let app = gpui_platform::application();
+        // Threads started meanwhile inherited the capped mask: restore all.
+        affinity::restore_every_thread(&full);
+        app
+    }
+}
+
+/// The CPU affinity calls behind [`application`], which differ between
+/// kernels: the mask GPUI sizes its pool by is the calling thread's on Linux
+/// (`sched_getaffinity(0)`) and the whole process's on FreeBSD (Rust's
+/// `available_parallelism` reads `CPU_WHICH_PID`).
+mod affinity {
+    use std::mem::size_of;
+
+    #[cfg(target_os = "linux")]
+    pub type CpuSet = libc::cpu_set_t;
+    #[cfg(target_os = "freebsd")]
+    pub type CpuSet = libc::cpuset_t;
+
+    /// Reads the mask the pool is sized by into `mask`; false on failure.
+    ///
+    /// # Safety
+    /// Only reads scheduling affinity into a valid set.
+    #[cfg(target_os = "linux")]
+    pub unsafe fn get(mask: &mut CpuSet) -> bool {
+        // SAFETY: valid pointer and exact size.
+        unsafe { libc::sched_getaffinity(0, size_of::<CpuSet>(), mask) == 0 }
+    }
+
+    /// Limits the mask the pool is sized by to `mask`; false on failure.
+    ///
+    /// # Safety
+    /// Only changes scheduling affinity; `mask` is a valid set.
+    #[cfg(target_os = "linux")]
+    pub unsafe fn cap(mask: &CpuSet) -> bool {
+        // SAFETY: valid pointer and exact size.
+        unsafe { libc::sched_setaffinity(0, size_of::<CpuSet>(), mask) == 0 }
+    }
+
+    /// Gives every thread of this process `mask`.
+    ///
+    /// # Safety
+    /// Only changes scheduling affinity; `mask` is a valid set.
+    #[cfg(target_os = "linux")]
+    pub unsafe fn restore_every_thread(mask: &CpuSet) {
+        let tids = std::fs::read_dir("/proc/self/task").into_iter().flatten().flatten().filter_map(|e| e.file_name().to_str()?.parse::<libc::pid_t>().ok());
+        for tid in tids {
+            // SAFETY: valid pointer and exact size, per the caller.
+            unsafe { libc::sched_setaffinity(tid, size_of::<CpuSet>(), mask) };
+        }
+    }
+
+    /// The process's mask (`CPU_WHICH_PID`, id -1: this process,
+    /// cpuset_getaffinity(2)); false on failure.
+    ///
+    /// # Safety
+    /// Only reads scheduling affinity into a valid set.
+    #[cfg(target_os = "freebsd")]
+    pub unsafe fn get(mask: &mut CpuSet) -> bool {
+        // SAFETY: valid pointer and exact size.
+        unsafe { libc::cpuset_getaffinity(libc::CPU_LEVEL_WHICH, libc::CPU_WHICH_PID, -1, size_of::<CpuSet>(), mask) == 0 }
+    }
+
+    /// Limits the process's mask, every thread's, to `mask`; false on failure.
+    ///
+    /// # Safety
+    /// Only changes scheduling affinity; `mask` is a valid set.
+    #[cfg(target_os = "freebsd")]
+    pub unsafe fn cap(mask: &CpuSet) -> bool {
+        // SAFETY: valid pointer and exact size.
+        unsafe { libc::cpuset_setaffinity(libc::CPU_LEVEL_WHICH, libc::CPU_WHICH_PID, -1, size_of::<CpuSet>(), mask) == 0 }
+    }
+
+    /// Gives every thread of this process `mask`: `CPU_WHICH_PID` applies
+    /// it to all of them.
+    ///
+    /// # Safety
+    /// Only changes scheduling affinity; `mask` is a valid set.
+    #[cfg(target_os = "freebsd")]
+    pub unsafe fn restore_every_thread(mask: &CpuSet) {
+        // SAFETY: valid pointer and exact size, per the caller.
+        unsafe { cap(mask) };
+    }
+}
+
+/// Debounce of the config file watcher.
+const CONFIG_WATCH_DEBOUNCE: Duration = Duration::from_millis(150);
+/// How long after startup a "settings were reset" notice waits, so the
+/// notification service of the session is up to show it.
+const REPAIRED_NOTICE_DELAY: Duration = Duration::from_secs(5);
+
+/// Every shipped plugin and command.
+fn build_registry() -> PluginRegistry {
+    let mut registry = PluginRegistry::default();
+    mandara_ui::plugins::register_builtin(&mut registry);
+    registry
+}
+
+fn run_shell() -> Result<()> {
+    if std::env::var_os("WAYLAND_DISPLAY").is_none() {
+        anyhow::bail!("Mandara Shell requires a Wayland session (WAYLAND_DISPLAY is not set)");
+    }
+    // The output query is a Wayland round trip of its own: run it while
+    // the config is read and the IPC socket bound.
+    let outputs = std::thread::Builder::new().name("mandara-outputs".into()).spawn(mandara_core::query_outputs).context("spawning the output query")?;
+    let store = ConfigStore::open_default().context("opening config")?;
+    tracing::info!("config: {} (allocator: {})", store.path().display(), alloc::NAME);
+    let repaired = store.repaired().cloned();
+    alloc::start_upkeep();
+    // A new Studio icon reaches installs the updater only swapped the binary of.
+    let _ = std::thread::Builder::new().name("mandara-icon".into()).spawn(|| {
+        let Some(home) = std::env::var_os("HOME").map(std::path::PathBuf::from) else { return;
+            };
+        let icon = mandara_install::files::Paths::new(None, &home, |k| std::env::var(k).ok()).icon();
+        match mandara_install::files::refresh_installed_icon(&icon) {
+            Ok(true) => tracing::info!("updated the Studio icon at {}", icon.display()),
+            Ok(false) => {}
+            Err(e) => tracing::debug!("Studio icon at {}: {e}", icon.display()),
+        }
+    });
+    let watcher = store.watch(CONFIG_WATCH_DEBOUNCE).context("watching config")?;
+    let requests = ipc::serve(&paths::ipc_socket())?;
+    let outputs = match outputs.join() {
+        Ok(Ok(outputs)) => outputs,
+        Ok(Err(err)) => {
+            tracing::warn!("xdg-output query failed: {err:#}");
+            Vec::new()
+        }
+        Err(_) => {
+            tracing::warn!("xdg-output query panicked");
+            Vec::new()
+        }
+    };
+
+    // Output changes can briefly leave no windows while surfaces are replaced.
+    // Only an explicit quit should end the shell and its restart supervisor.
+    let lifetime = mandara_core::shell_lifetime::ShellLifetime::default();
+    let running = lifetime.clone();
+    application().with_quit_mode(gpui::QuitMode::Explicit).with_assets(MandaraAssets).run(move |cx: &mut App| {
+        cx.set_global(running);
+        mandara_core::set_build_info(cx, build_info());
+        let cfg = store.snapshot();
+        cx.set_global(Fonts::resolve(&cfg.typography, cx));
+        cx.set_global(build_registry());
+        let (config, _shell) = mandara_ui::init_state(store, cx);
+        if let Some(repaired) = repaired {
+            cx.spawn(async move |cx| {
+                cx.background_executor().timer(REPAIRED_NOTICE_DELAY).await;
+                cx.update(|cx| mandara_ui::state::announce_repaired_config(&repaired, cx));
+            })
+            .detach();
+        }
+        mandara_ui::hub::init_hub(cx);
+        cx.set_global(mandara_ui::overlays::Outputs(outputs.clone()));
+        mandara_ui::overlays::init_overlays(cx);
+        mandara_ui::lock::init(cx);
+        mandara_ui::powerctl::init(cx);
+        // Interface style, calendar reminders, shared location, slideshow,
+        // the wallpaper generator's opt-in schedule.
+        mandara_ui::style::init(cx);
+        mandara_ui::calendar::init(cx);
+        mandara_ui::location::init(cx);
+        mandara_ui::timezone::init(cx);
+        mandara_ui::slideshow::init(cx);
+        mandara_ui::plugins::wallpaper_generator::init(cx);
+        mandara_ui::polkit::init(cx);
+        mandara_ui::keyring_prompt::init(cx);
+        mandara_ui::keepassxc_prompt::init(cx);
+        mandara_ui::bt_pairing::init(cx);
+        mandara_ui::plugins::system_admin::init(cx);
+        mandara_ui::plugins::compositor::init(cx);
+        mandara_ui::workflow::init(cx);
+        // Studio is its own process; the shell only launches it.
+        cx.set_global(mandara_ui::state::StudioHook(std::rc::Rc::new(|section, _| spawn_studio(section))));
+
+        mandara_ui::icon_theme::set_theme_override(cfg.appearance.icon_theme.clone());
+        // Re-resolve fonts / icon theme when appearance settings change.
+        let mut typography = cfg.typography.clone();
+        cx.observe(&config, move |config, cx| {
+            mandara_ui::icon_theme::set_theme_override(config.read(cx).get().appearance.icon_theme.clone());
+            let next = config.read(cx).get().typography.clone();
+            if next != typography {
+                cx.set_global(Fonts::resolve(&next, cx));
+                typography = next;
+                cx.refresh_windows();
+            }
+        })
+        .detach();
+
+        surfaces::init(outputs.clone(), cx);
+        // Panels that floated when the shell last stopped come back.
+        mandara_ui::floating::init(cx);
+        if mandara_ui::backdrop::software_enabled() {
+            // Falls back to the GPUI windows if it cannot start.
+            mandara_ui::backdrop::init(surfaces::enable_gpui_wallpapers, cx);
+        }
+
+        // External config edits → live reload.
+        let changes = watcher.receiver();
+        cx.spawn(async move |cx| {
+            let mut watcher = watcher;
+            while changes.recv().await.is_ok() {
+                    watcher = mandara_services::runtime::unblock(move || {
+                        if let Err(error) = watcher.refresh() {
+                            tracing::warn!("watching config links: {error:#}");
+                        }
+                        watcher
+                    })
+                    .await;
+                    let task = cx.update(mandara_ui::reload_config_from_disk);
+                    let _ = task.await;
+            }
+        })
+        .detach();
+
+        // IPC: resolve on the foreground thread, await pending service
+        // results without blocking the UI.
+        cx.spawn(async move |cx| {
+            while let Ok(Request { args, reply }) = requests.recv().await {
+                // The supervisor's liveness probe: answering from this
+                // foreground task proves the UI thread is running.
+                if ipc::is_watchdog(&args) {
+                    let _ = reply.try_send(WireResponse::ok(serde_json::Value::from("alive")));
+                    continue;
+                }
+                let output = cx.update(|cx| {
+                    if args.first().map(String::as_str) == Some("commands") {
+                        return Ok(mandara_plugins::Output::Value(cx.global::<PluginRegistry>().commands.catalog_json()));
+                    }
+                    let registry = cx.global::<PluginRegistry>().commands.clone();
+                    mandara_ui::dismiss::with_origin(mandara_ui::dismiss::Origin::External, cx, |cx| registry.execute(&args, cx))
+                });
+                cx.background_executor()
+                    .spawn(async move {
+                        let response = match output {
+                            Ok(output) => match output.resolve().await {
+                                Ok(value) => WireResponse::ok(value),
+                                Err(err) => WireResponse::err(err),
+                            },
+                            Err(err) => WireResponse::err(err),
+                        };
+                        let _ = reply.send(response).await;
+                    })
+                    .detach();
+            }
+        })
+        .detach();
+    });
+    let _ = std::fs::remove_file(paths::ipc_socket());
+    lifetime.finished()
+}
+
+/// Launches `mandara studio [section]` detached from the shell's process
+/// group (a running Studio just focuses itself).
+fn spawn_studio(section: Option<String>) {
+    use std::os::unix::process::CommandExt as _;
+    let exe = paths::self_exe();
+    let mut cmd = std::process::Command::new(exe);
+    // `section` may carry flags after the page (`date --demo`); the page
+    // itself can have spaces ("Login screen").
+    let (flags, words): (Vec<&str>, Vec<&str>) = section.as_deref().unwrap_or_default().split_whitespace().partition(|w| w.starts_with("--"));
+    cmd.arg("studio");
+    if !words.is_empty() {
+        cmd.arg(words.join(" "));
+    }
+    cmd.args(flags).stdin(std::process::Stdio::null()).process_group(0);
+    match cmd.spawn() {
+        // Reap it in the background so it never lingers as a zombie.
+        Ok(mut child) => drop(std::thread::spawn(move || child.wait())),
+        Err(err) => tracing::error!("launching Mandara Studio: {err}"),
+    }
+}
+
+fn studio_socket() -> std::path::PathBuf {
+    paths::ipc_socket().with_file_name("mandara-studio.sock")
+}
+
+/// Longest Studio section request.
+const STUDIO_REQUEST_BYTES: usize = 4096;
+/// A Studio client has this long, in total, to send its section.
+const STUDIO_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+/// A second Studio waits this long for the first to start listening.
+const STUDIO_STARTUP_WAIT: Duration = Duration::from_secs(5);
+
+/// Hands `section` to a Studio that is already listening; false if none is.
+fn send_to_running_studio(sock: &std::path::Path, section: &str) -> bool {
+    use std::io::Write as _;
+    let Ok(mut stream) = std::os::unix::net::UnixStream::connect(sock) else { return false };
+    let _ = stream.set_write_timeout(Some(STUDIO_REQUEST_TIMEOUT));
+    stream.write_all(format!("{section}\n").as_bytes()).is_ok()
+}
+
+fn run_studio(section: Option<String>) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt as _;
+    use std::os::unix::net::UnixListener;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    if std::env::var_os("WAYLAND_DISPLAY").is_none() {
+        anyhow::bail!("Mandara Studio requires a Wayland session (WAYLAND_DISPLAY is not set)");
+    }
+    // Single instance: hand the section to a running Studio and exit.
+    let sock = studio_socket();
+    if send_to_running_studio(&sock, section.as_deref().unwrap_or_default()) {
+        return Ok(());
+    }
+    // Only the holder of this lock removes and binds the socket, so two
+    // Studios starting together cannot both bind it. It is held until exit.
+    let lock_path = sock.with_extension("lock");
+    let lock = std::fs::OpenOptions::new().create(true).truncate(false).write(true).open(&lock_path).with_context(|| format!("opening {}", lock_path.display()))?;
+    if lock.try_lock().is_err() {
+        // Another Studio is starting up: it takes the section once it listens.
+        let deadline = std::time::Instant::now() + STUDIO_STARTUP_WAIT;
+        while std::time::Instant::now() < deadline {
+            if send_to_running_studio(&sock, section.as_deref().unwrap_or_default()) {
+                return Ok(());
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        anyhow::bail!("another Mandara Studio is starting but is not answering ({})", sock.display());
+    }
+    let _ = std::fs::remove_file(&sock);
+    let listener = UnixListener::bind(&sock).with_context(|| format!("binding {}", sock.display()))?;
+    std::fs::set_permissions(&sock, std::fs::Permissions::from_mode(0o600)).with_context(|| format!("restricting {}", sock.display()))?;
+    let (show_tx, show_rx) = async_channel::unbounded::<String>();
+    std::thread::Builder::new().name("mandara-studio-ipc".into()).spawn(move || {
+        for stream in listener.incoming().flatten() {
+            // A client that never finishes its line loses its turn, it does
+            // not hold up the next `mandara studio <section>`.
+            let section = match ipc::read_line_bounded(&stream, STUDIO_REQUEST_BYTES, STUDIO_REQUEST_TIMEOUT) {
+                Ok(section) => section,
+                Err(err) => {
+                    tracing::debug!("studio ipc client: {err:#}");
+                    continue;
+                }
+            };
+            if show_tx.send_blocking(section.trim().to_string()).is_err() {
+                break;
+            }
+        }
+    })?;
+
+    let store = ConfigStore::open_default().context("opening config")?;
+    let watcher = store.watch(CONFIG_WATCH_DEBOUNCE).context("watching config")?;
+    let shell_sock = paths::ipc_socket();
+    // Whether the shell answers decides who saves the config. Asked off the
+    // startup path (a hung shell would otherwise hold the window back for the
+    // whole IPC timeout); until it answers Studio saves edits itself, which
+    // is harmless (the shell ignores a file identical to its own).
+    let shell_alive = Arc::new(AtomicBool::new(false));
+    {
+        let alive = shell_alive.clone();
+        let sock = shell_sock.clone();
+        std::thread::Builder::new().name("mandara-studio-ping".into()).spawn(move || {
+            alive.store(ipc::send(&sock, &["ping".to_string()]).is_ok_and(|r| r.ok), Ordering::Relaxed);
+        })?;
+    }
+
+    let mirror = config_mirror::Mirror::start(shell_sock.clone(), shell_alive.clone())?;
+
+    let studio_ui = mandara_studio::ui_state::load();
+    let registry = build_registry();
+
+    application().with_assets(MandaraAssets).run(move |cx: &mut App| {
+        mandara_core::set_build_info(cx, build_info());
+        let cfg = store.snapshot();
+        cx.set_global(Fonts::resolve(cfg.studio_typography(), cx));
+        cx.set_global(registry);
+        let (config, _shell) = mandara_ui::init_state(store, cx);
+        mandara_ui::icon_theme::set_theme_override(cfg.appearance.icon_theme.clone());
+        let mut typography = cfg.studio_typography().clone();
+        cx.observe(&config, move |config, cx| {
+            mandara_ui::icon_theme::set_theme_override(config.read(cx).get().appearance.icon_theme.clone());
+            let next = config.read(cx).get().studio_typography().clone();
+            if next != typography {
+                cx.set_global(Fonts::resolve(&next, cx));
+                typography = next;
+                cx.refresh_windows();
+            }
+        })
+        .detach();
+
+        // Every edit goes to the shell; when it's down, Studio saves itself.
+        cx.set_global(mandara_ui::state::ConfigMirror(std::rc::Rc::new(move |before, after| mirror.queue(before, after))));
+        let pid_sock = shell_sock.clone();
+        let pid_alive = shell_alive.clone();
+        cx.set_global(mandara_studio::ShellLink(Arc::new(move || {
+            let response = ipc::send(&pid_sock, &["info".to_string()]).ok().filter(|r| r.ok);
+            pid_alive.store(response.is_some(), Ordering::Relaxed);
+            response?.data?.get("pid")?.as_u64().map(|p| p as u32)
+        })));
+
+        let ipc_sock = shell_sock.clone();
+        cx.set_global(mandara_studio::ShellIpc(Arc::new(move |args| match ipc::send(&ipc_sock, &args) {
+            Ok(r) if r.ok => Ok(()),
+            Ok(r) => Err(r.error.unwrap_or_default()),
+            Err(e) => Err(format!("{e:#}")),
+        })));
+        let query_sock = shell_sock.clone();
+        plugin_relay::connect(shell_sock.clone(), cx);
+        cx.set_global(mandara_studio::ShellQuery(Arc::new(move |args| match ipc::send(&query_sock, &args) {
+            Ok(r) if r.ok => Ok(r.data.unwrap_or(serde_json::Value::Null)),
+            Ok(r) => Err(mandara_studio::QueryError::Failed(
+                        r.error.unwrap_or_default(),
+                    )),
+            Err(error) => {
+                        let unavailable =
+                            error.downcast_ref::<std::io::Error>().is_some_and(|error| {
+                                matches!(
+                                    error.kind(),
+                                    std::io::ErrorKind::NotFound
+                                        | std::io::ErrorKind::ConnectionRefused
+                                )
+                            });
+                        let message = format!("{error:#}");
+                        Err(if unavailable {
+                            mandara_studio::QueryError::Unavailable(message)
+                        } else {
+                            mandara_studio::QueryError::Failed(message)
+                        })
+                    }
+                },
+            )));
+
+        mandara_studio::run(section.as_deref(), studio_ui, cx);
+
+        let changes = watcher.receiver();
+        cx.spawn(async move |cx| {
+            let mut watcher = watcher;
+            while changes.recv().await.is_ok() {
+                    watcher = mandara_services::runtime::unblock(move || {
+                        if let Err(error) = watcher.refresh() {
+                            tracing::warn!("watching config links: {error:#}");
+                        }
+                        watcher
+                    })
+                    .await;
+                    let task = cx.update(mandara_ui::reload_config_from_disk);
+                    let _ = task.await;
+            }
+        })
+        .detach();
+        cx.spawn(async move |cx| {
+            while let Ok(section) = show_rx.recv().await {
+                cx.update(|cx| {
+                        mandara_studio::open_at((!section.is_empty()).then_some(section.as_str()), cx)
+                    });
+            }
+        })
+        .detach();
+    });
+    mandara_studio::ui_state::flush();
+    let _ = std::fs::remove_file(studio_socket());
+    Ok(())
+}
+
+/// This binary's identity for the UI (About, `info`).
+fn build_info() -> mandara_core::BuildInfo {
+    mandara_core::BuildInfo {
+        version: mandara_version::version().to_string(),
+        long: mandara_version::long_version(),
+        components: mandara_version::COMPONENTS.iter().map(|c| (c.name.to_string(), c.version.to_string())).collect(),
+    }
+}
+
+/// `mandara msg apps install ./x.AppImage`, `mandara msg plugins vet ./my-plugin`,
+/// `mandara msg share file ./x.pdf`:
+/// the shell resolves paths against its own folder, so relative ones are
+/// made absolute here.
+fn absolute_install_paths(mut args: Vec<String>) -> Vec<String> {
+    if args.len() > 2 && matches!((args[0].as_str(), args[1].as_str()), ("apps", "install") | ("plugins", "vet") | ("share", "file")) {
+        for a in args.iter_mut().skip(2).filter(|a| !a.starts_with("--")) {
+            if let Ok(abs) = std::path::absolute(&*a) {
+                *a = abs.to_string_lossy().into_owned();
+            }
+        }
+    }
+    args
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser as _;
+
+    #[test]
+    fn storage_admin_passes_one_json_request_without_exposing_a_shell_command() {
+        use clap::CommandFactory as _;
+        let document = r#"{"action":"inspect","mount":{"target":"/a directory"}}"#;
+        let cli = Cli::try_parse_from(["mandara", "storage-admin", document]).unwrap();
+        assert!(matches!(cli.command, Some(Cmd::StorageAdmin { args }) if args == [document]));
+        let mut command = Cli::command();
+        assert!(!command.render_help().to_string().contains("storage-admin"));
+        assert!(Cli::try_parse_from(["mandara", "storage-admin", "--command", "rm"]).is_err());
+    }
+
+    /// The root side of a system update gets its words untouched (the
+    /// helper validates them itself), including `--protocol`.
+    #[test]
+    fn system_update_passes_its_words_through() {
+        for words in [vec!["--protocol"], vec!["apply"], vec!["nixos", "switch-to", "41"], vec!["apply", "--overwrite", "*"]] {
+            let argv = ["mandara", "system-update"].into_iter().chain(words.iter().copied());
+            let cli = Cli::try_parse_from(argv).unwrap();
+            let Some(Cmd::SystemUpdate { args }) = cli.command else { panic!("not system-update") };
+            assert_eq!(args, words);
+        }
+    }
+
+    /// Boot look's root side gets its words untouched too (it accepts only
+    /// its fixed actions itself).
+    #[test]
+    fn boot_admin_passes_its_words_through() {
+        for words in [vec!["apply", "/home/u/.cache/mandara/boot/requests/ab.json"], vec!["restore", "latest"], vec!["--evil"]] {
+            let argv = ["mandara", "boot-admin"].into_iter().chain(words.iter().copied());
+            let Some(Cmd::BootAdmin { args }) = Cli::try_parse_from(argv).unwrap().command else { panic!("not boot-admin") };
+            assert_eq!(args, words);
+        }
+    }
+
+    /// The root-owned copies Studio may run as root are the ones the
+    /// installer and the login screen put in place (issue #10).
+    #[test]
+    fn admin_binaries_agree_across_crates() {
+        assert_eq!(mandara_install::installer::ADMIN_EXE, mandara_config::admin::ADMIN_EXE);
+        assert_eq!(mandara_greeter::install::INSTALLED_EXE, mandara_config::admin::GREETER_EXE);
+        assert_eq!(mandara_install::installer::SETUP_CONFIG_ERRORS, crate::setup_cli::EXIT_CONFIG_ERRORS, "the installer reads `setup --check`'s exit code");
+        assert_eq!(mandara_install::installer::SETUP_CONFLICTS, crate::setup_cli::EXIT_CONFLICTS);
+        assert_eq!(mandara_install::installer::SETUP_PREREQUISITE, crate::setup_cli::EXIT_PREREQUISITE);
+    }
+
+    use super::{Cli, Cmd};
+
+    #[test]
+    fn install_and_uninstall_parse() {
+        let cli = Cli::try_parse_from(["mandara", "install", "--dry-run", "--no-greeter", "--compositor", "niri"]).unwrap();
+        let Some(Cmd::Install(args)) = cli.command else { panic!("not install") };
+        assert!(args.dry_run && args.no_greeter);
+        assert_eq!(args.compositor.as_deref(), Some("niri"));
+        let cli = Cli::try_parse_from(["mandara", "uninstall", "--dry-run"]).unwrap();
+        assert!(matches!(cli.command, Some(Cmd::Uninstall(a)) if a.dry_run));
+        // `mandara --version` stays the top-level version flag.
+        assert!(Cli::try_parse_from(["mandara", "install", "--version", "0.2.0"]).is_ok());
+    }
+
+    #[test]
+    fn setup_accepts_kwin_and_includes_it_in_help() {
+        use clap::CommandFactory as _;
+        let cli = Cli::try_parse_from(["mandara", "setup", "--compositor", "kwin", "--check"]).unwrap();
+        assert!(matches!(cli.command, Some(Cmd::Setup { compositor: Some(ref name), check: true, .. }) if name == "kwin"));
+        let cli = Cli::command();
+        let setup = cli.find_subcommand("setup").unwrap();
+        let help = setup.get_arguments().find(|argument| argument.get_id() == "compositor").unwrap().get_help().unwrap().to_string();
+        assert!(help.contains("kwin"));
+    }
+
+    /// The installer and the updater agree on which release build this is.
+    #[test]
+    fn installer_and_updater_name_the_same_target() {
+        assert_eq!(mandara_install::platform::compiled_target(), mandara_services::self_update::running_target());
+    }
+}

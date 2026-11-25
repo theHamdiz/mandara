@@ -1,0 +1,3351 @@
+//! Keyboard-driven overlays opened on demand as their own layer surfaces
+//! (exclusive keyboard focus while open):
+//!
+//! * **Launcher** — rises out of the bottom edge (or drops from the top, or
+//!   floats in the middle): results above, search at the bottom. Plain text
+//!   searches apps (fuzzy, frecency-ranked), `>` lists actions (themes,
+//!   appearance, session), `=` evaluates arithmetic, and the providers in
+//!   [`crate::launcher_ext`] answer their prefixes (`:` emoji, `@` windows,
+//!   `#` clipboard, `*` wallpapers, `~` files).
+//!   Its looks (Classic list, Grid, grouped results and the Beacon search
+//!   bar) are in [`launcher_looks`]. The colour icons it decodes are kept
+//!   in an [`IconLedger`]: bounded while it is open, all freed when it
+//!   closes (with its image thumbnails); nothing ticks once it is closed
+//!   (the surface and its tasks are gone).
+//! * **Session dock** — slides in from its edge (opposite the sidebar; left
+//!   in RTL) over a scrim: big
+//!   rounded buttons whose corner radius morphs on focus / press.
+
+mod launcher_looks;
+mod beacon_keyboard;
+mod launcher_agent;
+mod launcher_hint;
+mod launcher_data;
+
+use crate::bidi::Bidi as _;
+use crate::launcher_icons::IconLedger;
+use launcher_data::{AppCatalog, Catalog, CatalogRequest, Wallpapers};
+use launcher_looks::{BeaconMode, GridFilter};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use gpui::layer_shell::{Anchor, KeyboardInteractivity, Layer};
+use gpui::{
+    AnyWindowHandle, App, AppContext as _, ClickEvent, ClipboardItem, Context, Entity, FocusHandle, FontWeight,
+    InteractiveElement, IntoElement, KeyDownEvent, MouseButton, ObjectFit, ParentElement, Render, ScrollEvent,
+    StatefulInteractiveElement, Styled, StyledImage as _, Window, WindowHandle, div, img, prelude::FluentBuilder as _, px,
+};
+use mandara_core::{Edge, FrameClock, LayerSurfaceSpec, SpringConfig, SpringValue, SurfaceRole, ToGpui};
+use mandara_i18n::{t, tf, tk, tr};
+use mandara_services::SessionAction;
+use mandara_theme::{Color, MandaraPalette, catalog};
+use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
+use nucleo_matcher::{Config as MatcherConfig, Matcher};
+
+use crate::apps::{self, App as DesktopApp};
+use crate::launcher_ext::{self, Hit, HitAction, Lead, UsageSnapshot};
+use crate::first_frame::{self, FirstFrame};
+use crate::fonts::fonts;
+use crate::icons::icon;
+use crate::kit::text;
+use crate::shell::frame_color;
+use crate::state::{ShellState, config, shell};
+
+/// Polls (one frame) until the launcher has closed before running the follow-up.
+const CLOSE_POLL: std::time::Duration = std::time::Duration::from_millis(16);
+/// Lets the compositor hand focus back after the launcher closes.
+const REFOCUS_SETTLE: std::time::Duration = std::time::Duration::from_millis(50);
+/// Text caret blink half-period (platform convention).
+const CARET_BLINK: std::time::Duration = std::time::Duration::from_millis(530);
+
+const ROW_H: f32 = 52.0;
+/// Row height in the compact list.
+const ROW_H_COMPACT: f32 = 38.0;
+/// Emoji glyph size in result rows.
+const EMOJI_LEAD_PX: f32 = 24.0;
+/// Corner radius of image thumbnails in result rows.
+const THUMB_RADIUS: f32 = 8.0;
+/// Highest screen dim behind the launcher.
+const DIM_MAX: f32 = 0.7;
+/// Leading tile of a result row (normal / compact), its corner radius and
+/// glyph sizes as fractions of the tile.
+const ROW_LEAD_PX: f32 = 34.0;
+const ROW_LEAD_COMPACT_PX: f32 = 26.0;
+const LEAD_RADIUS_FRAC: f32 = 0.3;
+const LEAD_ICON_FRAC: f32 = 0.53;
+const APP_ICON_FRAC: f32 = 0.88;
+/// Pointer slack around the launcher before leaving counts, logical px.
+const LEAVE_SLACK_PX: f32 = 24.0;
+/// Results kept per query (the visible window scrolls through them).
+const MAX_RESULTS: usize = 48;
+const SEARCH_H: f32 = 52.0;
+const PAD: f32 = 14.0;
+/// Slightly under-damped (ζ ≈ 0.6) so the drawer springs up with a touch of
+/// overshoot (`[panels] spring` overrides it, as for panels).
+const DRAWER_SPRING: SpringConfig = SpringConfig::new(320.0, 21.5, 1.0);
+/// The selection highlight (and the grouped list's scroll) following the
+/// selection: quick and barely overshooting.
+const HIGHLIGHT_SPRING: SpringConfig = SpringConfig::new(520.0, 38.0, 1.0);
+/// Closing: critically damped, quicker than the opening.
+const CLOSE_STIFFNESS: f32 = 420.0;
+/// Open progress (0–1) resolution: invisible below ~half a pixel of travel.
+const OPEN_REST_EPSILON: f32 = 0.001;
+/// Choreography travel of the launcher's content, its parallax depth and
+/// each cascading row or tile, in px.
+const CONTENT_ENTRANCE_PX: f32 = 16.0;
+const CONTENT_PARALLAX_PX: f32 = 20.0;
+const ROW_CASCADE_PX: f32 = 12.0;
+/// Starts closer than this to its rest count as growing in place.
+const ORIGIN_EPSILON_PX: f32 = 1.0;
+
+/// The unit direction the launcher comes from: from its start (a pill, an
+/// edge sliver) toward its rest, reversed; a card growing in place rises.
+fn launcher_origin(start: crate::launcher_place::Rect, rest: crate::launcher_place::Rect) -> (f32, f32) {
+    let dx = start.x + start.w / 2.0 - (rest.x + rest.w / 2.0);
+    let dy = start.y + start.h / 2.0 - (rest.y + rest.h / 2.0);
+    let len = (dx * dx + dy * dy).sqrt();
+    if len < ORIGIN_EPSILON_PX { (0.0, 1.0) } else { (dx / len, dy / len) }
+}
+/// Gap between the results and the search field.
+const LIST_GAP: f32 = 8.0;
+/// Fewest result rows shown, however low the height is set.
+const MIN_ROWS: usize = 2;
+/// Bar fills at or above this alpha count as opaque (the drawer then
+/// overlaps the bar a hairline to hide the seam, as panels do).
+const OPAQUE_ALPHA: f32 = 0.999;
+/// Time for the focused window to take the keyboard back before an
+/// auto-paste.
+const AUTO_PASTE_DELAY: std::time::Duration = std::time::Duration::from_millis(120);
+
+/// Output geometry measured at startup via xdg-output.
+#[derive(Clone, Default)]
+pub struct Outputs(pub Vec<mandara_core::OutputGeometry>);
+impl gpui::Global for Outputs {}
+
+/// The fill of a panel-like overlay (the launcher, the session menu's
+/// dock), and the seam to reach into the bar: joined to the bar it takes
+/// the bar's own fill (tint, opacity) so the join is seamless, and reaches
+/// a hairline into an opaque bar to hide the anti-aliased edge; otherwise
+/// the panels' fill and no seam.
+pub(crate) fn panel_fill(cfg: &mandara_config::ShellConfig, palette: &MandaraPalette, joined: bool) -> (gpui::Hsla, f32) {
+    use mandara_config::surfaces::ranges;
+    let frame = frame_color(palette);
+    let panel_alpha = ranges::OPACITY.clamp(cfg.panels.opacity, 1.0);
+    let bar_opacity = ranges::OPACITY.clamp(cfg.bar.opacity, 1.0);
+    if !joined {
+        return (frame.with_alpha(frame.alpha() * panel_alpha).hsla(), 0.0);
+    }
+    let tinted = if cfg.bar.tint > 0.0 { frame.mix(palette.primary, ranges::BAR_TINT.clamp(cfg.bar.tint, 0.0)) } else { frame };
+    let seam = if bar_opacity >= OPAQUE_ALPHA && !cfg.bar.frame_floats() { 1.0 } else { 0.0 };
+    (tinted.with_alpha(frame.alpha() * bar_opacity * panel_alpha).hsla(), seam)
+}
+
+/// Logical size of the output full-screen overlays open on (the focused
+/// monitor's, see [`crate::outputs::overlay_target`]).
+pub fn primary_output_size(cx: &App) -> (f32, f32) {
+    output_size(cx)
+}
+
+/// Logical size of the focused monitor (overlays cover it entirely).
+fn output_size(cx: &App) -> (f32, f32) {
+    crate::outputs::overlay_target(cx).1
+}
+
+fn overlay_spec(role: SurfaceRole, w: f32, h: f32, display: Option<gpui::DisplayId>) -> gpui::WindowOptions {
+    let mut spec = LayerSurfaceSpec::overlay(role, gpui::size(px(w), px(h)), display).with_keyboard(KeyboardInteractivity::Exclusive);
+    spec.layer = Layer::Overlay;
+    spec.anchor = Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT;
+    spec.window_options()
+}
+
+/// One launcher result.
+#[derive(Clone)]
+#[expect(clippy::large_enum_variant, reason = "launcher rows are rebuilt per keystroke; boxing adds an allocation per row (speed over memory)")]
+enum Item {
+    App(DesktopApp),
+    Calc { expr: String, value: f64 },
+    /// A provider result (emoji, window, clipboard entry, wallpaper, file,
+    /// app action).
+    Hit(Hit),
+    /// Everything else: actions, plugins, commands, Studio sections, slash
+    /// commands and skills.
+    Entry(Entry),
+}
+
+#[derive(Clone)]
+struct Entry {
+    label: String,
+    detail: String,
+    icon: &'static str,
+    /// Small kind badge shown at the end of the row.
+    badge: &'static str,
+    /// Extra search words (synonyms) beyond label and detail.
+    keywords: String,
+    run: Run,
+}
+
+/// What an entry runs. Actions, plugins and Studio sections are documented
+/// commands too (`theme set …`, `panel open …`, `studio …`), so everything
+/// the launcher does goes through the command registry (and `--dry-run`).
+#[derive(Clone)]
+enum Run {
+    /// A command line (`mandara msg` words: the path plus any arguments the
+    /// entry fixes, like a theme id or an enum choice) and the arguments
+    /// still to type (required ones are prompted for; typed words
+    /// after the line are passed on as arguments.
+    Command { words: Vec<String>, args: Vec<mandara_plugins::ArgSpec> },
+    Slash { command: mandara_config::SlashCommand, query: String },
+    Skill(mandara_config::Skill),
+}
+
+/// What activating a result does (see [`plan`]).
+#[derive(Clone)]
+enum Effect {
+    /// Keep the launcher open with this query: arguments are still missing.
+    Prompt(String),
+    App(DesktopApp),
+    Copy(String),
+    /// Open a file or folder with its default app.
+    Open(std::path::PathBuf),
+    /// Run an app's desktop action.
+    AppAction(DesktopApp, apps::DesktopAction),
+    /// Command lines run in order through the registry.
+    Commands(Vec<Vec<String>>),
+    Url(String),
+    Shell(String),
+    Fail(String),
+}
+
+fn entry(label: impl Into<String>, detail: impl Into<String>, icon: &'static str, badge: &'static str, keywords: &str, run: Run) -> Item {
+    Item::Entry(Entry { label: label.into(), detail: detail.into(), icon, badge, keywords: keywords.to_lowercase(), run })
+}
+
+fn words(line: &str) -> Vec<String> {
+    line.split_whitespace().map(str::to_string).collect()
+}
+
+/// A fixed command line (no typed arguments).
+fn line(line: &str) -> Run {
+    Run::Command { words: words(line), args: Vec::new() }
+}
+
+/// A config icon name as a bundled icon (falls back to the grid).
+fn bundled_icon(name: &str) -> &'static str {
+    crate::icons::ICON_NAMES.iter().find(|n| **n == name).copied().unwrap_or("grid")
+}
+
+fn actions() -> Vec<Item> {
+    let mut out: Vec<Item> = catalog::all()
+        .iter()
+        .map(|theme| {
+            entry(
+                tf("Theme: {name}", &[("name", &theme.name)]),
+                tr(&theme.description),
+                "sun",
+                tk("Theme"),
+                &format!("color palette look {}", theme.id),
+                line(&format!("theme set {}", theme.id)),
+            )
+        })
+        .collect();
+    let a = |label: &str, detail: &str, icon: &'static str, keywords: &str, command: &str| entry(label, detail, icon, tk("Action"), keywords, line(command));
+    // Details that are command lines stay untranslated.
+    out.extend([
+        a(t("Light appearance"), "theme mode light", "sun", "day bright", "theme mode light"),
+        a(t("Dark appearance"), "theme mode dark", "moon", "night", "theme mode dark"),
+        a(t("Toggle sidebar"), "sidebar toggle", "sidebar", "drawer panel", "sidebar toggle"),
+        a(t("Change wallpaper"), t("Open the wallpaper picker"), "image", "wallpaper background backdrop desktop picture photo", "wallpaper picker open"),
+        a(t("Random wallpaper"), t("Pick a random image from your wallpaper folder"), "refresh", "wallpaper background shuffle desktop picture", "wallpaper random"),
+        a(t("Take a screenshot"), t("Select a region to capture"), "crop", SNIP_WORDS, "screenshot region"),
+        a(t("Record the screen"), t("Video of the whole screen"), "circle", "screen recording video capture", "record screen"),
+        a(t("Record a region"), t("Choose an area to record"), "crop", "screen recording video capture area", "record region"),
+        a(t("Record a window"), t("Video of the focused window"), "window", "screen recording video capture window", "record window"),
+        a(t("Stop recording"), t("Save the screen recording"), "stop", "screen recording video stop save", "record stop"),
+        a(t("Pause or resume recording"), "record pause-toggle", "pause", "screen recording video pause resume", "record pause-toggle"),
+        a(t("Clipboard history"), t("Recent copies"), "clipboard", "paste copy history", "panel open clipboard"),
+    ]);
+    if mandara_services::keepassxc::installed() {
+        out.push(a(t("Unlock KeePassXC"), t("Type a database password in Mandara's dialog"), "key", "keepass keepassxc password manager vault kdbx database unlock", "keepassxc unlock"));
+    }
+    for s in SessionAction::ALL {
+        let icon = match s {
+            SessionAction::Lock => "lock",
+            SessionAction::Logout => "logout",
+            SessionAction::Suspend => "moon",
+            SessionAction::Hibernate => "hibernate",
+            SessionAction::Reboot => "restart",
+            SessionAction::Shutdown => "power",
+        };
+        // Choosing the entry is the confirmation `session run` asks for.
+        let command = if s.is_destructive() { format!("session run {} confirm", s.id()) } else { format!("session run {}", s.id()) };
+        let keywords = match s {
+            SessionAction::Lock => "power lock screen session",
+            SessionAction::Logout => "power log out sign out exit session",
+            SessionAction::Suspend => "power sleep suspend",
+            SessionAction::Hibernate => "power hibernate suspend disk",
+            SessionAction::Reboot => "power reboot restart computer",
+            SessionAction::Shutdown => "power shut down off poweroff computer",
+        };
+        out.push(entry(s.label(), command.clone(), icon, tk("Session"), keywords, line(&command)));
+    }
+    out
+}
+
+/// Plugins whose bar item has no panel: what opening them from the
+/// launcher does instead (the rest open their panel).
+fn plugin_line(id: &str) -> String {
+    match id {
+        "session" => "session menu open".into(),
+        "wallpaper" => "wallpaper picker open".into(),
+        crate::plugins::wallpaper_generator::ID => "studio wallpaper".into(),
+        "quick-settings" => "sidebar open".into(),
+        "keyboard-layout" | "workspaces" | "active-window" => format!("studio plugins/{id}"),
+        _ => format!("panel open {id}"),
+    }
+}
+
+/// Commands not listed: the launcher's own verbs and Studio plumbing.
+const HIDDEN_COMMANDS: &[&str] = &["launcher", "launcher search", "launcher run", "config apply"];
+/// Commands whose first argument is not offered as one entry per choice
+/// (`panel open` needs a plugin; session actions have their own entries).
+const NO_EXPAND: &[&str] = &["panel", "session run"];
+
+/// The entries of one documented command: the command itself, plus one per
+/// value of an enum / on-off first argument (`theme mode dark`,
+/// `notifications dnd on`) so they're found and run without typing.
+fn command_entries(c: &mandara_plugins::CommandSpec) -> Vec<Item> {
+    use mandara_plugins::ArgKind;
+    let detail = tr(c.summary);
+    let keywords = format!("command {}", c.owner);
+    let make = |fixed: Option<&str>| {
+        let mut label = c.path.to_string();
+        let mut words = words(c.path);
+        let rest = match fixed {
+            Some(v) => {
+                label = format!("{label} {v}");
+                words.push(v.to_string());
+                &c.args[1..]
+            }
+            None => &c.args[..],
+        };
+        for a in rest {
+            label.push_str(&if a.required { format!(" <{}>", a.name) } else { format!(" [{}]", a.name) });
+        }
+        let run = Run::Command { words, args: rest.to_vec() };
+        entry(label, detail.clone(), "chevron-right", tk("Command"), &keywords, run)
+    };
+    let choices: Vec<&str> = match c.args.first() {
+        Some(a) if !NO_EXPAND.contains(&c.path) => match a.kind {
+            ArgKind::Enum => a.choices.iter().copied().filter(|v| !v.starts_with("--")).collect(),
+            ArgKind::Bool => vec!["on", "off"],
+            _ => Vec::new(),
+        },
+        _ => Vec::new(),
+    };
+    let mut out = Vec::new();
+    // The bare command, unless every use of it is one of the choices.
+    if choices.is_empty() || !c.args[0].required {
+        out.push(make(None));
+    }
+    out.extend(choices.into_iter().map(|v| make(Some(v))));
+    out
+}
+
+/// Studio sections reachable from the launcher (slug, title, icon, synonyms).
+/// Every slug must open its section with `mandara studio <slug>` (checked by
+/// Studio's tests against its `Section` list).
+pub const STUDIO_SECTIONS: &[(&str, &str, &str, &str)] = &[
+    ("home", tk("Home"), "grid", "overview start dashboard status quick settings"),
+    // Look & feel
+    ("themes", tk("Themes"), "droplet", "appearance looks colors palette wallpaper colors material you dark light icons roundness app themes cursor cursors pointer icon themes icon sets"),
+    ("wallpaper", tk("Wallpaper"), "image", "background desktop picture folder picker depth clock"),
+    ("desktop", tk("Desktop"), "clock", "desktop widgets clock system monitor decorations visualizer cards now playing calendar arrange edit context menu right-click ring menu"),
+    ("typography", tk("Typography"), "text-scan", "fonts text size"),
+    ("motion", tk("Motion"), "waves", "animation springs speed"),
+    // Desktop
+    ("bars", tk("Bars"), "window", "bar top bottom side bars sidebar drawer cards pin notifications tabs panels height layout hover edges corners power dock open on hover"),
+    ("dock", tk("Dock"), "box", "dock taskbar pinned apps magnification auto hide"),
+    ("launcher", tk("Launcher"), "search", "slash commands skills icon emoji providers pinned hidden apps frecency usage"),
+    ("window-switcher", tk("Window Switcher"), "copy", "alt tab switcher windows screen time wellbeing limits"),
+    ("notifications", tk("Notifications"), "bell", "popups toasts do not disturb dnd quiet hours rules mute history"),
+    ("on-screen-displays", tk("On-Screen Displays"), "sliders", "osd volume brightness pill indicator caps lock"),
+    // System
+    ("displays", tk("Displays"), "monitor", "monitors screens resolution refresh rate scale rotation arrangement profiles vrr brightness ddc night light gamma blue light warm"),
+    ("audio", tk("Audio & Media"), "volume-high", "sound mixer visualizer media lyrics music"),
+    ("network", tk("Network & Bluetooth"), "wifi-4", "wifi wi-fi vpn wireguard openvpn hotspot tethering saved networks forget dns ip static ethernet bluetooth pairing pair trust adapter"),
+    ("power", tk("Power & Idle"), "power", "idle sleep suspend hibernate lock screen off dpms caffeine keep awake battery low critical profile session menu shutdown reboot firmware hooks automation"),
+    ("input", tk("Input"), "pointer", "keyboard layout repeat numlock mouse touchpad trackpad tap natural scrolling acceleration cursor theme size focus follows mouse"),
+    ("keyboard-shortcuts", tk("Keyboard Shortcuts"), "keyboard", "keybinds hotkeys bindings shortcuts"),
+    ("date", tk("Date, Time & Location"), "calendar", "clock time date format strftime week numbers calendar ics events reminders location weather geoclue"),
+    ("applications", tk("Applications"), "package", "default apps browser terminal file manager mime autostart startup login apps"),
+    // Security & accounts
+    ("users", tk("Users"), "user", "accounts avatar password user"),
+    ("login-screen", tk("Login & Lock Screens"), "key", "greeter display manager sddm login lockscreen blur clock avatar media notifications battery oled"),
+    ("privacy", tk("Privacy"), "shield", "microphone camera screen sharing indicator in use"),
+    // Extend
+    ("plugins", tk("Plugins"), "zap", "extensions add-ons"),
+    ("compositor", tk("Compositor"), "tiles", "mango niri hyprland borders gaps keybinds rules"),
+    ("ai-shell-agent", tk("AI Shell Agent"), "zap", "local natural language offline commands artificial intelligence !"),
+    // Mandara
+    ("general", tk("General"), "globe", "language clock week restart"),
+    ("profiles", tk("Profiles & Backups"), "download", "profile export import backup restore reset undo recent changes support report"),
+    ("performance", tk("Performance"), "gauge", "cpu memory ram usage frames"),
+    ("maintenance", tk("Maintenance"), "refresh", "repair heal fix doctor factory reset backup restore download models fonts cache"),
+    ("about", tk("About"), "note", "version info"),
+];
+
+/// Studio tabs with their own launcher entry (`mandara studio <section>/<tab>`):
+/// `(target, title, icon, search keywords)`.
+pub const STUDIO_TABS: &[(&str, &str, &str, &str)] = &[
+    ("themes/boot", tk("Boot look"), "power", "boot menu bootloader grub limine refind plymouth splash startup screen logo"),
+    ("login-screen/login", tk("Login screen"), "key", "greeter display manager login designer"),
+    ("login-screen/lock", tk("Lock Appearance"), "lock", "lockscreen blur clock avatar oled"),
+];
+
+/// Everything searchable besides apps, built when the launcher opens.
+/// Words people type for the screenshot tool (Windows' Snipping Tool,
+/// "snip", Print Screen…).
+const SNIP_WORDS: &str = "screen capture snip snipping tool snippet sniptool print printscreen prtsc grab";
+
+/// Extra search words for built-in plugins, by id: what people call them
+/// when they don't know Mandara's name.
+const PLUGIN_SYNONYMS: &[(&str, &str)] = &[(crate::plugins::screenshot::ID, SNIP_WORDS), (crate::plugins::feeds::ID, FEEDS_WORDS), (crate::plugins::reddit::ID, REDDIT_WORDS), (crate::plugins::radio::ID, RADIO_WORDS), (crate::plugins::sudoku::ID, GAME_WORDS), (crate::plugins::tiles::ID, GAME_WORDS)];
+
+/// Words people type for a feed reader.
+const FEEDS_WORDS: &str = "rss feeds feed news atom reader subscriptions subscribe headlines articles blogs opml";
+
+/// A typed web address that may be a feed or a site with one: `https://…`,
+/// or a host with a path (`example.org/feed`). A bare word with a dot
+/// (`notes.md`) is not offered.
+fn subscribe_address(q: &str) -> Option<String> {
+    if q.contains(char::is_whitespace) { return None; }
+    let lower = q.to_ascii_lowercase();
+    if lower.starts_with("http://") || lower.starts_with("https://") {
+        return mandara_services::feeds::web_url(q).then(|| q.to_string());
+    }
+    let (host, _) = q.split_once('/').filter(|(_, path)| !path.is_empty()).or_else(|| lower.starts_with("www.").then_some((q, "")))?;
+    let tld = host.rsplit('.').next()?;
+    let plausible = host.contains('.') && tld.len() >= 2 && tld.chars().all(|c| c.is_ascii_alphabetic()) && host.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-');
+    plausible.then(|| format!("https://{q}"))
+}
+
+/// What people type looking for the Reddit reader.
+const REDDIT_WORDS: &str = "subreddit subreddits communities community threads forum posts comments";
+
+/// `r/name` opens that community in the Reddit plugin, while it is on (its
+/// `reddit open` command is in the index only then).
+fn reddit_entry(q: &str, index: &[Item]) -> Option<Item> {
+    let sub = mandara_services::reddit::Subreddit::parse(q.strip_prefix("r/")?)?;
+    let on = index.iter().any(|i| matches!(i, Item::Entry(Entry { run: Run::Command { words, .. }, .. }) if words.len() >= 2 && words[0] == "reddit" && words[1] == "open"));
+    on.then(|| entry(tf("Open {community} in Reddit", &[("community", &sub.to_string())]), t("Communities, posts and comments"), "messages", tk("Plugin"), REDDIT_WORDS, line(&format!("reddit open {sub}"))))
+}
+
+/// Words people type for the radio.
+const RADIO_WORDS: &str = "fm am internet radio stations station stream streaming live broadcast tune music news";
+
+/// Words people type for a game.
+const GAME_WORDS: &str = "game games puzzle puzzles play number numbers tiles";
+/// Opt-in plugins the launcher offers to switch on when they're off and
+/// searched for (the games: nobody guesses they ship).
+const OFFER_WHEN_OFF: &[&str] = &[crate::plugins::sudoku::ID, crate::plugins::tiles::ID];
+
+fn build_index(cx: &App) -> Vec<Item> {
+    let cfg = config(cx).read(cx).snapshot();
+    let registry = cx.global::<mandara_plugins::PluginRegistry>();
+    let mut out = build_index_with(registry, &cfg);
+    // The radio's stations, while the radio is on (built with the index,
+    // dropped with it).
+    if registry.is_enabled(crate::plugins::radio::ID, &cfg.plugins) {
+        for (id, name, shelf, keywords) in crate::plugins::radio::launcher_stations(cx) {
+            out.push(entry(name, tf("Radio · {shelf}", &[("shelf", &tr(shelf))]), "radio", tk("Station"), &keywords, line(&format!("radio play {id}"))));
+        }
+    }
+    out
+}
+
+fn build_index_with(registry: &mandara_plugins::PluginRegistry, cfg: &mandara_config::ShellConfig) -> Vec<Item> {
+    let mut out = actions();
+    // Actions of opt-in plugins, while they are on.
+    // Feeds: its actions while on; turning it on (and its settings) while off.
+    let feeds = crate::plugins::feeds::ID;
+    if registry.is_enabled(feeds, &cfg.plugins) {
+        out.push(entry(t("Add a feed"), t("Subscribe to a site or pick from tested starter feeds"), "plus", tk("Action"), FEEDS_WORDS, line(&format!("studio plugins/{feeds}/settings"))));
+        out.push(entry(t("Refresh feeds"), t("Fetch the latest articles of every feed"), "refresh", tk("Action"), FEEDS_WORDS, line("feeds refresh")));
+        out.push(entry(t("Mark all feeds read"), t("Mark every article of every feed read"), "list-check", tk("Action"), FEEDS_WORDS, line("feeds read-all")));
+    } else if registry.get(feeds).is_some() && !cfg.plugins.is_removed(feeds) {
+        out.push(entry(t("Turn on Feeds"), t("A reader for RSS, Atom and JSON feeds"), "rss", tk("Plugin"), &format!("plugin {feeds} {FEEDS_WORDS}"), line(&format!("plugins enable {feeds}"))));
+        out.push(entry(tf("Plugin settings: {name}", &[("name", &t("Feeds"))]), t("Open in Mandara Studio"), "sliders", tk("Studio"), &format!("settings preferences studio plugin {feeds} {FEEDS_WORDS}"), line(&format!("studio plugins/{feeds}/settings"))));
+    }
+    if registry.is_enabled(crate::plugins::wallpaper_generator::ID, &cfg.plugins) {
+        out.push(entry(t("Generate wallpaper"), t("A new procedural wallpaper from the generator"), "brush", tk("Action"), "wallpaper generate generator procedural new art background random", line("wallgen generate random")));
+    }
+    for m in registry.manifests() {
+        if m.id == crate::plugins::session::LAUNCHER_ID {
+            continue;
+        }
+        if !registry.is_enabled(&m.id, &cfg.plugins) {
+            if OFFER_WHEN_OFF.contains(&m.id.as_str()) && !cfg.plugins.is_removed(&m.id) {
+                let synonyms = PLUGIN_SYNONYMS.iter().find(|(id, _)| *id == m.id).map_or("", |(_, words)| words);
+                out.push(entry(
+                    tf("Turn on {name}", &[("name", &m.display_name())]),
+                    m.display_description(),
+                    "zap",
+                    tk("Plugin"),
+                    &format!("plugin enable {} {synonyms}", m.id),
+                    line(&format!("plugins enable {}", m.id)),
+                ));
+            }
+            continue;
+        }
+        let synonyms = PLUGIN_SYNONYMS.iter().find(|(id, _)| *id == m.id).map_or("", |(_, words)| words);
+        let keywords = format!("plugin {} {synonyms}", m.id);
+        out.push(entry(m.display_name(), m.display_description(), "grid", tk("Plugin"), &keywords, line(&plugin_line(&m.id))));
+        out.push(entry(
+            tf("Plugin settings: {name}", &[("name", &m.display_name())]),
+            t("Open in Mandara Studio"),
+            "sliders",
+            tk("Studio"),
+            &format!("settings preferences studio {keywords}"),
+            line(&format!("studio plugins/{}/settings", m.id)),
+        ));
+    }
+    for c in registry.commands.all() {
+        if c.path.starts_with("debug ") || HIDDEN_COMMANDS.contains(&c.path) {
+            continue;
+        }
+        // Commands of an off (or removed) plugin stay out of the launcher.
+        if !c.works_when_off && registry.get(&c.owner).is_some() && !registry.is_enabled(&c.owner, &cfg.plugins) {
+            continue;
+        }
+        out.extend(command_entries(c));
+    }
+    for (slug, title, icon, keywords) in STUDIO_SECTIONS.iter().chain(STUDIO_TABS) {
+        out.push(entry(tf("Settings: {title}", &[("title", &tr(title))]), t("Open in Mandara Studio"), icon, tk("Studio"), &format!("settings preferences studio {keywords}"), line(&format!("studio {slug}"))));
+    }
+    for sc in &cfg.launcher.commands {
+        out.push(entry(format!("/{} — {}", sc.trigger, tr(&sc.title)), tr(&sc.description), bundled_icon(&sc.icon), tk("Slash"), "slash command", Run::Slash { command: sc.clone(), query: String::new() }));
+    }
+    for sk in &cfg.launcher.skills {
+        out.push(entry(tr(&sk.name), if sk.description.is_empty() { sk.steps.join(" → ") } else { tr(&sk.description) }, bundled_icon(&sk.icon), tk("Skill"), "skill routine", Run::Skill(sk.clone())));
+    }
+    out
+}
+
+fn haystack(item: &Item) -> String {
+    match item {
+        Item::App(a) => a.haystack(),
+        Item::Entry(e) => format!("{} {} {}", e.label, e.detail, e.keywords),
+        Item::Hit(h) => h.haystack(),
+        Item::Calc { .. } => String::new(),
+    }
+}
+
+/// The key launches of `item` are counted under (frecency).
+fn usage_key(item: &Item) -> String {
+    match item {
+        Item::App(a) => format!("app:{}", a.id),
+        Item::Hit(h) => h.usage_key(),
+        Item::Entry(e) => match &e.run {
+            Run::Command { words, .. } => format!("cmd:{}", words.join(" ")),
+            Run::Slash { command, .. } => format!("slash:{}", command.trigger),
+            Run::Skill(skill) => format!("skill:{}", skill.name),
+        },
+        Item::Calc { .. } => String::new(),
+    }
+}
+
+/// Windows share their app's usage score, but selection follows the window id.
+fn selection_key(item: &Item) -> String {
+    if let Item::Hit(hit) = item
+        && hit.provider == "windows"
+        && let HitAction::Command(words) = &hit.action
+    {
+        return words.join(" ");
+    }
+    usage_key(item)
+}
+
+/// An item at the first position still owns its selection when a catalog changes.
+fn current_selection_key(results: &[Item], selected: usize) -> Option<String> {
+    results.get(selected).map(selection_key)
+}
+
+/// Live data the providers search, gathered when the launcher opens. The
+/// provider settings follow config edits while it is open
+/// ([`SearchCtx::follow_providers`]).
+#[derive(Clone, Default)]
+struct SearchCtx {
+    providers: mandara_config::workflow::LauncherProviders,
+    usage: UsageSnapshot,
+    pinned: Vec<String>,
+    recent_count: usize,
+    windows: Vec<mandara_services::toplevels::Toplevel>,
+    clipboard: mandara_services::ClipboardState,
+    wallpapers: Arc<Vec<std::path::PathBuf>>,
+    recent_files: Arc<Vec<launcher_ext::FileEntry>>,
+    catalog: Arc<Catalog>,
+    /// Desktop actions of the apps (empty when they aren't listed).
+    app_actions: Vec<Hit>,
+    /// Third-party plugin results for the current query, asked before the
+    /// search ([`SearchCtx::ask_plugins`]); `plugin_routed` when the query
+    /// was addressed to a plugin provider's prefix.
+    plugin_hits: Vec<Hit>,
+    plugin_routed: bool,
+    /// Providers queried for this text, including those still waiting for data.
+    plugin_sources: Vec<String>,
+}
+
+/// Providers whose live data [`SearchCtx`] gathers; the others search
+/// bundled or indexed data and need nothing gathered.
+const GATHERED_PROVIDERS: [&str; 4] = ["windows", "clipboard", "wallpapers", "files"];
+
+/// Whether provider `id` is switched on in `providers`.
+fn provider_on(providers: &mandara_config::workflow::LauncherProviders, id: &str) -> bool {
+    launcher_ext::provider(providers, id).is_some_and(|p| p.enabled)
+}
+
+impl SearchCtx {
+    fn gather(cx: &App) -> Self {
+        let cfg = config(cx).read(cx).snapshot();
+        let l = &cfg.launcher;
+        let mut ctx = Self {
+            usage: launcher_ext::usage_snapshot(&cfg),
+            pinned: l.pinned.clone(),
+            recent_count: l.usage.recent_count as usize,
+            providers: l.providers.clone(),
+            ..Self::default()
+        };
+        for id in GATHERED_PROVIDERS {
+            if provider_on(&ctx.providers, id) {
+                ctx.load(id, cx);
+            }
+        }
+        ctx
+    }
+
+    /// Gathers the live data provider `id` searches, as when the launcher
+    /// opens (the file index warms in the background).
+    fn load(&mut self, id: &str, cx: &App) {
+        match id {
+            "windows" => self.windows = crate::windows::windows(cx).map(|w| w.read(cx).list().to_vec()).unwrap_or_default(),
+            "clipboard" => self.clipboard = crate::hub::hub(cx).read(cx).clipboard.clone(),
+            "wallpapers" => self.wallpapers = Wallpapers::get(cx, &config(cx).read(cx).get().wallpaper.directory).unwrap_or_default(),
+            "files" => {
+                launcher_ext::warm_file_index();
+                self.recent_files = launcher_ext::RecentFiles::get(cx, &()).unwrap_or_default();
+            }
+            _ => {}
+        }
+    }
+
+    /// Drops the data provider `id` searched, with its capacity, once it is
+    /// switched off while the launcher is open.
+    fn unload(&mut self, id: &str) {
+        match id {
+            "windows" => self.windows = Vec::new(),
+            "clipboard" => self.clipboard = Default::default(),
+            "wallpapers" => self.wallpapers = Arc::default(),
+            "files" => self.recent_files = Arc::default(),
+            _ => {}
+        }
+    }
+
+    /// Follows provider settings edited while the launcher is open (Studio,
+    /// `config set`, a hand edit). Routing, Beacon modes and plain-search
+    /// mixing read the new settings; a provider switched on gathers its data
+    /// through `load`, and one switched off drops its data. Returns whether
+    /// anything changed. It runs from the config observer, never per
+    /// keystroke, and compares the borrowed settings first, so unrelated
+    /// config edits cost no allocation.
+    fn follow_providers(&mut self, providers: &mandara_config::workflow::LauncherProviders, mut load: impl FnMut(&mut Self, &'static str)) -> bool {
+        if *providers == self.providers {
+            return false;
+        }
+        for id in GATHERED_PROVIDERS {
+            match (provider_on(&self.providers, id), provider_on(providers, id)) {
+                (false, true) => load(self, id),
+                (true, false) => self.unload(id),
+                _ => {}
+            }
+        }
+        self.providers.clone_from(providers);
+        true
+    }
+
+    /// Asks the plugins' launcher providers for `query` (each in its
+    /// sandbox, under the launcher time budget).
+    fn ask_plugins(&mut self, query: &str, cx: &mut App) {
+        let q = query.trim_start();
+        if q.starts_with(['/', '=', '>', '!']) {
+            self.plugin_hits.clear();
+            self.plugin_routed = false;
+            self.plugin_sources.clear();
+            return;
+        }
+        let builtin = launcher_ext::route(q, &self.providers).is_some();
+        (self.plugin_routed, self.plugin_hits) = crate::plugins::external::launcher_hits(q, builtin, cx);
+        self.plugin_sources = crate::plugins::external::settle_launcher(cx);
+    }
+
+    fn set_catalog(&mut self, catalog: Arc<Catalog>, actions: bool) {
+        self.app_actions = if actions { launcher_ext::action_hits(&catalog.apps) } else { Vec::new() };
+        self.catalog = catalog;
+    }
+
+    fn uses(&self, query: &str, provider: &str) -> bool {
+        let query = query.trim();
+        if self.plugin_routed || query.starts_with(['=', '/']) {
+            return false;
+        }
+        if provider == "usage" { return true; }
+        match launcher_ext::route(query, &self.providers) {
+            Some((id, _)) => id == provider || (provider == "apps" && id == "windows"),
+            None => provider == "apps" || (!query.is_empty() && launcher_ext::globals(&self.providers).any(|id| id == provider)),
+        }
+    }
+
+    /// Results of provider `id` for `q`.
+    fn provider_hits(&self, id: &str, q: &str, limit: usize) -> Vec<Hit> {
+        match id {
+            "emoji" => launcher_ext::emoji_hits(q, limit),
+            "windows" => launcher_ext::window_hits(q, &self.windows, limit, |id| self.catalog.window_names.get(id).cloned().unwrap_or_else(|| crate::plugins::window::friendly_id(id))),
+            "clipboard" => launcher_ext::clipboard_hits(q, &self.clipboard.entries, &self.clipboard.collections, limit),
+            "wallpapers" => launcher_ext::wallpaper_hits(q, &self.wallpapers, limit),
+            "files" => launcher_ext::file_hits(q, &self.recent_files, limit),
+            _ => Vec::new(),
+        }
+    }
+}
+
+/// Percent-encodes a query for a URL template (`%20` for spaces, valid in
+/// paths and query strings alike).
+fn url_encode(s: &str) -> String {
+    let mut out = String::new();
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(b as char),
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
+}
+
+/// Single-quotes a word for `sh`.
+fn shell_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
+/// Read-only commands whose reply is the point: run from the launcher, the
+/// reply is shown as a notification (so `prayer today` isn't a silent no-op).
+const OUTPUT_COMMANDS: &[&str] = &[
+    "audio devices", "audio status", "audio streams", "authenticator code", "authenticator list", "bluetooth status",
+    "brightness status", "clipboard list", "clock now", "color-picker history", "color-picker pick", "color-picker show",
+    "compositor clients", "compositor monitors", "compositor status", "config get", "config show", "containers list",
+    "containers logs", "containers stats", "diagnostics frames", "diagnostics memory", "diagnostics views", "drives list",
+    "info", "language list", "media status", "models list", "net-speed addresses", "net-speed public-ip",
+    "net-speed status", "net-speed test", "network status", "network wifi list", "notes list", "notes show",
+    "notifications list", "ocr", "ping", "plugins list", "power battery", "power history", "power status", "prayer next",
+    "prayer today", "processes list", "services failed", "services list", "services logs", "services status",
+    "soundscapes status", "system resources", "theme current", "theme list", "theme seeds", "todo list", "tray menu",
+    "tray status", "updates check", "updates list", "updates news", "updates sources", "wallpaper current", "window list",
+    "launcher usage list", "launcher looks", "launcher emoji", "motion presets", "dock status", "screentime today", "screentime week", "screentime app",
+    "wallpaper list", "wallgen list", "wallgen recipe show", "wallgen status", "weather", "window active", "workspace list", "world-clock at", "world-clock list",
+    "world-clock search",
+    // Power & idle (powerctl).
+    "idle status", "power alerts", "hooks list", "hooks status", "hooks test", "session entries", "session boot-entries",
+];
+
+/// Commands that capture the screen or open a keyboard-grabbing overlay:
+/// they wait until the launcher's surface is gone (else the snip tool
+/// freezes a frame with the launcher in it, or two overlays fight over the
+/// keyboard).
+const AFTER_CLOSE: &[&str] = &[
+    "screenshot", "record", "color-picker pick", "color-picker demo", "authenticator scan", "wallpaper picker",
+    "session menu", "session run", "session do", "lock", "polkit", "keyring-prompt", "keepassxc unlock", "ocr", "switcher",
+];
+
+fn starts_with_line(words: &[String], line: &str) -> bool {
+    let line: Vec<&str> = line.split(' ').collect();
+    words.len() >= line.len() && line.iter().zip(words).all(|(l, w)| l == w)
+}
+
+/// One-line-per-item text of a command reply for a notification body.
+fn summarize(value: &serde_json::Value) -> String {
+    use serde_json::Value;
+    fn inline(v: &Value) -> String {
+        match v {
+            Value::String(s) => s.clone(),
+            Value::Null => "—".into(),
+            Value::Object(map) => {
+                const NAMES: [&str; 9] = ["name", "label", "title", "summary", "city", "unit", "id", "path", "text"];
+                const STATES: [&str; 5] = ["state", "status", "time", "value", "active"];
+                // A known name field, else the first text field that isn't a state.
+                let name_key = NAMES
+                    .iter()
+                    .copied()
+                    .find(|k| map.get(*k).is_some_and(|v| !v.is_null()))
+                    .or_else(|| map.iter().find(|(k, v)| v.is_string() && !STATES.contains(&k.as_str())).map(|(k, _)| k.as_str()));
+                let name = name_key.and_then(|k| map.get(k)).map(inline);
+                let state = STATES.iter().filter(|k| Some(**k) != name_key).find_map(|k| map.get(*k).filter(|v| !v.is_null() && !v.is_object()).map(inline));
+                match (name, state) {
+                    (Some(n), Some(s)) => format!("{n} — {s}"),
+                    (Some(n), None) => n,
+                    _ => {
+                        let s = v.to_string();
+                        if s.chars().count() > 90 { format!("{}…", s.chars().take(90).collect::<String>()) } else { s }
+                    }
+                }
+            }
+            Value::Array(items) => format!("[{}]", items.iter().take(4).map(inline).collect::<Vec<_>>().join(", ")),
+            other => other.to_string(),
+        }
+    }
+    const MAX_LINES: usize = 10;
+    let lines: Vec<String> = match value {
+        Value::Array(items) if items.is_empty() => vec![t("Nothing to show").to_string()],
+        Value::Array(items) => {
+            let mut lines: Vec<String> = items.iter().take(MAX_LINES).map(inline).collect();
+            if items.len() > MAX_LINES {
+                lines.push(tf("…and {count} more", &[("count", &(items.len() - MAX_LINES))]));
+            }
+            lines
+        }
+        Value::Object(map) => map.iter().take(MAX_LINES).map(|(k, v)| format!("{k}: {}", inline(v))).collect(),
+        other => vec![inline(other)],
+    };
+    let text = lines.join("\n");
+    if text.chars().count() > 900 { format!("{}…", text.chars().take(900).collect::<String>()) } else { text }
+}
+
+fn notify(summary: String, body: String, cx: &mut App) {
+    crate::plugins::notifications::send(cx, mandara_services::NotificationCommand::Post { app: t("Launcher").into(), icon: "search".into(), summary, body });
+}
+
+fn notify_failure(command: &str, err: String, cx: &mut App) {
+    notify(tf("`{command}` failed", &[("command", &command)]), err, cx);
+}
+
+/// Runs a command line through the documented command registry; errors
+/// (and pending failures) surface as notifications, and so do the replies of
+/// read-only commands ([`OUTPUT_COMMANDS`], `… status`).
+fn run_command(words: Vec<String>, cx: &mut App) {
+    let registry = cx.global::<mandara_plugins::PluginRegistry>().commands.clone();
+    let label = words.join(" ");
+    let show = registry.resolve(&words).is_ok_and(|r| OUTPUT_COMMANDS.contains(&r.spec.path) || words.last().is_some_and(|w| w == "status"));
+    // Run as from inside the shell even when `launcher run` came over IPC:
+    // nothing typed into the launcher is a held-modifier gesture.
+    match crate::dismiss::with_origin(crate::dismiss::Origin::InProcess, cx, |cx| registry.execute(&words, cx)) {
+        Ok(mandara_plugins::Output::Pending(rx)) => {
+            cx.spawn(async move |cx| {
+                let result = rx.recv().await;
+                cx.update(|cx| match result {
+                    Ok(Ok(reply)) if show => notify(label, reply, cx),
+                    Ok(Err(err)) => notify_failure(&label, err, cx),
+                    _ => {}
+                });
+            })
+            .detach();
+        }
+        Ok(mandara_plugins::Output::Value(value)) => {
+            if show {
+                notify(label, summarize(&value), cx);
+            }
+        }
+        Err(err) => notify_failure(&label, err, cx),
+    }
+}
+
+/// What a slash command does with `query` substituted for `{query}`
+/// (percent-encoded in URLs, one shell word in `exec:` lines).
+fn slash_effect(command: &mandara_config::SlashCommand, query: &str) -> Effect {
+    let action = command.action.trim();
+    if let Some(url) = action.strip_prefix("url:") {
+        Effect::Url(url.trim().replace("{query}", &url_encode(query)))
+    } else if let Some(cmd) = action.strip_prefix("mandara:") {
+        Effect::Commands(vec![words(&cmd.replace("{query}", query))])
+    } else if let Some(sh) = action.strip_prefix("exec:") {
+        // A template that already quotes the placeholder gets one quoting.
+        let line = sh.trim().replace("'{query}'", "{query}").replace("\"{query}\"", "{query}").replace("{query}", &shell_quote(query));
+        Effect::Shell(line)
+    } else {
+        Effect::Fail(tf("slash command /{trigger}: unknown action {action} (use url:, mandara: or exec:)", &[("trigger", &command.trigger), ("action", &format!("{action:?}"))]))
+    }
+}
+
+/// Words typed after a command line (`/audio volume set 40` → `40`),
+/// matched word by word, ignoring case and the `/` or `>` prefix.
+fn typed_args(query: &str, line: &[String]) -> Vec<String> {
+    let typed: Vec<&str> = query.trim().trim_start_matches(['/', '>']).split_whitespace().collect();
+    if typed.len() > line.len() && typed.iter().zip(line).all(|(t, l)| t.eq_ignore_ascii_case(l)) {
+        typed[line.len()..].iter().map(|s| s.to_string()).collect()
+    } else {
+        Vec::new()
+    }
+}
+
+/// What activating `item` (Enter / click) does, given the typed query.
+fn plan(item: &Item, query: &str) -> Effect {
+    match item {
+        Item::App(app) => Effect::App(app.clone()),
+        Item::Calc { value, .. } => Effect::Copy(format_number(*value)),
+        Item::Hit(h) => match &h.action {
+            HitAction::Copy(text) => Effect::Copy(text.clone()),
+            HitAction::Command(words) => Effect::Commands(vec![words.clone()]),
+            HitAction::Open(path) => Effect::Open(path.clone()),
+            HitAction::AppAction(app, action) => Effect::AppAction(app.clone(), action.clone()),
+        },
+        Item::Entry(e) => match &e.run {
+            Run::Command { words, args: specs } => {
+                let mut args = if specs.is_empty() { Vec::new() } else { typed_args(query, words) };
+                // Outside slash mode, words that don't fit the first argument
+                // are search text ("lock screen"), not arguments.
+                if !query.trim_start().starts_with('/') && args.first().is_some_and(|a| !accepts(&specs[0], a)) {
+                    args.clear();
+                }
+                if specs.iter().any(|a| a.required) && args.is_empty() {
+                    return Effect::Prompt(format!("/{} ", words.join(" ")));
+                }
+                Effect::Commands(vec![words.iter().cloned().chain(args).collect()])
+            }
+            Run::Slash { command, query } => {
+                if query.trim().is_empty() && command.action.contains("{query}") {
+                    Effect::Prompt(format!("/{} ", command.trigger))
+                } else {
+                    slash_effect(command, query.trim())
+                }
+            }
+            Run::Skill(skill) => Effect::Commands(skill.steps.iter().map(|s| words(s)).filter(|w| !w.is_empty()).collect()),
+        },
+    }
+}
+
+/// A plain-text account of an effect (`launcher run --dry-run`, tests).
+fn describe(effect: &Effect) -> String {
+    match effect {
+        Effect::Prompt(q) => format!("prompt: {q}"),
+        Effect::App(app) => format!("app: {} ({})", app.name, app.exec),
+        Effect::Copy(s) => format!("copy: {s}"),
+        Effect::Open(path) => format!("open: {}", path.display()),
+        Effect::AppAction(app, action) => format!("app action: {} — {} ({})", app.name, action.name, action.exec),
+        Effect::Commands(lines) => format!("command: {}", lines.iter().map(|w| w.join(" ")).collect::<Vec<_>>().join(" ; ")),
+        Effect::Url(url) => format!("url: {url}"),
+        Effect::Shell(line) => format!("exec: {line}"),
+        Effect::Fail(err) => format!("error: {err}"),
+    }
+}
+
+/// Whether focusing a running window wins over launching `app` under the
+/// current launch options (and any per-app override).
+fn prefers_focus(app: &DesktopApp, cx: &App) -> bool {
+    use mandara_config::workflow::RunningApps;
+    let cfg = config(cx).read(cx).get();
+    let mode = cfg.launcher.overrides.get(&app.id).and_then(|o| o.running).unwrap_or(cfg.launcher.launch.running_apps);
+    mode == RunningApps::Focus
+}
+
+/// The most recently used open window for `app`, if any (same matching as
+/// the dock: desktop id, `StartupWMClass`, reverse-DNS tails, `[apps] id_map`).
+fn running_window_for(app: &DesktopApp, cx: &App) -> Option<u64> {
+    let list = crate::windows::windows(cx)?.read(cx).list();
+    list.iter()
+        .filter(|w| !crate::windows::is_shell(&w.app_id) && w.parent.is_none())
+        .find(|w| crate::plugins::dock::model::belongs(&w.app_id, &app.id, Some(app)))
+        .map(|w| w.id)
+}
+
+/// What Enter would do for `item`, honouring `running_apps = "focus"`.
+fn describe_planned(item: &Item, query: &str, cx: &App) -> String {
+    match plan(item, query) {
+        Effect::App(app) if prefers_focus(&app, cx) => {
+            if let Some(id) = running_window_for(&app, cx) {
+                let title = crate::windows::windows(cx).and_then(|w| w.read(cx).list().iter().find(|t| t.id == id).map(|t| t.title.clone())).unwrap_or_default();
+                if title.is_empty() {
+                    format!("focus: {} ({id})", app.name)
+                } else {
+                    format!("focus: {title} ({id})")
+                }
+            } else {
+                describe(&Effect::App(app))
+            }
+        }
+        effect => describe(&effect),
+    }
+}
+
+/// Runs `f` once the launcher's surface has closed (immediately when it
+/// isn't open), plus a frame for the compositor to drop it.
+fn after_launcher_closed(cx: &mut App, f: impl FnOnce(&mut App) + 'static) {
+    cx.spawn(async move |cx| {
+        for _ in 0..120 {
+            let open = cx.update(|cx| cx.try_global::<Overlays>().is_some_and(|o| is_open(&o.launcher, cx)));
+            if !open {
+                break;
+            }
+            cx.background_executor().timer(CLOSE_POLL).await;
+        }
+        cx.background_executor().timer(REFOCUS_SETTLE).await;
+        cx.update(f);
+    })
+    .detach();
+}
+
+/// Carries out an effect (after the launcher started closing).
+/// `force_launch`: Shift/Ctrl+Enter — always start another instance even when
+/// `running_apps = "focus"`. Desktop actions always launch.
+fn execute(effect: Effect, force_launch: bool, cx: &mut App) {
+    match effect {
+        Effect::Prompt(_) => {}
+        Effect::App(app) => {
+            if !force_launch && prefers_focus(&app, cx)
+                && let Some(id) = running_window_for(&app, cx)
+            {
+                // Activate restores minimized windows (foreign-toplevel).
+                crate::windows::activate(id, cx);
+                return;
+            }
+            let options = config(cx).read(cx).get().launch_options();
+            if let Err(err) = apps::launch_with(&app, None, &options) {
+                notify_failure(&app.name, err, cx);
+            }
+        }
+        Effect::AppAction(app, action) => {
+            let options = config(cx).read(cx).get().launch_options();
+            if let Err(err) = apps::launch_with(&app, Some(&action), &options) {
+                notify_failure(&app.name, err, cx);
+            }
+        }
+        // The path itself, not a hand-built `file://` URI: `#`, `?`, `%` and
+        // spaces in a name would break one.
+        Effect::Open(path) => crate::opener::open_path(&path, cx),
+        Effect::Copy(text) => {
+            cx.write_to_clipboard(ClipboardItem::new_string(text));
+            // Auto-paste: type Ctrl+V once the launcher has given the
+            // keyboard back to the window underneath.
+            if config(cx).read(cx).get().launcher.launch.auto_paste {
+                after_launcher_closed(cx, |_| {
+                    std::thread::spawn(|| {
+                        std::thread::sleep(AUTO_PASTE_DELAY);
+                        if let Err(err) = mandara_services::clipboard::keyboard::ctrl_v() {
+                            tracing::warn!("auto-paste: {err}");
+                        }
+                    });
+                });
+            }
+        }
+        Effect::Commands(lines) => {
+            let wait = lines.iter().any(|w| AFTER_CLOSE.iter().any(|l| starts_with_line(w, l)));
+            let run = move |cx: &mut App| {
+                for words in lines {
+                    run_command(words, cx);
+                }
+            };
+            if wait {
+                after_launcher_closed(cx, run);
+            } else {
+                run(cx);
+            }
+        }
+        Effect::Url(url) => {
+            std::thread::spawn(move || {
+                if let Err(err) = mandara_services::session::open_uri(&url) {
+                    tracing::warn!("{err}");
+                }
+            });
+        }
+        Effect::Shell(line) => {
+            use std::os::unix::process::CommandExt as _;
+            if let Err(err) = mandara_services::reaper::spawn(std::process::Command::new("sh").arg("-c").arg(&line).stdin(std::process::Stdio::null()).process_group(0)) {
+                notify_failure(&line, err.to_string(), cx);
+            }
+        }
+        Effect::Fail(err) => notify(t("Launcher").into(), err, cx),
+    }
+}
+
+/// What the launcher shows for `query` with no live provider data (tests).
+#[cfg(test)]
+fn search(query: &str, apps: &[DesktopApp], index: &[Item]) -> Vec<Item> {
+    search_with(query, apps, index, &SearchCtx::default())
+}
+
+/// What the launcher shows for `query` (shared with `launcher search`).
+fn search_with(query: &str, apps: &[DesktopApp], index: &[Item], ctx: &SearchCtx) -> Vec<Item> {
+    let q = query.trim();
+    let routed = launcher_ext::route(q, &ctx.providers);
+    let actions_prefix = routed.filter(|(id, _)| *id == "actions").map(|(_, rest)| rest);
+    if ctx.plugin_routed {
+        ctx.plugin_hits.iter().cloned().map(Item::Hit).collect()
+    } else if let Some(expr) = q.strip_prefix('=') {
+        apps::calculate(expr).map(|value| vec![Item::Calc { expr: expr.trim().to_string(), value }]).unwrap_or_default()
+    } else if let Some((id, rest)) = routed.filter(|(id, _)| *id != "actions" && !q.starts_with('/')) {
+        ctx.provider_hits(id, rest, launcher_ext::PROVIDER_LIMIT).into_iter().map(Item::Hit).collect()
+    } else if let Some(rest) = actions_prefix {
+        // `>`: actions, plugins, commands, Studio and skills (no apps).
+        let all: Vec<Item> = index.iter().filter(|i| matches!(i, Item::Entry(e) if !matches!(e.run, Run::Slash { .. }))).cloned().collect();
+        let rest = rest.trim();
+        if rest.is_empty() {
+            return all;
+        }
+        // A command line with arguments (`>audio volume set 40`) leads.
+        let lines = command_matches(rest, index, false);
+        let names: Vec<String> = lines.iter().map(|i| item_names(i).0).collect();
+        let fuzzy = rank(fuzzy(all, rest, haystack), rest).into_iter().filter(|i| !names.contains(&item_names(i).0));
+        lines.into_iter().chain(fuzzy).collect()
+    } else if let Some(rest) = q.strip_prefix('/') {
+        slash_results(rest, index)
+    } else if q.is_empty() {
+        let (order, _, _) = launcher_ext::browse_order(apps, &ctx.pinned, &ctx.usage, ctx.recent_count);
+        order.into_iter().map(Item::App).collect()
+    } else {
+        // Apps and everything else in one ranked list (actions only when
+        // that provider joins plain searches).
+        let actions_global = ctx.providers.actions.enabled && ctx.providers.actions.global;
+        let entries = index.iter().filter(|i| actions_global && !matches!(i, Item::Entry(e) if matches!(e.run, Run::Slash { .. }))).cloned();
+        let hits = launcher_ext::globals(&ctx.providers)
+            .filter(|id| *id != "actions")
+            .flat_map(|id| ctx.provider_hits(id, q, launcher_ext::global_limit()))
+            .chain(ctx.app_actions.iter().cloned())
+            .chain(ctx.plugin_hits.iter().cloned())
+            .map(Item::Hit);
+        let pool: Vec<Item> = apps.iter().cloned().map(Item::App).chain(entries).chain(hits).collect();
+        let lines = if actions_global { command_matches(q, index, false) } else { Vec::new() };
+        let names: Vec<String> = lines.iter().map(|i| item_names(i).0).collect();
+        let fuzzy = rank_with(fuzzy(pool, q, haystack), q, &ctx.usage).into_iter().filter(|i| !names.contains(&item_names(i).0));
+        let mut found: Vec<Item> = lines.into_iter().chain(fuzzy).collect();
+        if let Some(open) = reddit_entry(q, index) {
+            found.insert(0, open);
+        }
+        // A web address can be subscribed to (the feed is found on its page).
+        if let Some(url) = subscribe_address(q) {
+            let label = tf("Subscribe in Feeds: {site}", &[("site", &crate::plugins::feeds::host(&url))]);
+            found.insert(0, Item::Entry(Entry { label, detail: url.clone(), icon: "rss", badge: tk("Action"), keywords: FEEDS_WORDS.into(), run: Run::Command { words: vec!["feeds".into(), "subscribe".into(), url], args: Vec::new() } }));
+        }
+        // A bare arithmetic expression also offers its result.
+        if let Some(value) = apps::calculate(q).filter(|_| q.chars().any(|c| "+-*/^%(".contains(c))) {
+            found.insert(0, Item::Calc { expr: q.to_string(), value });
+        }
+        // Last: search the web for it (the first `url:` slash command).
+        if let Some(Item::Entry(web)) = index
+            .iter()
+            .filter(|i| matches!(i, Item::Entry(Entry { run: Run::Slash { command, .. }, .. }) if command.action.trim().starts_with("url:") && command.action.contains("{query}")))
+            .min_by_key(|i| !matches!(i, Item::Entry(Entry { run: Run::Slash { command, .. }, .. }) if command.trigger == "g"))
+        {
+            let Run::Slash { command, .. } = &web.run else { unreachable!() };
+            let mut web = web.clone();
+            web.label = format!("{} — “{q}”", tr(&command.title));
+            web.run = Run::Slash { command: command.clone(), query: q.to_string() };
+            found.push(Item::Entry(web));
+        }
+        found
+    }
+}
+
+/// The name an item is listed under (and, for commands, its command line).
+fn item_names(item: &Item) -> (String, String) {
+    match item {
+        Item::App(a) => (a.name.to_lowercase(), String::new()),
+        Item::Entry(e) => (e.label.trim_start_matches('/').to_lowercase(), match &e.run {
+            Run::Command { words, .. } => words.join(" ").to_lowercase(),
+            _ => String::new(),
+        }),
+        Item::Hit(h) => (h.label.to_lowercase(), String::new()),
+        Item::Calc { .. } => (String::new(), String::new()),
+    }
+}
+
+/// Whether `q` starts a word of `name`.
+fn word_prefix(name: &str, q: &str) -> bool {
+    name.match_indices(q).any(|(i, _)| i == 0 || name[..i].chars().next_back().is_some_and(|c| !c.is_alphanumeric()))
+}
+
+/// Whether every typed word starts a word of the entry's name, synonyms or
+/// detail (`lock screen` finds Lock before letters scattered elsewhere). A
+/// single word counts against the name and synonyms only (`snip` finds the
+/// screenshot tool; a description's every word would be noise).
+fn all_words_prefix(item: &Item, q: &str) -> bool {
+    let words: Vec<&str> = q.split_whitespace().collect();
+    let single = words.len() == 1;
+    let text = match item {
+        Item::Entry(e) if single => format!("{} {}", e.label, e.keywords).to_lowercase(),
+        Item::Entry(e) => format!("{} {} {}", e.label, e.keywords, e.detail).to_lowercase(),
+        Item::App(a) if single => format!("{} {}", a.name, a.keywords).to_lowercase(),
+        Item::App(a) => a.haystack().to_lowercase(),
+        Item::Hit(h) => h.haystack().to_lowercase(),
+        Item::Calc { .. } => return false,
+    };
+    !words.is_empty() && words.iter().all(|w| word_prefix(&text, w))
+}
+
+/// Exact names lead, then names starting with the query, then names with a
+/// word starting with it, then entries matching every typed word at a word
+/// start; within a tier settings follow apps, plugins and actions, and raw
+/// commands follow settings (`weather` opens the panel before printing the JSON), and
+/// fuzzy order holds.
+fn rank(found: Vec<Item>, q: &str) -> Vec<Item> {
+    rank_with(found, q, &UsageSnapshot::default())
+}
+
+/// [`rank`], with frecency deciding within a tier (before fuzzy order).
+fn rank_with(mut found: Vec<Item>, q: &str, usage: &UsageSnapshot) -> Vec<Item> {
+    let q = q.trim().to_lowercase();
+    found.sort_by_key(|i| {
+        let (name, line) = item_names(i);
+        let line = (!line.is_empty()).then_some(line);
+        let tier = if name == q || line.as_deref() == Some(q.as_str()) {
+            0
+        } else if name.starts_with(&q) || line.as_deref().is_some_and(|l| l.starts_with(&q)) {
+            1
+        } else if word_prefix(&name, &q) || matches!(i, Item::Entry(e) if word_prefix(&e.keywords, &q)) {
+            2
+        } else if all_words_prefix(i, &q) {
+            3
+        } else {
+            4
+        };
+        let kind = match i {
+            Item::Entry(e) if e.badge == tk("Command") => 2,
+            Item::Entry(e) if e.badge == tk("Studio") => 1,
+            _ => 0,
+        };
+        (tier, kind, std::cmp::Reverse(usage.frecency(&usage_key(i))))
+    });
+    found
+}
+
+/// `/trigger words…`: slash commands and skills by trigger, then any
+/// documented command whose path the typed words start with (the rest
+/// become its arguments).
+fn slash_results(rest: &str, index: &[Item]) -> Vec<Item> {
+    let words: Vec<&str> = rest.split_whitespace().collect();
+    let first = words.first().copied().unwrap_or("").to_lowercase();
+    let tail = words.get(1..).map(|w| w.join(" ")).unwrap_or_default();
+    let mut out = Vec::new();
+    for item in index {
+        let Item::Entry(e) = item else { continue };
+        match &e.run {
+            Run::Slash { command, .. } if command.trigger.to_lowercase().starts_with(&first) => {
+                let mut e = e.clone();
+                let exact = command.trigger.eq_ignore_ascii_case(&first);
+                if exact && !tail.is_empty() {
+                    e.label = format!("{} — “{tail}”", tr(&command.title));
+                }
+                e.run = Run::Slash { command: command.clone(), query: if exact { tail.clone() } else { String::new() } };
+                out.push(Item::Entry(e));
+            }
+            Run::Skill(skill) if skill.name.to_lowercase().replace(' ', "-").starts_with(&first) => out.push(item.clone()),
+            _ => {}
+        }
+    }
+    out.extend(command_matches(&words.join(" "), index, true).into_iter().map(|mut item| {
+        if let Item::Entry(e) = &mut item {
+            e.label = format!("/{}", e.label);
+        }
+        item
+    }));
+    out
+}
+
+/// Whether a typed word is a valid value for an argument.
+fn accepts(arg: &mandara_plugins::ArgSpec, raw: &str) -> bool {
+    use mandara_plugins::ArgKind;
+    match arg.kind {
+        ArgKind::String => true,
+        ArgKind::Integer => raw.parse::<i64>().is_ok(),
+        ArgKind::Number => raw.parse::<f64>().is_ok(),
+        ArgKind::Bool => matches!(raw, "true" | "false" | "on" | "off" | "1" | "0"),
+        ArgKind::Enum => arg.choices.iter().any(|c| c.eq_ignore_ascii_case(raw)),
+    }
+}
+
+/// Documented commands for typed words: the exact line, then lines the
+/// words extend (arguments being typed; longest first), then lines the
+/// words start. Outside slash mode only the lines with typed arguments
+/// (fuzzy ranking finds the rest).
+fn command_matches(typed: &str, index: &[Item], slash: bool) -> Vec<Item> {
+    let typed = typed.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
+    let (mut exact, mut extended, mut completed) = (Vec::new(), Vec::new(), Vec::new());
+    for item in index {
+        let Item::Entry(e) = item else { continue };
+        let Run::Command { words, args } = &e.run else { continue };
+        if e.badge != tk("Command") {
+            continue;
+        }
+        let line = words.join(" ").to_lowercase();
+        if line == typed {
+            if slash {
+                exact.push(item.clone());
+            }
+        } else if let Some(arg) = args.first()
+            && let Some(extra) = typed.strip_prefix(&format!("{line} "))
+            // Outside slash mode the first typed argument must fit, so a
+            // phrase like "lock screen" isn't taken for `lock <mode>`.
+            && (slash || accepts(arg, extra.split(' ').next().unwrap_or_default()))
+        {
+            extended.push((line.len(), item.clone()));
+        } else if slash && line.starts_with(&typed) {
+            completed.push(item.clone());
+        }
+    }
+    extended.sort_by_key(|(len, _)| std::cmp::Reverse(*len));
+    exact.into_iter().chain(extended.into_iter().map(|(_, i)| i)).chain(completed).collect()
+}
+
+/// JSON view of launcher results (for `launcher search`).
+pub fn search_json(query: String, cx: &mut App) -> Result<mandara_plugins::Output, String> {
+    with_results(query, cx, |query, results, cx| {
+        Ok(serde_json::Value::Array(results.iter().take(12).map(|item| result_json(item, query, cx)).collect()))
+    })
+}
+
+/// Stop waiting before the IPC client times out, so a stalled mount can't
+/// leave a deferred `launcher run` that opens a result much later.
+pub(crate) const LAUNCHER_DATA_TIMEOUT: Duration = Duration::from_secs(10);
+
+pub(crate) async fn wait_for_catalogs(requests: Vec<async_channel::Receiver<()>>, timer: gpui::Task<()>) -> bool {
+    use std::future::{Future as _, poll_fn};
+    use std::pin::pin;
+    use std::task::Poll;
+
+    let mut pending = pin!(async {
+        for request in requests {
+            let _ = request.recv().await;
+        }
+    });
+    let mut timer = pin!(timer);
+    poll_fn(|cx| {
+        if timer.as_mut().poll(cx).is_ready() {
+            Poll::Ready(false)
+        } else {
+            pending.as_mut().poll(cx).map(|_| true)
+        }
+    }).await
+}
+
+/// A command waits only for the providers that can affect its results.
+fn with_results(
+    query: String,
+    cx: &mut App,
+    finish: impl FnOnce(&str, Vec<Item>, &mut App) -> Result<serde_json::Value, String> + 'static,
+) -> Result<mandara_plugins::Output, String> {
+    launcher_ext::warm_usage(cx);
+    let index = build_index(cx);
+    let mut ctx = SearchCtx::gather(cx);
+    ctx.ask_plugins(&query, cx);
+    let cfg = config(cx).read(cx).get();
+    let app_actions = cfg.launcher.look.app_actions;
+    let apps_key = ctx.uses(&query, "apps").then(|| CatalogRequest::new(cfg, &ctx.windows));
+    let wallpapers_key = ctx.uses(&query, "wallpapers").then(|| cfg.wallpaper.directory.clone());
+    let use_recents = ctx.uses(&query, "files");
+    let apps = apps_key.map(|key| AppCatalog::refresh(cx, key, launcher_data::read_catalog));
+    let wallpapers = wallpapers_key.map(|key| Wallpapers::refresh(cx, key, launcher_data::read_wallpapers));
+    let recents = use_recents.then(|| launcher_ext::RecentFiles::refresh(cx, (), launcher_ext::read_recent_files));
+    let usage = (config(cx).read(cx).get().launcher.usage.sort && ctx.uses(&query, "usage")).then(launcher_ext::usage_ready);
+    let requests = [
+        usage,
+        apps.as_ref().map(|request| request.ready()),
+        wallpapers.as_ref().map(|request| request.ready()),
+        recents.as_ref().map(|request| request.ready()),
+    ].into_iter().flatten().collect::<Vec<_>>();
+    if requests.is_empty() {
+        return finish(&query, search_with(&query, &[], &index, &ctx), cx).map(Into::into);
+    }
+    let (reply, result) = async_channel::bounded(1);
+    cx.spawn(async move |cx| {
+        let timed_out = || t("The service did not reply").to_string();
+        let timer = cx.background_executor().timer(LAUNCHER_DATA_TIMEOUT);
+        if !wait_for_catalogs(requests, timer).await {
+            let _ = reply.try_send(Err(timed_out()));
+        } else if !reply.is_closed() {
+            let output = cx.update(|cx| {
+                let cancelled = || t("Cancelled").to_string();
+                if let Some(request) = apps {
+                    ctx.set_catalog(request.value().ok_or_else(cancelled)?, app_actions);
+                }
+                if let Some(request) = wallpapers {
+                    ctx.wallpapers = request.value().ok_or_else(cancelled)?;
+                }
+                if let Some(request) = recents {
+                    ctx.recent_files = request.value().ok_or_else(cancelled)?;
+                }
+                ctx.usage = launcher_ext::usage_snapshot(config(cx).read(cx).get());
+                finish(&query, search_with(&query, &ctx.catalog.apps, &index, &ctx), cx)
+            });
+            let _ = reply.try_send(output.map(|value| value.to_string()));
+        }
+    }).detach();
+    Ok(result.into())
+}
+
+/// One result as JSON, with what Enter would do (`effect`).
+fn result_json(item: &Item, query: &str, cx: &App) -> serde_json::Value {
+    let effect = describe_planned(item, query, cx);
+    match item {
+        Item::App(a) => serde_json::json!({ "kind": "app", "label": a.name, "detail": a.comment, "effect": effect }),
+        Item::Calc { expr, value } => serde_json::json!({ "kind": "calc", "label": format_number(*value), "detail": expr, "effect": effect }),
+        Item::Hit(h) => serde_json::json!({ "kind": h.provider, "label": h.label, "detail": h.detail, "effect": effect }),
+        Item::Entry(e) => serde_json::json!({ "kind": e.badge.to_lowercase(), "label": e.label, "detail": e.detail, "effect": effect }),
+    }
+}
+
+/// `launcher run <query…> [--index N] [--dry-run]`: activates result N
+/// (default 0) for `query` exactly as Enter in the launcher would; with
+/// `--dry-run`, only reports what it would do.
+pub fn run_json(args: &[String], cx: &mut App) -> Result<mandara_plugins::Output, String> {
+    let (mut dry_run, mut index, mut query) = (false, 0usize, Vec::new());
+    let mut it = args.iter();
+    while let Some(word) = it.next() {
+        match word.as_str() {
+            "--dry-run" => dry_run = true,
+            "--index" => index = it.next().and_then(|n| n.parse().ok()).ok_or_else(|| t("--index needs a number").to_string())?,
+            _ => query.push(word.as_str()),
+        }
+    }
+    with_results(query.join(" "), cx, move |query, results, cx| {
+        let item = results.get(index).ok_or_else(|| tf("No result #{index} for {query} ({count} results)", &[("index", &index), ("query", &format!("{query:?}")), ("count", &results.len())]))?;
+        let mut out = result_json(item, query, cx);
+        out["dry_run"] = serde_json::Value::Bool(dry_run);
+        if !dry_run {
+            match plan(item, query) {
+                Effect::Prompt(_) => {}
+                effect => {
+                    launcher_ext::record_use(&usage_key(item), &config(cx).read(cx).snapshot());
+                    // As from the launcher: it closes, then the effect runs.
+                    let s = shell(cx);
+                    if s.read(cx).launcher_open {
+                        s.update(cx, |s, cx| s.set_launcher(false, cx));
+                    }
+                    execute(effect, false, cx);
+                }
+            }
+        }
+        Ok(out)
+    })
+}
+
+pub struct LauncherView {
+    agent: Option<launcher_agent::Agent>,
+    /// The AI Shell Agent is switched on (`!` goes to it), as of the last
+    /// config change.
+    agent_enabled: bool,
+    /// The search field's prefix help, shared by every look
+    /// ([`launcher_hint`]).
+    hint: launcher_hint::PrefixHelp,
+    shell: Entity<ShellState>,
+    focus: FocusHandle,
+    query: String,
+    /// Caret position in `query`, in chars.
+    caret: usize,
+    /// Ctrl+A: the whole query is selected (typing replaces it).
+    select_all: bool,
+    /// Where the query text was laid out (for click-to-place-caret).
+    text_bounds: std::rc::Rc<std::cell::Cell<Option<gpui::Bounds<gpui::Pixels>>>>,
+    /// Caret blink phase restarts on every edit (solid while typing).
+    blink_from: Instant,
+    blink_task: Option<gpui::Task<()>>,
+    catalog_key: CatalogRequest,
+    wallpapers_key: String,
+    /// Actions, plugins, commands, settings, slash commands and skills.
+    index: Vec<Item>,
+    /// Provider data (windows, clipboard, wallpapers, files, usage).
+    ctx: SearchCtx,
+    results: Vec<Item>,
+    /// The launcher's rectangle last frame `(x, y, w, h)`, for pointer tests.
+    rect: (f32, f32, f32, f32),
+    selected: usize,
+    /// Touchpad travel not yet turned into a row step (logical px).
+    wheel: f32,
+    /// A wheel step moved the selection: rows sliding under a still pointer
+    /// don't take it back by hover until the pointer moves.
+    wheel_hold: bool,
+    /// Where the launcher rests (springs on result-count and placement
+    /// changes, so `launcher placement` re-places it live).
+    rest: SpringValue<gpui::Bounds<gpui::Pixels>>,
+    /// Open progress 0–1 (from its start rect to `rest`).
+    open: SpringValue<f32>,
+    /// `rest` has been placed (snapped) once.
+    placed: bool,
+    highlight: SpringValue<f32>,
+    /// `[launcher.look]` as of the last config change.
+    look: mandara_config::workflow::LauncherLook,
+    /// Grouped results: `(first index, heading)` per section (empty when
+    /// not grouped).
+    sections: Vec<(usize, &'static str)>,
+    /// Scroll offset of the grouped list (springs to follow the selection).
+    list_scroll: SpringValue<f32>,
+    /// Grid: its scroll position, columns last laid out, the category chip
+    /// picked (`None`: All), the chips offered, and the reflow (0 → 1)
+    /// from the slots tiles had before the last keystroke.
+    grid_scroll: gpui::UniformListScrollHandle,
+    grid_cols: usize,
+    category: Option<GridFilter>,
+    categories: Vec<GridFilter>,
+    reflow: SpringValue<f32>,
+    reflow_from: std::collections::HashMap<String, usize>,
+    /// The open spring as of this frame and where the launcher comes from
+    /// (a unit vector), for the grid tiles' choreography cascade.
+    cascade: (f32, (f32, f32)),
+    /// Beacon: the browse mode picked (Ctrl+1–4) and the results card's
+    /// height.
+    mode: Option<BeaconMode>,
+    card_h: SpringValue<f32>,
+    /// Size of the query text (click-to-place-caret shapes at it).
+    field_px: f32,
+    /// Colour icons decoded for this launcher (bounded; freed on close).
+    icons: IconLedger,
+    /// The output's scale (decoded icon sizes; freeing without a window).
+    scale: f32,
+    /// What it decoded has been freed (it is closing).
+    released: bool,
+    /// Thumbnails of image results (`None` while being made).
+    thumbs: std::collections::HashMap<std::path::PathBuf, Option<std::path::PathBuf>>,
+    /// The launcher redraws when the thumbnail worker finishes a plugin
+    /// picture (set up on the first one).
+    pictures_observed: bool,
+    clock: FrameClock,
+    closing: bool,
+    /// Pointer has been inside the drawer (enables leave-to-close).
+    entered: bool,
+    leave_task: Option<gpui::Task<()>>,
+    /// Waits for the real logical size of the output it opened for
+    /// (GPUI's first frames use an integer-scale guess), a few frames at
+    /// most ([`crate::first_frame`]).
+    first: FirstFrame,
+    /// The output the launcher opened on (once settled).
+    output: Option<String>,
+    /// When the surface was created (open latency, logged at debug level).
+    created: Instant,
+}
+
+/// The colour icon files the dock shows (the launcher leaves them decoded).
+fn dock_icon_paths(cx: &mut App) -> Vec<std::path::PathBuf> {
+    crate::plugins::dock::dock_icon_ids(cx).iter().filter_map(|id| crate::plugins::workspaces::cached_raster_icon_path(id)).map(|p| p.to_path_buf()).collect()
+}
+
+/// Whether a viewport is an output's size (within the settle slack).
+pub(crate) fn is_output(vp: (f32, f32), o: &mandara_core::OutputGeometry) -> bool {
+    first_frame::same_size(vp, (o.width as f32, o.height as f32))
+}
+
+/// The output the launcher opens on ([`crate::outputs::overlay_output`]).
+pub(crate) fn focused_output(cx: &App) -> Option<mandara_core::OutputGeometry> {
+    crate::outputs::overlay_output(&cx.try_global::<Outputs>()?.0, cx).cloned()
+}
+
+/// Follows the prefix settings edited while the launcher is open: the
+/// providers ([`SearchCtx::follow_providers`], data gathered through
+/// `load`) and the AI Shell Agent's switch. The prefix help every look
+/// shows is composed again on its next frame when either changed. Returns
+/// whether the providers changed (routing and Beacon modes follow them).
+fn follow_prefix_settings(
+    ctx: &mut SearchCtx,
+    hint: &mut launcher_hint::PrefixHelp,
+    agent_enabled: &mut bool,
+    launcher: &mandara_config::LauncherConfig,
+    load: impl FnMut(&mut SearchCtx, &'static str),
+) -> bool {
+    let providers_changed = ctx.follow_providers(&launcher.providers, load);
+    if providers_changed || launcher.agent.enabled != *agent_enabled {
+        *agent_enabled = launcher.agent.enabled;
+        hint.invalidate();
+    }
+    providers_changed
+}
+
+impl LauncherView {
+    /// A launcher on a surface opened for an output of logical size
+    /// `expected` ([`crate::outputs::overlay_target`]).
+    fn new(expected: (f32, f32), window: &mut Window, cx: &mut Context<Self>) -> Self {
+        launcher_ext::warm_usage(cx);
+        AppCatalog::retain_view(cx);
+        Wallpapers::retain_view(cx);
+        launcher_ext::RecentFiles::retain_view(cx);
+        let shell = shell(cx);
+        first_frame::guard("launcher", window, cx, |this| this.first.drawn(), |this, cx| this.close(cx));
+        cx.observe(&shell, |this: &mut Self, shell, cx| {
+            // Reopening while the close animation runs revives the surface.
+            this.closing = !shell.read(cx).launcher_open;
+            if this.closing { this.agent = None; }
+            if !this.closing {
+                this.entered = false;
+                this.leave_task = None;
+            }
+            cx.notify();
+        })
+        .detach();
+        cx.observe(&mandara_core::theme_entity(cx), |_, _, cx| cx.notify()).detach();
+        // Studio / `launcher placement` / `launcher look` edits re-place
+        // and restyle it while open.
+        // Provider edits re-route it and re-offer the Beacon modes (#111).
+        cx.observe(&config(cx), |this: &mut Self, config, cx| {
+            let launcher = &config.read(cx).get().launcher;
+            let look_changed = launcher.look != this.look;
+            let agent_changed = this.agent.as_ref().is_some_and(|agent| agent.settings != launcher.agent);
+            let files_were_enabled = this.ctx.providers.files.enabled;
+            let wallpapers_were_enabled = this.ctx.providers.wallpapers.enabled;
+            let providers_changed = follow_prefix_settings(&mut this.ctx, &mut this.hint, &mut this.agent_enabled, launcher, |ctx, id| ctx.load(id, cx));
+            if look_changed {
+                this.look = config.read(cx).get().launcher.look.clone();
+            }
+            if providers_changed {
+                this.mode = launcher_looks::settle_mode(this.mode, &this.ctx.providers);
+                if !files_were_enabled && this.ctx.providers.files.enabled {
+                    launcher_ext::RecentFiles::refresh_for_view(cx, (), launcher_ext::read_recent_files);
+                }
+            }
+            let wallpaper_dir = config.read(cx).get().wallpaper.directory.clone();
+            let wallpapers_changed = wallpaper_dir != this.wallpapers_key;
+            if wallpapers_changed || (!wallpapers_were_enabled && this.ctx.providers.wallpapers.enabled) {
+                this.wallpapers_key = wallpaper_dir;
+                if this.ctx.providers.wallpapers.enabled {
+                    this.ctx.load("wallpapers", cx);
+                    Wallpapers::refresh_for_view(cx, this.wallpapers_key.clone(), launcher_data::read_wallpapers);
+                }
+            }
+            let catalog_key = CatalogRequest::new(config.read(cx).get(), &this.ctx.windows);
+            if catalog_key != this.catalog_key {
+                this.catalog_key = catalog_key;
+                AppCatalog::refresh_for_view(cx, this.catalog_key.clone(), launcher_data::read_catalog);
+            }
+            if look_changed {
+                this.ctx.set_catalog(this.ctx.catalog.clone(), this.look.app_actions);
+            }
+            if look_changed || agent_changed || providers_changed || wallpapers_changed {
+                this.refilter(cx);
+            }
+            cx.notify();
+        })
+        .detach();
+        cx.observe_global::<launcher_ext::UsageRevision>(|this, cx| {
+            this.ctx.usage = launcher_ext::usage_snapshot(config(cx).read(cx).get());
+            this.refilter_on_data("usage", cx);
+        }).detach();
+        let plugin_updates = crate::plugins::external::launcher_updates::events(cx);
+        cx.subscribe(&plugin_updates, |this, _, change, cx| {
+            if !this.closing && !this.released && change.affects(&this.ctx.plugin_sources) {
+                this.refilter_preserving_selection(cx);
+            }
+        }).detach();
+        cx.observe_global::<launcher_ext::RecentFiles>(|this, cx| {
+            if this.ctx.providers.files.enabled
+                && let Some(recent) = launcher_ext::RecentFiles::get(cx, &())
+                && !Arc::ptr_eq(&recent, &this.ctx.recent_files)
+            {
+                this.ctx.recent_files = recent;
+                this.refilter_on_data("files", cx);
+            }
+        }).detach();
+        cx.observe_global::<Wallpapers>(|this, cx| {
+            if this.ctx.providers.wallpapers.enabled
+                && let Some(wallpapers) = Wallpapers::get(cx, &this.wallpapers_key)
+                && !Arc::ptr_eq(&wallpapers, &this.ctx.wallpapers)
+            {
+                this.ctx.wallpapers = wallpapers;
+                this.refilter_on_data("wallpapers", cx);
+            }
+        }).detach();
+        cx.observe_global::<AppCatalog>(|this, cx| {
+            if let Some(catalog) = AppCatalog::get(cx, &this.catalog_key)
+                && !Arc::ptr_eq(&catalog, &this.ctx.catalog)
+            {
+                this.ctx.set_catalog(catalog, this.look.app_actions);
+                this.categories = launcher_looks::categories(&this.ctx.catalog.apps, &this.ctx.pinned);
+                this.refilter_on_data("apps", cx);
+            }
+        }).detach();
+        // Removed without its last frame (a crash of the close animation,
+        // an output unplugged): still free the icons it decoded.
+        cx.on_release(|this: &mut Self, cx| this.forget_decoded(cx)).detach();
+        let focus = cx.focus_handle().tab_stop(true);
+        focus.focus(window, cx);
+        let mut search = SearchCtx::gather(cx);
+        let catalog_key = CatalogRequest::new(config(cx).read(cx).get(), &search.windows);
+        if let Some(catalog) = AppCatalog::get(cx, &catalog_key) {
+            search.set_catalog(catalog, config(cx).read(cx).get().launcher.look.app_actions);
+        }
+        let mut this = Self {
+            agent: None,
+            agent_enabled: config(cx).read(cx).get().launcher.agent.enabled,
+            hint: Default::default(),
+            shell,
+            focus,
+            query: String::new(),
+            caret: 0,
+            select_all: false,
+            text_bounds: Default::default(),
+            blink_from: Instant::now(),
+            blink_task: None,
+            catalog_key,
+            wallpapers_key: config(cx).read(cx).get().wallpaper.directory.clone(),
+            index: build_index(cx),
+            ctx: search,
+            results: Vec::new(),
+            rect: (0.0, 0.0, 0.0, 0.0),
+            selected: 0,
+            wheel: 0.0,
+            wheel_hold: false,
+            rest: SpringValue::new(gpui::Bounds::default(), DRAWER_SPRING),
+            open: SpringValue::new(0.0, DRAWER_SPRING).with_rest_epsilon(OPEN_REST_EPSILON),
+            placed: false,
+            highlight: SpringValue::new(0.0, HIGHLIGHT_SPRING),
+            look: config(cx).read(cx).get().launcher.look.clone(),
+            sections: Vec::new(),
+            list_scroll: SpringValue::new(0.0, HIGHLIGHT_SPRING),
+            grid_scroll: gpui::UniformListScrollHandle::new(),
+            grid_cols: 0,
+            category: None,
+            categories: Vec::new(),
+            reflow: SpringValue::new(1.0, launcher_looks::REFLOW_SPRING),
+            reflow_from: Default::default(),
+            cascade: (1.0, (0.0, -1.0)),
+            mode: None,
+            card_h: SpringValue::new(0.0, launcher_looks::CARD_SPRING),
+            field_px: text::BODY + 1.0,
+            icons: IconLedger::default(),
+            scale: window.scale_factor(),
+            released: false,
+            thumbs: Default::default(),
+            pictures_observed: false,
+            clock: FrameClock::new(),
+            closing: false,
+            entered: false,
+            leave_task: None,
+            first: FirstFrame::new(expected),
+            output: None,
+            created: Instant::now(),
+        };
+        AppCatalog::refresh_for_view(cx, this.catalog_key.clone(), launcher_data::read_catalog);
+        if this.ctx.providers.wallpapers.enabled {
+            Wallpapers::refresh_for_view(cx, this.wallpapers_key.clone(), launcher_data::read_wallpapers);
+        }
+        if this.ctx.providers.files.enabled {
+            launcher_ext::RecentFiles::refresh_for_view(cx, (), launcher_ext::read_recent_files);
+        }
+        this.categories = launcher_looks::categories(&this.ctx.catalog.apps, &this.ctx.pinned);
+        if this.look.remember_query {
+            let q = launcher_ext::last_query();
+            this.caret = q.chars().count();
+            this.query = q;
+            this.select_all = !this.query.is_empty();
+        }
+        this.refilter(cx);
+        // Opening is the drawer's animation; tiles don't also reflow in.
+        this.reflow.snap_to(1.0);
+        // Caret blink: re-render twice a second while open.
+        this.blink_task = Some(cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor().timer(CARET_BLINK).await;
+                if this.update(cx, |_, cx| cx.notify()).is_err() {
+                    break;
+                }
+            }
+        }));
+        this
+    }
+
+    /// Places the caret at the character nearest to `x` (window coords).
+    fn caret_at(&mut self, x: gpui::Pixels, window: &mut Window, cx: &App) {
+        let Some(bounds) = self.text_bounds.get() else { return };
+        let font = gpui::font(fonts(cx).ui.clone());
+        let run = gpui::TextRun { len: self.query.len(), font, color: gpui::black(), background_color: None, underline: None, strikethrough: None };
+        let line = window.text_system().shape_line(self.query.clone().into(), px(self.field_px), &[run], None);
+        let byte = line.closest_index_for_x(x - bounds.origin.x);
+        self.caret = self.query[..byte.min(self.query.len())].chars().count();
+        self.select_all = false;
+        self.blink_from = Instant::now();
+    }
+
+    /// Replaces the selection (if any) before an edit.
+    fn take_selection(&mut self) {
+        if self.select_all {
+            self.query.clear();
+            self.caret = 0;
+            self.select_all = false;
+        }
+    }
+
+    fn refilter_on_data(&mut self, provider: &str, cx: &mut Context<Self>) {
+        if !self.ctx.uses(&self.effective_query(), provider) {
+            return;
+        }
+        self.refilter_preserving_selection(cx);
+    }
+
+    fn refilter_preserving_selection(&mut self, cx: &mut Context<Self>) {
+        let selected = current_selection_key(&self.results, self.selected);
+        self.refilter(cx);
+        if let Some(selected) = selected
+            && let Some(index) = self.results.iter().take(self.count()).position(|item| selection_key(item) == selected)
+        {
+            self.selected = index;
+            if self.grid_active() {
+                self.reveal_selected();
+            }
+        }
+        cx.notify();
+    }
+
+    /// Refresh the active provider, keeping bang queries outside ordinary search.
+    fn refilter(&mut self, cx: &mut Context<Self>) {
+        if self.agent_refilter(cx) { return; }
+        // Where the tiles were (the grid reflows from there).
+        let was_grid = self.grid_active();
+        let before: std::collections::HashMap<String, usize> = if was_grid { self.results.iter().enumerate().map(|(i, it)| (usage_key(it), i)).collect() } else { Default::default() };
+        let query = self.effective_query();
+        self.ctx.ask_plugins(&query, cx);
+        let mut results = search_with(&query, &self.ctx.catalog.apps, &self.index, &self.ctx);
+        if self.mode == Some(BeaconMode::Apps) {
+            results.retain(|i| matches!(i, Item::App(_)));
+        }
+        let grid = self.grid_active();
+        if grid && let Some(f) = self.category {
+            results.retain(|i| f.keeps(i, &self.ctx.pinned));
+        }
+        if self.grouped() {
+            results.truncate(MAX_RESULTS);
+            let (ordered, sections) = launcher_looks::group_results(results, self.mode.is_none());
+            results = ordered;
+            self.sections = sections;
+        } else {
+            self.sections.clear();
+        }
+        self.results = results;
+        self.selected = 0;
+        self.list_scroll.snap_to(0.0);
+        if grid {
+            self.reflow_from = if was_grid { before } else { Default::default() };
+            self.reflow.snap_to(0.0);
+            self.reflow.set_target(1.0);
+            self.grid_scroll.scroll_to_item(0, gpui::ScrollStrategy::Top);
+        } else {
+            self.reflow_from.clear();
+            self.reflow.snap_to(1.0);
+        }
+    }
+
+    /// The query searched: a Beacon mode's provider prefix before the text.
+    fn effective_query(&self) -> String {
+        match self.mode.and_then(|m| m.prefix(&self.ctx.providers)) {
+            Some(prefix) => format!("{prefix}{}", self.query),
+            None => self.query.clone(),
+        }
+    }
+
+    /// The grid shows: the Grid layout while browsing or typing plain
+    /// words, and the Beacon's Apps mode.
+    fn grid_active(&self) -> bool {
+        use mandara_config::workflow::{LauncherLayout, LauncherStyle};
+        match self.look.style {
+            LauncherStyle::Classic => self.look.layout == LauncherLayout::Grid && launcher_looks::is_plain(&self.query, &self.ctx.providers),
+            LauncherStyle::Beacon => self.agent.is_none() && self.mode == Some(BeaconMode::Apps),
+        }
+    }
+
+    /// Results are listed under headings (something typed, or a mode).
+    fn grouped(&self) -> bool {
+        self.look.group_results && !self.grid_active() && (!self.query.trim().is_empty() || self.mode.is_some())
+    }
+
+    /// Results the keyboard walks through (the grid shows them all; the
+    /// lists the first [`MAX_RESULTS`]).
+    fn count(&self) -> usize {
+        if self.grid_active() { self.results.len() } else { self.results.len().min(MAX_RESULTS) }
+    }
+
+    /// A wheel notch (or a touchpad's pixels adding up to `row` px) steps
+    /// the selection by `step`; rows sliding under a still pointer don't
+    /// take it back by hover until the pointer moves.
+    fn wheel_select(&mut self, e: &ScrollEvent, row: f32, step: usize, cx: &mut Context<Self>) {
+        let count = self.count();
+        if count == 0 {
+            return;
+        }
+        // Down is negative.
+        let rows = match e.delta {
+            gpui::ScrollDelta::Lines(l) => -l.y.signum(),
+            gpui::ScrollDelta::Pixels(p) => {
+                self.wheel -= f32::from(p.y);
+                let whole = (self.wheel / row).trunc();
+                self.wheel -= whole * row;
+                whole
+            }
+        };
+        if rows == 0.0 {
+            return;
+        }
+        let next = self.selected as isize + rows as isize * step as isize;
+        self.selected = next.clamp(0, count as isize - 1) as usize;
+        self.wheel_hold = true;
+        cx.stop_propagation();
+        cx.notify();
+    }
+
+    /// Frees what this launcher decoded: its colour icons (bitmaps and
+    /// atlas textures; not the ones the dock shows) and image thumbnails.
+    fn release(&mut self, window: &mut Window, cx: &mut App) {
+        if std::mem::replace(&mut self.released, true) {
+            return;
+        }
+        AppCatalog::release_view(cx);
+        Wallpapers::release_view(cx);
+        launcher_ext::RecentFiles::release_view(cx);
+        let keep = dock_icon_paths(cx);
+        for (path, edge) in self.icons.drain() {
+            if !keep.contains(&path) {
+                crate::icon_raster::forget_edge(&path, edge, window, cx);
+            }
+        }
+        for thumb in std::mem::take(&mut self.thumbs).into_values().flatten() {
+            crate::image_cache::evict_path(&thumb, window, cx);
+        }
+    }
+
+    /// [`Self::release`] once the window is gone (its atlas went with it).
+    fn forget_decoded(&mut self, cx: &mut App) {
+        if std::mem::replace(&mut self.released, true) {
+            return;
+        }
+        AppCatalog::release_view(cx);
+        Wallpapers::release_view(cx);
+        launcher_ext::RecentFiles::release_view(cx);
+        let keep = dock_icon_paths(cx);
+        for (path, edge) in self.icons.drain() {
+            if !keep.contains(&path) {
+                crate::icon_raster::forget_cached_edge(&path, edge, cx);
+            }
+        }
+        for thumb in std::mem::take(&mut self.thumbs).into_values().flatten() {
+            crate::image_cache::forget_path(&thumb, cx);
+        }
+    }
+
+    fn close(&mut self, cx: &mut Context<Self>) {
+        self.agent = None;
+        launcher_ext::remember_query(&self.query);
+        self.closing = true;
+        self.shell.update(cx, |s, cx| s.set_launcher(false, cx));
+    }
+
+    /// Enter / click: prompts for missing arguments (the launcher stays
+    /// open), otherwise closes the launcher and runs the result.
+    /// `force_launch` (Shift/Ctrl+Enter): start another instance even when
+    /// `running_apps = "focus"`.
+    fn activate(&mut self, index: usize, force_launch: bool, cx: &mut Context<Self>) {
+        if self.agent.is_some() { self.activate_agent(index, cx); return; }
+        // The Beacon bar alone (nothing typed) has no results to open.
+        if self.look.style == mandara_config::workflow::LauncherStyle::Beacon && !self.beacon_open_results() {
+            return;
+        }
+        let Some(item) = self.results.get(index) else { return };
+        match plan(item, &self.query) {
+            Effect::Prompt(query) => {
+                self.set_query(query, cx);
+                cx.notify();
+            }
+            effect => {
+                launcher_ext::record_use(&usage_key(item), &config(cx).read(cx).snapshot());
+                self.close(cx);
+                execute(effect, force_launch, cx);
+            }
+        }
+    }
+
+    fn set_query(&mut self, q: String, cx: &mut Context<Self>) {
+        self.caret = q.chars().count();
+        self.query = q;
+        self.refilter(cx);
+    }
+
+    /// Byte offset of the caret.
+    fn caret_byte(&self) -> usize {
+        self.query.char_indices().nth(self.caret).map(|(i, _)| i).unwrap_or(self.query.len())
+    }
+
+    fn on_key(&mut self, e: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let k = &e.keystroke;
+        let count = self.count();
+        self.blink_from = Instant::now();
+        let beacon = self.look.style == mandara_config::workflow::LauncherStyle::Beacon;
+        if beacon_keyboard::handle(self.look.style, &self.focus, k, window, cx) {
+            return;
+        }
+        // Beacon: Ctrl+1–4 pick a mode; Backspace on an empty field or
+        // Escape leaves it.
+        if beacon && k.modifiers.control
+            && let Some(mode) = BeaconMode::from_digit(&k.key)
+        {
+            self.toggle_mode(mode, cx);
+            return;
+        }
+        if beacon && self.mode.is_some() && (k.key == "escape" || (k.key == "backspace" && self.query.is_empty())) {
+            self.mode = None;
+            self.refilter(cx);
+            cx.notify();
+            return;
+        }
+        // Grid: arrows move in two dimensions, Tab switches the category.
+        if self.grid_active() && !k.modifiers.control {
+            if k.key == "tab" && self.look.grid_categories && !self.categories.is_empty() {
+                let next = launcher_looks::cycle(self.category, &self.categories, k.modifiers.shift);
+                self.set_category(next, cx);
+                return;
+            }
+            if let Some(d) = launcher_looks::grid_step(&k.key, self.grid_cols.max(1), crate::bidi::rtl()).filter(|_| count > 0) {
+                self.selected = (self.selected as isize + d).clamp(0, count as isize - 1) as usize;
+                self.reveal_selected();
+                cx.notify();
+                return;
+            }
+        }
+        // Ctrl+P pins / unpins the selected app (empty query: browse view).
+        if k.modifiers.control && k.key == "p"
+            && let Some(Item::App(app)) = self.results.get(self.selected)
+        {
+            let id = app.id.clone();
+            crate::state::update_config(cx, move |c| {
+                if let Some(i) = c.launcher.pinned.iter().position(|p| *p == id) {
+                    c.launcher.pinned.remove(i);
+                } else {
+                    c.launcher.pinned.push(id);
+                }
+            });
+            self.ctx.pinned = config(cx).read(cx).get().launcher.pinned.clone();
+            let keep = self.selected;
+            self.refilter(cx);
+            self.selected = keep.min(self.results.len().saturating_sub(1));
+            cx.notify();
+            return;
+        }
+        if k.modifiers.control {
+            match k.key.as_str() {
+                "a" => {
+                    self.select_all = !self.query.is_empty();
+                    cx.notify();
+                    return;
+                }
+                "c" | "x" => {
+                    if !self.query.is_empty() {
+                        cx.write_to_clipboard(ClipboardItem::new_string(self.query.clone()));
+                    }
+                    if k.key == "x" {
+                        self.query.clear();
+                        self.caret = 0;
+                        self.select_all = false;
+                        self.refilter(cx);
+                    }
+                    cx.notify();
+                    return;
+                }
+                "v" => {
+                    if let Some(text) = cx.read_from_clipboard().and_then(|c| c.text()) {
+                        self.take_selection();
+                        let text = text.replace(['\n', '\r'], " ");
+                        let at = self.caret_byte();
+                        self.query.insert_str(at, &text);
+                        self.caret += text.chars().count();
+                        self.refilter(cx);
+                    }
+                    cx.notify();
+                    return;
+                }
+                _ => {}
+            }
+        }
+        if matches!(k.key.as_str(), "left" | "right" | "home" | "end") && self.select_all {
+            self.select_all = false;
+            self.caret = if matches!(k.key.as_str(), "left" | "home") { 0 } else { self.query.chars().count() };
+            cx.notify();
+            return;
+        }
+        if matches!(k.key.as_str(), "backspace" | "delete") && self.select_all {
+            self.take_selection();
+            self.refilter(cx);
+            cx.notify();
+            return;
+        }
+        match k.key.as_str() {
+            "escape" => self.close(cx),
+            "enter" => self.activate(self.selected, k.modifiers.shift || k.modifiers.control, cx),
+            "down" | "tab" if count > 0 => self.selected = (self.selected + 1) % count,
+            "up" if count > 0 => self.selected = (self.selected + count - 1) % count,
+            "left" => self.caret = self.caret.saturating_sub(1),
+            "right" => self.caret = (self.caret + 1).min(self.query.chars().count()),
+            "home" => self.caret = 0,
+            "end" => self.caret = self.query.chars().count(),
+            "backspace" => {
+                if k.modifiers.control {
+                    // Delete the word before the caret.
+                    let head: String = self.query.chars().take(self.caret).collect();
+                    let tail: String = self.query.chars().skip(self.caret).collect();
+                    let mut head = head;
+                    crate::text_field::delete_word(&mut head);
+                    self.caret = head.chars().count();
+                    self.query = head + &tail;
+                } else if self.caret > 0 {
+                    let at = self.query.char_indices().nth(self.caret - 1).map(|(i, _)| i).unwrap_or(0);
+                    self.query.remove(at);
+                    self.caret -= 1;
+                }
+                self.refilter(cx);
+            }
+            "delete" => {
+                if self.caret < self.query.chars().count() {
+                    let at = self.caret_byte();
+                    self.query.remove(at);
+                    self.refilter(cx);
+                }
+            }
+            _ => {
+                if let Some(ch) = k.key_char.as_ref().filter(|_| !k.modifiers.control && !k.modifiers.alt) {
+                    self.take_selection();
+                    let at = self.caret_byte();
+                    self.query.insert_str(at, ch);
+                    self.caret += ch.chars().count();
+                    self.refilter(cx);
+                }
+            }
+        }
+        cx.notify();
+    }
+}
+
+fn fuzzy(items: Vec<Item>, needle: &str, text: impl Fn(&Item) -> String) -> Vec<Item> {
+    let mut matcher = Matcher::new(MatcherConfig::DEFAULT);
+    let pattern = Pattern::parse(needle, CaseMatching::Ignore, Normalization::Smart);
+    let texts: Vec<(usize, String)> = items.iter().enumerate().map(|(i, it)| (i, text(it))).collect();
+    let mut scored: Vec<(usize, u32)> = pattern
+        .match_list(texts.iter().map(|(i, t)| IndexedText(*i, t.as_str())), &mut matcher)
+        .into_iter()
+        .map(|(t, score)| (t.0, score))
+        .collect();
+    scored.sort_by_key(|a| std::cmp::Reverse(a.1));
+    scored.into_iter().map(|(i, _)| items[i].clone()).collect()
+}
+
+struct IndexedText<'a>(usize, &'a str);
+impl AsRef<str> for IndexedText<'_> {
+    fn as_ref(&self) -> &str {
+        self.1
+    }
+}
+
+fn format_number(v: f64) -> String {
+    if (v - v.round()).abs() < 1e-9 && v.abs() < 1e15 { format!("{}", v.round() as i64) } else { format!("{v:.6}").trim_end_matches('0').trim_end_matches('.').to_string() }
+}
+
+fn monogram(name: &str, size: f32, corner: f32, palette: &MandaraPalette) -> impl IntoElement {
+    let letter = name.chars().next().map(|c| c.to_uppercase().to_string()).unwrap_or_default();
+    let hue = name.bytes().fold(0u32, |h, b| h.wrapping_mul(31).wrapping_add(b as u32)) % 360;
+    let bg = Color::oklch(if palette.is_dark { 0.42 } else { 0.86 }, 0.09, hue as f32);
+    div()
+        .size(px(size))
+        .flex_none()
+        .rounded(px(corner))
+        .bg(bg.hsla())
+        .flex()
+        .items_center()
+        .justify_center()
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(bg.best_on(Color::hex("#ffffff"), Color::hex("#101010")).hsla())
+        .child(letter)
+}
+
+impl LauncherView {
+    /// A cached thumbnail of `path` (wallpapers and copied images), made off
+    /// the UI thread on first use.
+    fn thumb(&mut self, path: &std::path::Path, cx: &mut Context<Self>) -> Option<std::path::PathBuf> {
+        if let Some(hit) = self.thumbs.get(path) {
+            return hit.clone();
+        }
+        self.thumbs.insert(path.to_path_buf(), None);
+        let src = path.to_path_buf();
+        cx.spawn(async move |this, cx| {
+            let made = cx.background_executor().spawn({
+                let src = src.clone();
+                async move { crate::wallpaper::thumbnail(&src).ok() }
+            });
+            let made = made.await;
+            let _ = this.update(cx, |this, cx| {
+                this.thumbs.insert(src, made);
+                cx.notify();
+            });
+        })
+        .detach();
+        None
+    }
+
+    /// A plugin's picture at `side` physical px, kept square with its
+    /// transparency, through the shared bounded thumbnail worker
+    /// ([`crate::wallpaper::fit`]); `None` until it is ready.
+    fn picture(&mut self, path: &std::path::Path, side: f32, cx: &mut Context<Self>) -> Option<std::path::PathBuf> {
+        let side = crate::wallpaper::fit_size(side);
+        let job = (path.to_path_buf(), side, side | crate::wallpaper::FIT_JOB);
+        let thumbs = crate::wallpaper::thumbnails(cx);
+        if let Some(ready) = thumbs.read(cx).get_job(&job).cloned() {
+            return Some(ready);
+        }
+        if !thumbs.read(cx).failed_job(&job) {
+            // Redraw once it's made (one observer for the launcher's life).
+            if !std::mem::replace(&mut self.pictures_observed, true) {
+                cx.observe(&thumbs, |_, _, cx| cx.notify()).detach();
+            }
+            thumbs.update(cx, |t, cx| t.request_jobs([job], cx));
+        }
+        None
+    }
+
+    /// One list row: lead tile, title and detail, badge. `on_accent`: the
+    /// row sits on the accent-filled highlight (Beacon), its text follows.
+    fn list_row(&mut self, i: usize, item: &Item, row_h: f32, lead_px: f32, look: &mandara_config::workflow::LauncherLook, on_accent: bool, palette: &MandaraPalette, cx: &mut Context<Self>) -> gpui::AnyElement {
+        let ignore_mouse = look.ignore_mouse;
+        let badge = self.badge(i, item, look, cx);
+        let hover = cx.listener(move |this, hovered: &bool, _, cx| {
+            if *hovered && !ignore_mouse && !this.wheel_hold {
+                this.selected = i;
+                cx.notify();
+            }
+        });
+        let click = cx.listener(move |this, _: &ClickEvent, _, cx| this.activate(i, false, cx));
+        let lead = self.lead(item, lead_px, palette, cx);
+        let (title, sub) = match item {
+            Item::App(app) => {
+                let sub = if prefers_focus(app, cx) && running_window_for(app, cx).is_some() {
+                    t("Switch to").to_string()
+                } else {
+                    app.comment.clone()
+                };
+                (app.name.clone(), sub)
+            }
+            Item::Entry(e) => (e.label.clone(), e.detail.clone()),
+            Item::Hit(h) => (h.label.clone(), h.detail.clone()),
+            Item::Calc { expr, value } => (format_number(*value), tf("{expression} · Enter copies", &[("expression", expr)])),
+        };
+        let fg = crate::plugins::panel_fx::readable(palette.primary, palette).best_on(Color::hex("#ffffff"), Color::hex("#101010"));
+        let (title_c, sub_c, badge_bg, badge_fg) = if on_accent {
+            (fg, fg.with_alpha(launcher_looks::SUB_ON_ACCENT_ALPHA), fg.with_alpha(launcher_looks::BADGE_ON_ACCENT_ALPHA), fg)
+        } else {
+            (palette.on_surface, palette.on_surface_variant, palette.on_surface.with_alpha(0.06), palette.on_surface_variant)
+        };
+        div()
+            .id(("row", i))
+            .h(px(row_h))
+            .px(px(12.0))
+            .flex()
+            .items_center()
+            .gap(px(12.0))
+            .cursor_pointer()
+            .child(lead)
+            .child(
+                div()
+                    .flex_1()
+                    .min_w(px(0.0))
+                    .flex()
+                    .flex_col()
+                    .child(div().truncate().text_size(px(text::BODY)).when(on_accent, |el| el.text_color(title_c.hsla())).child(title))
+                    .when((!look.compact || matches!(item, Item::Hit(hit) if hit.provider == "agent")) && !sub.is_empty(), |el| el.child(div().truncate().text_size(px(text::LABEL)).text_color(sub_c.hsla()).child(sub))),
+            )
+            .when_some(badge, |el, b| el.child(div().flex_none().px(px(8.0)).h(px(20.0)).rounded_full().flex().items_center().bg(badge_bg.hsla()).text_size(px(10.5)).text_color(badge_fg.hsla()).child(b)))
+            .on_hover(hover)
+            .on_click(click)
+            .into_any_element()
+    }
+
+    /// The prefix help every look's search field shows while empty, for
+    /// the field's width last frame at `font_px` ([`launcher_hint`],
+    /// composed only when its settings or the language change).
+    fn prefix_help(&mut self, font_px: f32) -> gpui::SharedString {
+        let width = self.text_bounds.get().map(|b| f32::from(b.size.width));
+        self.hint.get(&self.ctx.providers, self.agent_enabled, width, font_px)
+    }
+
+    /// The query text with its blinking caret (solid for half a second
+    /// after each edit), the selection, or `placeholder` while empty;
+    /// `size` px type. Records where the text lies (click-to-place-caret).
+    fn query_field(&self, size: f32, placeholder: gpui::SharedString, palette: &MandaraPalette, focused: bool) -> gpui::Div {
+        let caret_on = focused && (self.blink_from.elapsed().as_millis() / CARET_BLINK.as_millis()).is_multiple_of(2);
+        let caret = div().w(px(2.0)).h(px(size + 5.0)).rounded(px(crate::style::radius(1.0))).flex_none().bg(palette.primary.hsla()).when(!caret_on, |el| el.opacity(0.0));
+        let bounds = self.text_bounds.clone();
+        let field = div()
+            .flex_1()
+            .min_w(px(0.0))
+            .relative()
+            .h_full()
+            .flex()
+            .items_center()
+            .cursor_text()
+            .text_size(px(size))
+            .child(gpui::canvas(move |b, _, _| bounds.set(Some(b)), |_, _, _, _| {}).absolute().inset_0());
+        if self.query.is_empty() {
+            field.child(caret).child(div().pl(px(2.0)).truncate().text_color(palette.on_surface_variant.with_alpha(0.7).hsla()).child(placeholder))
+        } else if self.select_all {
+            field.child(div().px(px(1.0)).rounded(px(crate::style::radius(3.0))).bg(palette.primary.with_alpha(0.28).hsla()).text_color(palette.on_surface.hsla()).child(self.query.clone()))
+        } else {
+            let (head, tail) = self.query.split_at(self.caret_byte());
+            field
+                .text_color(palette.on_surface.hsla())
+                .when(!head.is_empty(), |el| el.child(head.to_string()))
+                .child(caret)
+                .when(!tail.is_empty(), |el| el.child(tail.to_string()))
+        }
+    }
+
+    /// A colour icon file decoded at the size it is drawn and recorded in
+    /// the ledger (formats the sized decoder doesn't take, like XPM, load
+    /// as they are).
+    fn colour_icon(&mut self, path: &std::path::Path, size: f32) -> gpui::AnyElement {
+        let el = div().size(px(size)).flex_none();
+        if !crate::icon_raster::handles(path) {
+            return el.child(img(path.to_path_buf()).size_full().object_fit(ObjectFit::Contain)).into_any_element();
+        }
+        self.icons.touch(path, crate::icon_raster::edge_for(size, self.scale));
+        el.child(img(crate::icon_raster::source(path, size)).size_full().object_fit(ObjectFit::Contain)).into_any_element()
+    }
+
+    /// The small badge of a result row (`App`, `Pinned`, `Flatpak`…).
+    fn badge(&self, i: usize, item: &Item, look: &mandara_config::workflow::LauncherLook, cx: &App) -> Option<String> {
+        match item {
+            Item::Entry(e) => Some(tr(e.badge)),
+            Item::Hit(h) => Some(tr(h.badge)),
+            Item::App(a) if prefers_focus(a, cx) && running_window_for(a, cx).is_some() => Some(t("Running").to_string()),
+            Item::App(a) if self.query.trim().is_empty() && self.ctx.pinned.iter().any(|p| p.eq_ignore_ascii_case(&a.id)) => Some(t("Pinned").to_string()),
+            Item::App(a) if self.query.trim().is_empty() && i < self.ctx.pinned.len() + self.ctx.recent_count && self.ctx.usage.frecency(&format!("app:{}", a.id)) > 0 => Some(t("Recent").to_string()),
+            Item::App(a) if look.origin_badges => a.origin.badge().map(tr),
+            _ => None,
+        }
+    }
+
+    /// The leading tile of a result.
+    fn lead(&mut self, item: &Item, size: f32, palette: &MandaraPalette, cx: &mut Context<Self>) -> gpui::AnyElement {
+        // Every tile shares the app icons' shape (`[appearance] app_icon_shape`).
+        let shape = crate::icon_shape::current(cx);
+        let corner = crate::icon_shape::radius(shape, size).unwrap_or_else(|| crate::style::radius(size * LEAD_RADIUS_FRAC));
+        let tile = || div().size(px(size)).flex_none().rounded(px(corner)).flex().items_center().justify_center();
+        let (inner, fill) = (crate::icon_shape::inner(shape, size), crate::icon_shape::plate_color(palette));
+        // Monochrome: the theme's symbolic icon, tinted like the bar's.
+        if let Item::App(app) = item
+            && crate::state::config(cx).read(cx).get().appearance.launcher_icons == mandara_config::IconStyle::Monochrome
+            && let Some(path) = self.ctx.catalog.symbolic.get(&app.id)
+        {
+            let symbolic = gpui::svg().external_path(path.clone()).size(px(inner.min(size * APP_ICON_FRAC))).flex_none().text_color(palette.on_surface.hsla());
+            return crate::icon_shape::plate(shape, size, fill, symbolic.into_any_element());
+        }
+        match item {
+            Item::App(app) => match &app.icon {
+                Some(path) => {
+                    let icon = self.colour_icon(path, inner);
+                    crate::icon_shape::plate(shape, size, fill, icon)
+                }
+                None => monogram(&app.name, size, corner, palette).into_any_element(),
+            },
+            Item::Entry(e) => tile().bg(palette.surface_container_high.hsla()).child(icon(e.icon, size * LEAD_ICON_FRAC, palette.primary)).into_any_element(),
+            Item::Calc { .. } => tile().bg(palette.primary_container.hsla()).text_color(palette.primary.hsla()).child("=").into_any_element(),
+            Item::Hit(h) => match &h.lead {
+                Lead::Glyph(g) => tile().bg(palette.surface_container_high.hsla()).text_size(px(EMOJI_LEAD_PX * size / ROW_LEAD_PX)).child(g.clone()).into_any_element(),
+                Lead::AppIcon(id) => {
+                    let path = self.ctx.catalog.window_icons.get(id)
+                        .or_else(|| self.ctx.catalog.apps.iter().find(|app| &app.id == id).and_then(|app| app.icon.as_ref()))
+                        .cloned();
+                    let icon = match path {
+                        Some(path) => self.colour_icon(&path, inner.min(size * APP_ICON_FRAC)),
+                        None => monogram(id, inner.min(size * APP_ICON_FRAC), corner, palette).into_any_element(),
+                    };
+                    crate::icon_shape::plate(shape, size, fill, icon)
+                }
+                Lead::Icon(name) => tile().bg(palette.surface_container_high.hsla()).child(icon(name, size * LEAD_ICON_FRAC, palette.primary)).into_any_element(),
+                Lead::Picture(path) => match self.picture(path, size * self.scale, cx) {
+                    Some(picture) => img(picture).size(px(size)).flex_none().into_any_element(),
+                    None => tile().into_any_element(),
+                },
+                Lead::Image(path) => match self.thumb(path, cx) {
+                    Some(thumb) => img(thumb).size(px(size)).flex_none().rounded(px(crate::style::radius(THUMB_RADIUS))).object_fit(ObjectFit::Cover).into_any_element(),
+                    None => tile().bg(palette.surface_container_high.hsla()).child(icon("image", size * LEAD_ICON_FRAC, palette.on_surface_variant)).into_any_element(),
+                },
+            },
+        }
+    }
+}
+
+impl LauncherView {
+    /// Whether the surface has its real size yet (the size it opened for,
+    /// or — after a few frames — whatever size the compositor gave it);
+    /// remembers the output it settled on. Runs on every frame, including
+    /// close-animation frames drawn before that: reopened mid-close, the
+    /// launcher must still reach its first real frame, or the deadline
+    /// guard takes it for a surface that never drew and closes it.
+    fn settle(&mut self, window: &Window, cx: &App) -> bool {
+        let vp = first_frame::viewport(window);
+        let matched = match self.first.settle(vp) {
+            first_frame::Settle::Waiting => return false,
+            first_frame::Settle::Drawn => return true,
+            first_frame::Settle::First { matched } => matched,
+        };
+        // A close animation drawn at the guessed size placed it there:
+        // snap again at the real size.
+        self.placed = false;
+        let outputs = cx.try_global::<Outputs>().map(|o| o.0.as_slice()).unwrap_or_default();
+        let focused = if matched { focused_output(cx).filter(|o| is_output(vp, o)) } else { None };
+        // No output of that size (tests, early startup, an output connected
+        // since): it draws all the same, just without per-output details.
+        self.output = focused.or_else(|| outputs.iter().find(|o| is_output(vp, o)).cloned()).map(|o| o.name);
+        true
+    }
+}
+
+impl Render for LauncherView {
+    /// Draw the selected look and follow its animated bounds with the input mask.
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        use crate::launcher_place::{Join, Rect};
+        use mandara_config::surfaces::PanelAnimation;
+        use mandara_config::workflow::{LauncherEdge, SearchPosition};
+        // Counted in `diagnostics frames` while open (its own interval key).
+        let _frame = crate::plugins::diagnostics::frame(cx.entity_id().as_u64());
+        if !self.settle(window, cx) && !self.closing {
+            window.request_animation_frame();
+            return div().id("launcher-root").size_full().track_focus(&self.focus).into_any_element();
+        }
+        // Icons scrolled out of view beyond the budget go before this frame.
+        self.scale = window.scale_factor();
+        for (path, edge) in self.icons.begin_frame() {
+            crate::icon_raster::forget_edge(&path, edge, window, cx);
+        }
+        let palette = mandara_core::frame_palette(window, cx);
+        let f = fonts(cx);
+        let cfg = config(cx).read(cx).snapshot();
+        // The launcher's grain and the cards' (results, previews).
+        crate::components::grain::prepare(crate::components::grain::Slot::Launcher, &cfg.grain.launcher, &palette, window, cx);
+        crate::components::grain::prepare(crate::components::grain::Slot::Cards, &cfg.grain.cards, &palette, window, cx);
+        let _motion = mandara_core::spring::MotionScope::new(mandara_config::motion::surface_speed(cfg.motion.surfaces.launcher));
+        if self.look.style == mandara_config::workflow::LauncherStyle::Beacon {
+            return self.render_beacon(window, cx);
+        }
+        let look = self.look.clone();
+        let viewport = window.viewport_size();
+        let (sw, sh) = (f32::from(viewport.width), f32::from(viewport.height));
+        let row_h = if look.compact { ROW_H_COMPACT } else { ROW_H };
+        let lead_px = if look.compact { ROW_LEAD_COMPACT_PX } else { ROW_LEAD_PX };
+        let grid = self.grid_active();
+        let grouped = !grid && !self.sections.is_empty();
+        let chips = grid && look.grid_categories && !self.categories.is_empty();
+        let chips_h = if chips { launcher_looks::CHIPS_H + LIST_GAP } else { 0.0 };
+        let hints_h = if look.hints { launcher_looks::HINTS_H + LIST_GAP } else { 0.0 };
+        // Rows: as many results as configured, as fit the height setting.
+        let chrome = PAD * 2.0 + LIST_GAP + SEARCH_H + chips_h + hints_h;
+        let fit = ((look.size().1 - chrome) / row_h).floor().max(0.0) as usize;
+        let max_rows = cfg.launcher.max_results.clamp(3, 12).min(fit).max(MIN_ROWS);
+        let n = self.count();
+        let output = self.output.as_deref();
+        let bar_here = output.is_none_or(|o| cfg.bar_on_output(o));
+        let anchor = crate::launcher_place::anchor_on(output, cx);
+        let button = anchor.and_then(|anchor| anchor.button);
+        let bar_span = anchor.map(|anchor| anchor.span);
+        // The grid's columns follow the width this placement gives.
+        let g = grid.then(|| {
+            let width = crate::launcher_place::for_config_with_bar(&cfg, (sw, sh), look.size().1, bar_here, bar_span, button).rect.w;
+            launcher_looks::grid_geom(width - PAD * 2.0, look.grid_icon(), look.grid_columns)
+        });
+        let lay = if grouped { launcher_looks::list_layout(n, &self.sections, row_h, launcher_looks::HEADER_H) } else { Default::default() };
+        // Visible window and list height (the width comes from the placement).
+        let (list_h, first_visible, shown, cell_h) = if let Some(g) = g {
+            self.grid_cols = g.cols;
+            let total_rows = n.div_ceil(g.cols).max(1);
+            let room = (look.size().1 - chrome).max(g.tile_h);
+            let vis_rows = ((room / g.tile_h).floor() as usize).max(1).min(total_rows);
+            (vis_rows as f32 * g.tile_h, 0, 0, g.tile_h)
+        } else if grouped {
+            (lay.total.min(max_rows as f32 * row_h).max(row_h), 0, 0, row_h)
+        } else {
+            let rows = n.min(max_rows);
+            (if rows == 0 { row_h } else { rows as f32 * row_h }, self.selected.saturating_sub(max_rows - 1), max_rows, row_h)
+        };
+        let full_h = chrome + list_h;
+        // Where it rests for this placement, bar style, dock and output.
+        let place = crate::launcher_place::for_config_with_bar(&cfg, (sw, sh), full_h, bar_here, bar_span, button);
+        let full_h = place.rect.h;
+        // Springs: the panels' spring (or the user's own), the panels'
+        // animation style; reduced motion snaps (inside the step).
+        let (spring, custom) = crate::shell::spring_for(DRAWER_SPRING, &cfg.panels.spring);
+        let instant = cfg.panels.animation == PanelAnimation::None;
+        if !self.placed {
+            tracing::debug!(target: "mandara::launcher", "first frame {:.1} ms after opening ({:?} on {:?})", self.created.elapsed().as_secs_f32() * 1000.0, look.position, self.output);
+            self.rest.snap_to(place.rect.to_bounds());
+            self.open.snap_to(0.0);
+            self.placed = true;
+        }
+        self.rest.set_config(spring);
+        self.open.set_config(if self.closing { SpringConfig::critical(CLOSE_STIFFNESS) } else { spring });
+        self.rest.set_instant(instant);
+        self.open.set_instant(instant);
+        self.rest.set_target(place.rect.to_bounds());
+        self.open.set_target(if self.closing { 0.0 } else { 1.0 });
+        if grouped {
+            // The highlight and the scroll follow the selected row (and its
+            // heading, scrolling up to the first row of a section).
+            if let Some(&top) = lay.item_y.get(self.selected) {
+                let above = if lay.headers.iter().any(|(y, _)| (top - launcher_looks::HEADER_H - y).abs() < 0.5) { launcher_looks::HEADER_H } else { 0.0 };
+                self.list_scroll.set_target(launcher_looks::follow(self.list_scroll.target(), top, row_h, above, list_h, lay.total));
+                self.highlight.set_target(top);
+            }
+        } else if !grid {
+            self.highlight.set_target(self.selected.saturating_sub(first_visible) as f32 * cell_h);
+        }
+        let dt = self.clock.tick(Instant::now());
+        let a = crate::shell::step_spring(&mut self.rest, custom, dt);
+        let opening = crate::shell::step_spring(&mut self.open, custom, dt);
+        let b = self.highlight.step(dt);
+        let c = self.list_scroll.step(dt);
+        let d = self.reflow.step(dt);
+        if self.closing && !opening {
+            self.release(window, cx);
+            window.remove_window();
+        } else if a || opening || b || c || d {
+            window.request_animation_frame();
+        } else {
+            self.clock.idle();
+        }
+        let rest = Rect::from_bounds(self.rest.value());
+        let opened = self.open.value();
+        // Grows from its start (the launcher pill, a sliver on the bar's
+        // edge, a slide's offset or a smaller centered card) to its rest.
+        let cur = place.start.lerp(rest, opened);
+        let progress = opened.clamp(0.0, 1.0);
+        let (x, y, h) = (cur.x, cur.y, cur.h);
+        self.rect = (x, y, cur.w, h);
+        // Choreography: where the launcher comes from, for its content's
+        // entrance, parallax and the rows' cascade.
+        let choreo = mandara_core::choreo::choreography();
+        let rtl = crate::bidi::rtl();
+        let origin = launcher_origin(place.start, rest);
+        self.cascade = (opened, origin);
+        let search_top = match look.search_position {
+            SearchPosition::Top => true,
+            SearchPosition::Bottom => false,
+            SearchPosition::Auto => place.edge != Some(LauncherEdge::Bottom),
+        };
+
+        // The wheel (or a touchpad) steps the selection a row at a time, and
+        // the window follows it like the arrow keys (the grid scrolls
+        // smoothly on its own).
+        let wheel_row = cell_h;
+        let list = div()
+            .relative()
+            .h(px(list_h))
+            .when(!grid, |el| el.on_scroll(cx.listener(move |this, e: &ScrollEvent, _, cx| this.wheel_select(e, wheel_row, 1, cx))))
+            .on_mouse_move(cx.listener(|this, _: &gpui::MouseMoveEvent, _, _| this.wheel_hold = false));
+        let list = if let Some(g) = g {
+            let grid_el = self.grid_element(g, list_h, &palette, cx);
+            list.child(grid_el)
+        } else if grouped {
+            let grouped_el = self.grouped_element(&lay, list_h, row_h, lead_px, false, &palette, cx);
+            list.child(grouped_el)
+        } else {
+            let items: Vec<(usize, Item)> = self.results.iter().enumerate().skip(first_visible).take(shown).map(|(i, it)| (i, it.clone())).collect();
+            let rows_el: Vec<gpui::AnyElement> = items
+                .into_iter()
+                .enumerate()
+                .map(|(k, (i, item))| {
+                    let row = self.list_row(i, &item, row_h, lead_px, &look, false, &palette, cx);
+                    match choreo.item(opened, k, origin, rtl, ROW_CASCADE_PX) {
+                        Some((dx, dy, alpha)) => div().relative().left(px(dx)).top(px(dy)).opacity(alpha).child(row).into_any_element(),
+                        None => row,
+                    }
+                })
+                .collect();
+            // The highlight stretches as it hops between rows (liquid
+            // choreography), thinning a touch; at rest it is the row.
+            let hl_v = self.highlight.velocity()[0];
+            let (hl_top, hl_h) = choreo.stretch_span(self.highlight.value(), cell_h, hl_v);
+            let hl_w = place.rect.w - PAD * 2.0;
+            let hl_thin = choreo.thinned(hl_w, hl_v);
+            list.child(
+                div()
+                    .absolute()
+                    .left(px((hl_w - hl_thin) / 2.0))
+                    .top(px(hl_top))
+                    .w(px(hl_thin))
+                    .h(px(hl_h))
+                    .rounded(px(crate::style::radius(16.0)))
+                    .bg(palette.on_surface.with_alpha(0.08).hsla())
+                    .when(self.results.is_empty(), |el| el.opacity(0.0)),
+            )
+            .when(self.results.is_empty(), |el| {
+                el.child(div().size_full().flex().items_center().justify_center().text_color(palette.on_surface_variant.hsla()).child(t("No results")))
+            })
+            .child(div().flex().flex_col().children(rows_el))
+        };
+        let chips_el = chips.then(|| self.chips_element(&palette, None, window, cx));
+        let hints_el = look.hints.then(|| self.classic_hints(grid, chips, &palette));
+        self.field_px = text::BODY + 1.0;
+        let hint = self.prefix_help(text::BODY + 1.0);
+        // The search field in the input design picked under Themes →
+        // Components (always focused while the launcher is open).
+        let input = crate::style::input_design();
+        let search = div().h(px(SEARCH_H)).px(px(16.0));
+        let search = if input == crate::components::InputDesign::Classic {
+            search.rounded(px(crate::style::radius(SEARCH_H / 2.0))).bg(palette.surface_container_high.hsla()).border_2().border_color(palette.primary.with_alpha(0.55).hsla())
+        } else {
+            crate::components::inputs::dress(search.relative(), input, true, false, &palette)
+        };
+        let search = search
+            .flex()
+            .items_center()
+            .gap(px(10.0))
+            .id("launcher-search")
+            .cursor_text()
+            .child(icon("search", 18.0, palette.on_surface_variant))
+            .child(self.query_field(text::BODY + 1.0, hint, &palette, true))
+            // Clicking the field focuses it and puts the caret where you clicked.
+            .on_mouse_down(MouseButton::Left, cx.listener(|this, e: &gpui::MouseDownEvent, window, cx| {
+                this.focus.focus(window, cx);
+                if e.click_count >= 2 {
+                    this.select_all = !this.query.is_empty();
+                } else {
+                    this.caret_at(e.position.x, window, cx);
+                }
+                cx.notify();
+            }));
+
+        // Hover-leave only (clicks are hit-tested by the element tree): slack
+        // on every side, so drifting just past an edge or onto a flare
+        // doesn't start the close timer.
+        let inside = |this: &Self, p: gpui::Point<gpui::Pixels>, slack: f32| {
+            let (rx, ry, rw, rh) = this.rect;
+            crate::dismiss::Rect::new(rx, ry, rw, rh).contains(f32::from(p.x), f32::from(p.y), slack)
+        };
+        // Edge drawers grow concave flares beside the drawer (shrinking with
+        // it): they count as the launcher, not as outside.
+        let flare = place.flare.min(h);
+        // The content rests where the launcher rests, pinned to the edge it
+        // grows from; the shape reveals it.
+        let body_y = if place.edge == Some(LauncherEdge::Bottom) { rest.bottom() - full_h } else { rest.y };
+        // Choreography: the content enters from its direction and trails
+        // the shape (clipped by it; none at rest).
+        let (ex, ey) = choreo.entrance_offset(opened, origin, rtl, CONTENT_ENTRANCE_PX);
+        let (lx, ly) = choreo.parallax_offset(opened, origin, rtl, CONTENT_PARALLAX_PX);
+        let body = div()
+            .absolute()
+            .left(px(rest.x - x + ex + lx))
+            .top(px(body_y - y + ey + ly))
+            .w(px(rest.w))
+            .h(px(full_h))
+            .p(px(PAD))
+            .flex()
+            .gap(px(LIST_GAP))
+            .opacity(((progress - 0.3) / 0.5).clamp(0.0, 1.0));
+        // The search field sits on the side the drawer comes from (or as
+        // configured), and leads as the drawer opens.
+        // The category chips sit above the grid; the hints under the results.
+        let body = if search_top {
+            body.flex_col().child(search).children(chips_el).child(list).children(hints_el)
+        } else {
+            body.flex_col().justify_end().children(chips_el).child(list).children(hints_el).child(search)
+        };
+        let joined = place.keep_bright.is_some() && place.join == Join::Flares;
+        let (fill, seam) = panel_fill(&cfg, &palette, joined);
+        let radius = crate::style::panel_radius(&cfg.bar);
+        let scale = window.scale_factor();
+        let surface = match (place.join, place.edge) {
+            (Join::Flares | Join::Flush, Some(edge)) => {
+                let (edge, sy) = match edge {
+                    LauncherEdge::Top => (Edge::Top, y - seam),
+                    LauncherEdge::Bottom => (Edge::Bottom, y),
+                };
+                place.drawer(cur, radius, scale).element(edge, Rect::new(x, sy, cur.w, h + seam), fill, scale)
+            }
+            _ => {
+                // Morphing out of a floating pill: the pill's radius first.
+                let r = place.start_radius.map_or(radius, |r0| r0 + (radius - r0) * progress);
+                div()
+                    .absolute()
+                    .left(px(x))
+                    .top(px(y))
+                    .w(px(cur.w))
+                    .h(px(h))
+                    .rounded(px(r))
+                    .bg(fill)
+                    .border(px(crate::plugins::panel_fx::edge_px()))
+                    .border_color(crate::plugins::panel_fx::surface_edge(&palette, cfg.theme.adjustments.rim_intensity).hsla())
+                    .shadow(crate::plugins::panel_fx::elevation_scaled(&palette, progress, cfg.panels.shadow_strength))
+                    .into_any_element()
+            }
+        };
+        // Grain (`[grain.launcher]`) over the surface, under the content.
+        let surface = match crate::components::grain::layer(crate::components::grain::Slot::Launcher, gpui::Corners::all(px(radius))) {
+            Some(g) => div().absolute().size_full().child(surface).child(div().absolute().left(px(x)).top(px(y)).w(px(cur.w)).h(px(h)).child(g)).into_any_element(),
+            None => surface,
+        };
+        // The center card (and a slide) fade in whole.
+        let surface = if place.fades && progress < 1.0 { div().absolute().size_full().opacity(progress).child(surface).into_any_element() } else { surface };
+        let dim = look.dim.clamp(0.0, DIM_MAX) * progress;
+        // Joined to the bar, the dim follows its shape.
+        let dim_el = (dim > 0.0).then(|| {
+            let mut bar = crate::bar::layout::Metrics::of(&cfg, crate::style::radius_scale());
+            // A notch grown to hold its items stays bright whole.
+            if let Some((_, width)) = bar_span {
+                bar.notch_fit = width;
+            }
+            crate::bar::scrim::element((sw, sh), &bar, place.keep_bright, gpui::black().opacity(dim), scale)
+        });
+        let hover_close = place.hover_close;
+
+        div()
+            .id("launcher-root")
+            .size_full()
+            .relative()
+            .track_focus(&self.focus)
+            .font_family(f.ui.clone())
+            .text_start()
+            .font_weight(crate::style::body_weight())
+            .text_color(palette.on_surface.hsla())
+            .text_size(px(13.0 * cfg.typography.scale))
+            .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| this.on_key(e, window, cx)))
+            .on_mouse_move(cx.listener(move |this, e: &gpui::MouseMoveEvent, _, cx| {
+                if inside(this, e.position, LEAVE_SLACK_PX) {
+                    this.entered = true;
+                    this.leave_task = None;
+                } else if this.entered && this.leave_task.is_none() && hover_close {
+                    // Grace before closing (`panels.leave_delay_ms`).
+                    let delay = crate::state::config(cx).read(cx).snapshot().panels.leave_delay();
+                    this.leave_task = Some(cx.spawn(async move |this, cx| {
+                        cx.background_executor().timer(delay).await;
+                        let _ = this.update(cx, |this, cx| this.close(cx));
+                    }));
+                }
+            }))
+            // Click outside the launcher dismisses: a full-surface catcher
+            // (with the dim), the drawer (and its flares) occlude it.
+            .child(
+                div()
+                    .id("launcher-outside")
+                    .absolute()
+                    .inset_0()
+                    .children(dim_el)
+                    .on_mouse_down(MouseButton::Left, cx.listener(|this, _: &gpui::MouseDownEvent, _, cx| this.close(cx)))
+                    .on_mouse_down(MouseButton::Right, cx.listener(|this, _: &gpui::MouseDownEvent, _, cx| this.close(cx))),
+            )
+            .child(surface)
+            .child(div().id("launcher-frame").absolute().left(px(x - flare)).top(px(y)).w(px(cur.w + 2.0 * flare)).h(px(h)).occlude())
+            .child(
+                div()
+                    .absolute()
+                    .left(px(x))
+                    .top(px(y))
+                    .w(px(cur.w))
+                    .h(px(h))
+                    .overflow_hidden()
+                    .when(place.fades, |el| el.opacity(progress))
+                    .child(body),
+            )
+            .into_any_element()
+    }
+}
+
+// ── Session dock ─────────────────────────────────────────────────────────
+// The power / session menu (dock or grid, configurable entries,
+// hold-to-confirm) lives in `crate::powerctl::session_menu`.
+
+pub use crate::powerctl::session_menu::SessionView;
+
+// ── Window management ────────────────────────────────────────────────────
+
+#[derive(Default)]
+struct Overlays {
+    launcher: Option<WindowHandle<LauncherView>>,
+    session: Option<WindowHandle<SessionView>>,
+    picker: Option<WindowHandle<crate::wallpaper::PickerView>>,
+}
+
+impl gpui::Global for Overlays {}
+
+/// The output (connector name, and its logical size when known) the next
+/// wallpaper picker opens on.
+#[derive(Default)]
+struct PickerOutput(Option<(String, Option<(f32, f32)>)>);
+
+impl gpui::Global for PickerOutput {}
+
+/// Opens the next wallpaper picker on `output` (the desktop menu's
+/// display, of logical `size`) instead of the focused window's.
+pub fn picker_on(output: &str, size: Option<(f32, f32)>, cx: &mut App) {
+    cx.set_global(PickerOutput((!output.is_empty()).then(|| (output.to_string(), size))));
+}
+
+fn is_open<V: 'static>(handle: &Option<WindowHandle<V>>, cx: &App) -> bool {
+    handle.as_ref().is_some_and(|h| cx.windows().iter().any(|w: &AnyWindowHandle| w.window_id() == h.window_id()))
+}
+
+/// Opens / closes overlay surfaces as the shell state changes.
+pub fn init_overlays(cx: &mut App) {
+    cx.set_global(Overlays::default());
+    let shell = shell(cx);
+    cx.observe(&shell, |shell, cx| {
+        let (launcher, session, picker) = (shell.read(cx).launcher_open, shell.read(cx).session_open, shell.read(cx).wallpaper_open);
+        let mut overlays = std::mem::take(cx.global_mut::<Overlays>());
+        // Sized for, and placed on, the focused monitor: sized for the first
+        // output while the compositor put it on another, an overlay covered
+        // only part of a larger display (issue #8).
+        let (display, (w, h), output) = if (launcher && !is_open(&overlays.launcher, cx)) || (session && !is_open(&overlays.session, cx)) || (picker && !is_open(&overlays.picker, cx)) {
+            crate::outputs::overlay_target_with_output(cx)
+        } else {
+            (None, (1920.0, 1080.0), None)
+        };
+        if launcher && !is_open(&overlays.launcher, cx) {
+            overlays.launcher = cx
+                .open_window(overlay_spec(SurfaceRole::Launcher, w, h, display), |window, cx| cx.new(|cx| LauncherView::new((w, h), window, cx)))
+                .map_err(|e| tracing::error!("launcher: {e:#}"))
+                .ok();
+        }
+        if session && !is_open(&overlays.session, cx) {
+            overlays.session = cx
+                .open_window(overlay_spec(SurfaceRole::Lock, w, h, display), |window, cx| cx.new(|cx| SessionView::new((w, h), output.clone(), window, cx)))
+                .map_err(|e| tracing::error!("session: {e:#}"))
+                .ok();
+        }
+        let picker_target = std::mem::take(&mut cx.default_global::<PickerOutput>().0);
+        if picker && !is_open(&overlays.picker, cx) {
+            // Sized for, and placed on, one output: the one asked for (the
+            // desktop menu's), else the focused window's. Sized for the
+            // first output while the compositor put it on another, the
+            // picker covered only part of a larger display.
+            let (target, known) = match picker_target {
+                Some((m, size)) => (Some(m), size),
+                None => (None, None),
+            };
+            let asked = target.as_deref().and_then(|m| crate::outputs::display_for(m, cx));
+            let (display, (w, h)) = match (&target, asked, known) {
+                // The size its caller measured (an output connected after
+                // startup isn't in the output list).
+                (_, d, Some(size)) => (d, size),
+                (Some(m), Some(d), None) => (Some(d), crate::plugins::dock::output_size(m, cx)),
+                // Else the focused monitor, as for the other overlays.
+                _ => (display, (w, h)),
+            };
+            let options = overlay_spec(SurfaceRole::Launcher, w, h, display);
+            overlays.picker = cx
+                .open_window(options, move |window, cx| cx.new(|cx| crate::wallpaper::PickerView::new((w, h), window, cx)))
+                .map_err(|e| tracing::error!("wallpaper picker: {e:#}"))
+                .ok();
+        }
+        cx.set_global(overlays);
+    })
+    .detach();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mandara_plugins::PluginRegistry;
+
+    /// The built-in registry with every plugin switched on.
+    fn fixture() -> (PluginRegistry, mandara_config::ShellConfig, Vec<Item>) {
+        let mut registry = PluginRegistry::default();
+        crate::plugins::register_builtin(&mut registry);
+        let mut cfg = mandara_config::ShellConfig::default();
+        cfg.plugins.enabled = registry.manifests().map(|m| m.id.clone()).collect();
+        cfg.plugins.disabled.clear();
+        let index = build_index_with(&registry, &cfg);
+        (registry, cfg, index)
+    }
+
+    fn entries(index: &[Item]) -> impl Iterator<Item = &Entry> {
+        index.iter().filter_map(|i| match i {
+            Item::Entry(e) => Some(e),
+            _ => None,
+        })
+    }
+
+    fn effect(results: &[Item], query: &str) -> String {
+        describe(&plan(results.first().expect("a result"), query))
+    }
+
+    fn strings(words: &[&str]) -> Vec<String> {
+        words.iter().map(|w| w.to_string()).collect()
+    }
+
+    /// A command line names a registered command; complete lines resolve
+    /// with valid arguments, Studio and panel targets exist.
+    fn assert_line(registry: &PluginRegistry, words: &[String], complete: bool, label: &str) {
+        let commands = &registry.commands;
+        assert!(commands.all().iter().any(|c| starts_with_line(words, c.path)), "`{label}` runs `{}`, which is not a command", words.join(" "));
+        if complete
+            && let Err(err) = commands.resolve(words) {
+                panic!("`{label}` runs `{}`: {err}", words.join(" "));
+            }
+        let ids: Vec<&str> = registry.manifests().map(|m| m.id.as_str()).collect();
+        match words.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
+            ["studio", target] => {
+                let mut parts = target.split('/');
+                let section = parts.next().unwrap();
+                if section == "plugins" && let Some(id) = parts.next() {
+                    assert!(ids.contains(&id), "`{label}` opens Studio on unknown plugin {id}");
+                    assert!(matches!(parts.next(), None | Some("settings")), "`{label}`: bad deep link {target}");
+                } else {
+                    assert!(STUDIO_SECTIONS.iter().any(|(slug, ..)| *slug == section), "`{label}` opens unknown Studio section {section}");
+                }
+            }
+            ["panel", "open", id] => assert!(ids.contains(id), "`{label}` opens the panel of unknown plugin {id}"),
+            _ => {}
+        }
+    }
+
+    #[test]
+    fn a_catalog_refresh_preserves_the_first_selected_item() {
+        let app = |id: &str| Item::App(DesktopApp { id: id.into(), name: id.into(), ..Default::default() });
+        let cached = vec![app("B"), app("C")];
+        let key = current_selection_key(&cached, 0).unwrap();
+        let refreshed = [app("A"), app("B"), app("C")];
+        assert_eq!(refreshed.iter().position(|item| selection_key(item) == key), Some(1));
+        assert!(current_selection_key(&[], 0).is_none());
+    }
+
+    #[test]
+    fn window_selection_distinguishes_windows_from_the_same_app() {
+        let window = |id: &str| Item::Hit(Hit {
+            provider: "windows",
+            key: "org.example.App".into(),
+            label: String::new(),
+            detail: String::new(),
+            lead: Lead::Icon("window"),
+            badge: "",
+            keywords: String::new(),
+            action: HitAction::Command(vec!["window".into(), "focus".into(), id.into()]),
+        });
+        let first = window("1");
+        let second = window("2");
+        assert_eq!(usage_key(&first), usage_key(&second));
+        assert_ne!(selection_key(&first), selection_key(&second));
+    }
+
+    /// `reddit` and `subreddit` find the plugin; `r/name` opens that
+    /// community, only while the plugin is on.
+    #[test]
+    fn reddit_names_and_communities_reach_the_plugin() {
+        let (registry, mut cfg, index) = fixture();
+        let results = search("r/linux", &[], &index);
+        let Some(Item::Entry(first)) = results.first() else { panic!("an entry for r/linux") };
+        assert_eq!(first.label, "Open r/linux in Reddit");
+        let Run::Command { words, .. } = &first.run else { panic!() };
+        assert_line(&registry, words, true, &first.label);
+        for query in ["reddit", "subreddit"] {
+            assert!(search(query, &[], &index).iter().take(5).any(|item| matches!(item, Item::Entry(e) if e.label == "Reddit")), "{query}");
+        }
+        assert!(search("r/not a name", &[], &index).iter().all(|item| !matches!(item, Item::Entry(e) if e.label.starts_with("Open r/"))));
+        cfg.plugins.enabled.retain(|id| id != crate::plugins::reddit::ID);
+        cfg.plugins.disabled.push(crate::plugins::reddit::ID.into());
+        let off = build_index_with(&registry, &cfg);
+        assert!(search("r/linux", &[], &off).iter().all(|item| !matches!(item, Item::Entry(e) if e.label.starts_with("Open r/"))));
+    }
+
+    #[test]
+    fn the_games_are_found_by_name_and_offered_when_off() {
+        let (registry, mut cfg, _) = fixture();
+        let label_of = |index: &[Item], q: &str| match search(q, &[], index).first() {
+            Some(Item::Entry(e)) => (e.label.to_string(), describe(&plan(&Item::Entry(e.clone()), q))),
+            _ => panic!("nothing for {q:?}"),
+        };
+        // On: the plugin itself.
+        let index = build_index_with(&registry, &cfg);
+        for q in ["sudoku", "2048"] {
+            let (label, _) = label_of(&index, q);
+            assert!(label.to_lowercase().contains(q), "{q}: {label}");
+        }
+        assert!(search("games", &[], &index).iter().filter(|i| matches!(i, Item::Entry(e) if e.label.contains("Sudoku") || e.label.contains("2048"))).count() >= 2);
+        // Off (as shipped): an offer to switch it on, for the names and the words.
+        cfg.plugins.enabled.retain(|p| p != crate::plugins::sudoku::ID && p != crate::plugins::tiles::ID);
+        cfg.plugins.disabled.extend([crate::plugins::sudoku::ID.to_string(), crate::plugins::tiles::ID.to_string()]);
+        let index = build_index_with(&registry, &cfg);
+        for (q, id) in [("sudoku", "sudoku"), ("2048", "2048"), ("puzzle", ""), ("game", "")] {
+            let offers: Vec<String> = search(q, &[], &index).iter().filter_map(|i| match i {
+                Item::Entry(e) => Some(describe(&plan(&Item::Entry(e.clone()), q))),
+                _ => None,
+            }).filter(|d| d.contains("plugins enable")).collect();
+            assert!(!offers.is_empty(), "{q}: no offer to turn it on");
+            assert!(offers.iter().any(|d| d.contains(id)), "{q}: {offers:?}");
+        }
+    }
+
+    #[test]
+    fn off_plugins_leave_the_launcher() {
+        let (registry, mut cfg, _) = fixture();
+        let mentions = |cfg: &mandara_config::ShellConfig| {
+            entries(&build_index_with(&registry, cfg)).filter(|e| format!("{} {}", e.label, e.keywords).to_lowercase().contains("prayer")).count()
+        };
+        assert!(mentions(&cfg) > 0, "on: plugin entry and its commands");
+        mandara_plugins::lifecycle::remove(&mut cfg, crate::plugins::prayer::ID, "Prayer times").unwrap();
+        assert_eq!(mentions(&cfg), 0, "removed: no entries, no commands");
+        mandara_plugins::lifecycle::restore(&mut cfg, crate::plugins::prayer::ID, None);
+        assert!(mentions(&cfg) > 0, "restored");
+    }
+
+    #[test]
+    fn every_entry_runs_a_real_command() {
+        let (registry, cfg, index) = fixture();
+        assert!(entries(&index).count() > 150);
+        for e in entries(&index) {
+            let item = Item::Entry(e.clone());
+            match plan(&item, "") {
+                Effect::Commands(lines) => {
+                    assert!(!lines.is_empty(), "{}", e.label);
+                    for words in &lines {
+                        assert_line(&registry, words, true, &e.label);
+                    }
+                }
+                Effect::Prompt(query) => {
+                    let Run::Command { words, args } = &e.run else {
+                        // Slash commands with `{query}` prompt for it.
+                        assert!(matches!(e.run, Run::Slash { .. }), "{} prompts unexpectedly", e.label);
+                        continue;
+                    };
+                    assert!(args.iter().any(|a| a.required), "{} prompts without required arguments", e.label);
+                    assert_eq!(query, format!("/{} ", words.join(" ")));
+                    assert_line(&registry, words, false, &e.label);
+                }
+                Effect::Url(_) | Effect::Shell(_) => assert!(matches!(e.run, Run::Slash { .. })),
+                other => panic!("{} → {}", e.label, describe(&other)),
+            }
+        }
+        // Slash commands (`mandara:`) and skills of the default config run real commands.
+        for sc in &cfg.launcher.commands {
+            if let Effect::Commands(lines) = slash_effect(sc, "buy milk") {
+                lines.iter().for_each(|w| assert_line(&registry, w, true, &sc.trigger));
+            }
+        }
+        for sk in &cfg.launcher.skills {
+            for step in &sk.steps {
+                assert_line(&registry, &words(step), true, &sk.name);
+            }
+        }
+    }
+
+    #[test]
+    fn every_command_and_studio_section_is_listed() {
+        let (registry, _, index) = fixture();
+        let lines: Vec<Vec<String>> = entries(&index)
+            .filter_map(|e| match &e.run {
+                Run::Command { words, .. } => Some(words.clone()),
+                _ => None,
+            })
+            .collect();
+        for c in registry.commands.all() {
+            if c.path.starts_with("debug ") || HIDDEN_COMMANDS.contains(&c.path) {
+                continue;
+            }
+            assert!(lines.iter().any(|w| starts_with_line(w, c.path)), "`{}` is missing from the launcher", c.path);
+        }
+        for (slug, ..) in STUDIO_SECTIONS {
+            assert!(lines.iter().any(|w| w == &strings(&["studio", slug])), "Studio section {slug} is missing");
+            assert!(crate::plugins::core_commands::STUDIO_SECTION_ARG.contains(&format!(" {slug},")) || crate::plugins::core_commands::STUDIO_SECTION_ARG.contains(&format!(" {slug})")) || crate::plugins::core_commands::STUDIO_SECTION_ARG.contains(&format!("({slug},")), "`studio` command help doesn't list {slug}");
+        }
+        for m in registry.manifests().filter(|m| m.id != crate::plugins::session::LAUNCHER_ID) {
+            assert!(lines.iter().any(|w| w == &strings(&["studio", &format!("plugins/{}/settings", m.id)])), "{} has no settings entry", m.id);
+        }
+        // Every theme has an entry.
+        for theme in catalog::all() {
+            assert!(lines.iter().any(|w| w == &strings(&["theme", "set", &theme.id])), "theme {} is missing", theme.id);
+        }
+        // The lists steering execution name real commands.
+        for path in HIDDEN_COMMANDS.iter().chain(NO_EXPAND).chain(OUTPUT_COMMANDS).chain(AFTER_CLOSE) {
+            assert!(registry.commands.all().iter().any(|c| c.path == *path || c.path.starts_with(&format!("{path} ")) || path.starts_with(&format!("{} ", c.path))), "`{path}` is not a command");
+        }
+    }
+
+    #[test]
+    fn exact_command_names_rank_first() {
+        let (_, _, index) = fixture();
+        let first = |q: &str| {
+            let results = search(q, &[], &index);
+            item_names(results.first().unwrap_or_else(|| panic!("no results for {q}"))).1
+        };
+        assert_eq!(first("theme mode dark"), "theme mode dark");
+        assert_eq!(first("wallpaper random"), "wallpaper random");
+        assert_eq!(first("weather"), "panel open weather");
+        assert_eq!(first("prayer today"), "prayer today");
+        assert_eq!(first("> notifications dnd on"), "notifications dnd on");
+        assert_eq!(first(">dark appearance"), "theme mode dark");
+        // A web search is always offered last.
+        let results = search("zzqx unlikely words", &[], &index);
+        assert!(effect(&results[results.len() - 1..], "").starts_with("url: https://duckduckgo.com/?q=zzqx%20unlikely%20words"));
+    }
+
+    #[test]
+    fn feed_words_find_the_feeds_plugin_its_settings_and_actions() {
+        let (_, _, index) = fixture();
+        for q in ["rss", "feeds", "news", "atom", "reader", "subscriptions", "RSS"] {
+            let lines: Vec<String> = search(q, &[], &index).iter().take(12).map(|i| item_names(i).1).collect();
+            assert!(lines.iter().any(|l| l == "panel open feeds"), "{q}: {lines:?}");
+            // "feeds" itself lists the plugin first, then its commands (their names start with it).
+            if q != "feeds" { assert!(lines.iter().any(|l| l == "studio plugins/feeds/settings"), "{q}: {lines:?}"); }
+        }
+        let lines: Vec<String> = search("refresh feeds", &[], &index).iter().take(3).map(|i| item_names(i).1).collect();
+        assert!(lines.iter().any(|l| l == "feeds refresh"), "{lines:?}");
+        let lines: Vec<String> = search("add feed", &[], &index).iter().take(3).map(|i| item_names(i).1).collect();
+        assert!(lines.iter().any(|l| l == "studio plugins/feeds/settings"), "{lines:?}");
+    }
+
+    #[test]
+    fn with_feeds_off_the_launcher_offers_turning_it_on() {
+        let (registry, mut cfg, _) = fixture();
+        cfg.plugins.enabled.retain(|id| id != crate::plugins::feeds::ID);
+        let index = build_index_with(&registry, &cfg);
+        let lines: Vec<String> = search("rss", &[], &index).iter().take(5).map(|i| item_names(i).1).collect();
+        assert!(lines.iter().any(|l| l == "plugins enable feeds"), "{lines:?}");
+        assert!(lines.iter().any(|l| l == "studio plugins/feeds/settings"), "{lines:?}");
+        assert!(!lines.iter().any(|l| l == "panel open feeds"), "{lines:?}");
+        // A removed Feeds is not offered at all (like any removed plugin).
+        mandara_plugins::lifecycle::remove(&mut cfg, crate::plugins::feeds::ID, "Feeds").unwrap();
+        let index = build_index_with(&registry, &cfg);
+        let offered: Vec<String> = index.iter().map(|i| item_names(i).1).filter(|l| l == "plugins enable feeds" || l == "studio plugins/feeds/settings").collect();
+        assert!(offered.is_empty(), "{offered:?}");
+    }
+
+    #[test]
+    fn typed_web_addresses_offer_subscribing_in_feeds() {
+        let (_, _, index) = fixture();
+        for (q, url) in [("https://blog.rust-lang.org", "https://blog.rust-lang.org"), ("example.org/feed.xml", "https://example.org/feed.xml"), ("www.example.org", "https://www.example.org")] {
+            let results = search(q, &[], &index);
+            assert_eq!(item_names(&results[0]).1, format!("feeds subscribe {url}"), "{q}");
+            assert_eq!(effect(&results, q), format!("command: feeds subscribe {url}"), "{q}");
+        }
+        for q in ["notes.md", "3.14", "hello world", "file:///etc/passwd", "a/b", "https://user:pw@example.org"] {
+            assert!(subscribe_address(q).is_none(), "{q}");
+        }
+    }
+
+    #[test]
+    fn snipping_words_find_the_screenshot_tool() {
+        let (_, _, index) = fixture();
+        for q in ["snip", "snipping tool", "Snipping Tool", "printscreen"] {
+            let results = search(q, &[], &index);
+            let line = item_names(results.first().unwrap_or_else(|| panic!("no results for {q}"))).1;
+            assert!(line == "screenshot region" || line == plugin_line(crate::plugins::screenshot::ID), "{q}: first result runs `{line}`");
+        }
+    }
+
+    #[test]
+    fn arguments_are_prompted_for_and_passed_on() {
+        let (_, _, index) = fixture();
+        // Choosing a command that needs arguments asks for them…
+        let results = search("audio volume set", &[], &index);
+        assert_eq!(effect(&results, "audio volume set"), "prompt: /audio volume set ");
+        // …and what's typed after the line is passed on (any case, `/` or `>`).
+        for q in ["/audio volume set 40", "/Audio Volume SET 40", ">audio volume set 40"] {
+            let results = search(q, &[], &index);
+            assert_eq!(effect(&results, q), "command: audio volume set 40", "{q}");
+        }
+        let q = "/network wifi connect My Home Net";
+        assert_eq!(effect(&search(q, &[], &index), q), "command: network wifi connect My Home Net");
+        // Enum arguments are listed as their own entries.
+        let modes: Vec<String> = search("/theme mode", &[], &index).iter().map(|i| item_names(i).1).collect();
+        assert_eq!(modes, ["theme mode light", "theme mode dark", "theme mode toggle"]);
+        let q = "/soundscapes volume sea";
+        assert_eq!(effect(&search(q, &[], &index), q), "prompt: /soundscapes volume sea ");
+        let q = "/soundscapes volume sea 40";
+        assert_eq!(effect(&search(q, &[], &index), q), "command: soundscapes volume sea 40");
+        // Optional arguments: run bare, or with what was typed.
+        let q = "/audio volume up 10";
+        assert_eq!(effect(&search(q, &[], &index), q), "command: audio volume up 10");
+        assert_eq!(effect(&search("/audio volume up", &[], &index), "/audio volume up"), "command: audio volume up");
+        // Plain text only takes typed arguments that fit the command.
+        let q = "audio volume up 10";
+        assert_eq!(effect(&search(q, &[], &index), q), "command: audio volume up 10");
+        let settings = search("settings lock", &[], &index);
+        assert!(item_names(&settings[0]).1.starts_with("studio "));
+        let q = "lock screen";
+        assert_eq!(effect(&search(q, &[], &index), q), "command: session run lock");
+        // …and choosing `lock [mode]` for that text locks plainly.
+        let lock = search(q, &[], &index).into_iter().find(|i| item_names(i).1 == "lock").expect("lock command");
+        assert_eq!(describe(&plan(&lock, q)), "command: lock");
+    }
+
+    #[test]
+    fn slash_commands_substitute_and_quote() {
+        let (_, _, index) = fixture();
+        let q = "/g rust & “gpui” 100%";
+        assert_eq!(effect(&search(q, &[], &index), q), "url: https://duckduckgo.com/?q=rust%20%26%20%E2%80%9Cgpui%E2%80%9D%20100%25");
+        assert_eq!(effect(&search("/g", &[], &index), "/g"), "prompt: /g ");
+        let q = "/todo buy milk";
+        assert_eq!(effect(&search(q, &[], &index), q), "command: todo add buy milk");
+        // `#Topic` passes through to the plugin, which files the task there.
+        let q = "/todo #Work send the report";
+        assert_eq!(effect(&search(q, &[], &index), q), "command: todo add #Work send the report");
+        let q = "/note #Recipes koshary";
+        assert_eq!(effect(&search(q, &[], &index), q), "command: notes add #Recipes koshary");
+        let exec = |action: &str, query: &str| {
+            let sc = mandara_config::SlashCommand { trigger: "x".into(), action: action.into(), ..Default::default() };
+            describe(&slash_effect(&sc, query))
+        };
+        assert_eq!(exec("exec:notify-send {query}", "it's $HOME"), r"exec: notify-send 'it'\''s $HOME'");
+        assert_eq!(exec("exec:notify-send '{query}'", "a b"), "exec: notify-send 'a b'");
+        assert_eq!(exec("exec:notify-send \"{query}\"", "a b"), "exec: notify-send 'a b'");
+        assert!(exec("ftp:x", "q").starts_with("error:"));
+        // Skills run their steps in order.
+        let results = search("/wind", &[], &index);
+        assert_eq!(effect(&results, "/wind"), "command: notifications dnd off ; pomodoro reset ; theme mode dark");
+    }
+
+    #[test]
+    fn calculator_results() {
+        let (_, _, index) = fixture();
+        assert_eq!(effect(&search("=2+3*4", &[], &index), "=2+3*4"), "copy: 14");
+        assert_eq!(effect(&search("=(1+2)^2", &[], &index), ""), "copy: 9");
+        // A bare expression leads the plain list.
+        assert_eq!(effect(&search("sqrt(16)+1", &[], &index), ""), "copy: 5");
+        assert!(search("=2+", &[], &index).is_empty());
+        assert_eq!(format_number(0.1 + 0.2), "0.3");
+    }
+
+    #[test]
+    fn query_replies_are_summarized() {
+        let v = serde_json::json!([{ "name": "Fajr", "time": "04:51" }, { "name": "Dhuhr", "time": "11:42" }]);
+        assert_eq!(summarize(&v), "Fajr — 04:51\nDhuhr — 11:42");
+        let v = serde_json::json!([{ "prayer": "Fajr", "arabic": "الفجر", "time": "05:43" }]);
+        assert_eq!(summarize(&v), "Fajr — 05:43");
+        assert_eq!(summarize(&serde_json::json!({ "mode": "dark", "theme": null })), "mode: dark\ntheme: —");
+        assert_eq!(summarize(&serde_json::json!("pong")), "pong");
+        let many: Vec<u32> = (0..15).collect();
+        assert!(summarize(&serde_json::json!(many)).ends_with("…and 5 more"));
+    }
+
+    /// What one keystroke costs the looks' models with 600 apps and every
+    /// plugin's commands: the fuzzy search, regrouping it, and the grid's
+    /// reflow map. All of it must leave most of a 144 Hz frame (6.94 ms)
+    /// for layout and painting; the bound is loose for debug builds, the
+    /// measured numbers are printed.
+    #[test]
+    fn a_keystroke_stays_well_inside_the_frame_budget() {
+        let (_registry, _cfg, index) = fixture();
+        let apps: Vec<DesktopApp> = (0..600)
+            .map(|i| DesktopApp { id: format!("org.example.App{i}"), name: format!("Example {i} {}", ["Firefox", "Files", "Terminal", "Editor", "Music"][i % 5]), categories: "Utility".into(), ..Default::default() })
+            .collect();
+        let ctx = SearchCtx::default();
+        let runs = 20;
+        let start = Instant::now();
+        for _ in 0..runs {
+            let found = search_with("fi", &apps, &index, &ctx);
+            let before: std::collections::HashMap<String, usize> = found.iter().enumerate().map(|(i, it)| (usage_key(it), i)).collect();
+            assert!(!before.is_empty());
+            let (grouped, sections) = launcher_looks::group_results(found.into_iter().take(MAX_RESULTS).collect(), true);
+            assert!(!grouped.is_empty() && !sections.is_empty());
+        }
+        let per_key = start.elapsed().as_secs_f64() * 1000.0 / runs as f64;
+        let start = Instant::now();
+        for _ in 0..runs {
+            assert_eq!(search_with("", &apps, &index, &ctx).len(), 600, "the grid browses every app");
+        }
+        let browse = start.elapsed().as_secs_f64() * 1000.0 / runs as f64;
+        eprintln!("launcher keystroke (600 apps, debug build): search + group + reflow map {per_key:.2} ms, browse order {browse:.2} ms");
+        assert!(per_key < 40.0 && browse < 40.0, "{per_key:.2} / {browse:.2} ms");
+    }
+
+    /// Provider settings edited while the launcher is open take effect
+    /// without reopening it: switching off the active Beacon provider drops
+    /// its mode, its routing and its data, and switching one on gathers its
+    /// data once (#111).
+    #[test]
+    fn provider_settings_follow_edits_while_the_launcher_is_open() {
+        use mandara_services::clipboard::{ClipContent, ClipEntry, kind::classify_text};
+        let (_registry, _cfg, index) = fixture();
+        let text = "hello from the clipboard";
+        let entry = ClipEntry { id: 1, content: ClipContent::Text { text: text.into() }, copied_at: 0, pinned: false, app_id: String::new(), class: classify_text(text), collections: Vec::new() };
+        let mut ctx = SearchCtx::default();
+        ctx.clipboard.entries = std::sync::Arc::new(vec![entry]);
+        let query = format!("{}hello", ctx.providers.clipboard.prefix);
+        let clip_hits = |ctx: &SearchCtx| search_with(&query, &[], &index, ctx).iter().filter(|i| matches!(i, Item::Hit(h) if h.provider == "clipboard")).count();
+        assert_eq!(clip_hits(&ctx), 1, "routed to the clipboard while it is on");
+        let mode = Some(BeaconMode::Clipboard);
+        assert_eq!(launcher_looks::settle_mode(mode, &ctx.providers), mode);
+
+        // An unrelated config edit: nothing is gathered or changed.
+        let same = ctx.providers.clone();
+        assert!(!ctx.follow_providers(&same, |_, id| panic!("gathered {id} for an unchanged setting")));
+
+        // The active provider is switched off while open.
+        let mut edited = ctx.providers.clone();
+        edited.clipboard.enabled = false;
+        assert!(ctx.follow_providers(&edited, |_, id| panic!("gathered {id} for a provider switched off")));
+        assert_eq!(launcher_looks::settle_mode(mode, &ctx.providers), None, "its Beacon mode is no longer offered");
+        assert!(!BeaconMode::Clipboard.available(&ctx.providers));
+        assert!(ctx.clipboard.entries.is_empty() && ctx.clipboard.entries.capacity() == 0, "its data is dropped");
+        assert_eq!(clip_hits(&ctx), 0, "the prefix no longer routes to it");
+
+        // Switched back on: its data is gathered once, routing returns.
+        edited.clipboard.enabled = true;
+        let mut gathered = Vec::new();
+        assert!(ctx.follow_providers(&edited, |ctx, id| {
+            gathered.push(id);
+            ctx.clipboard.entries = std::sync::Arc::new(vec![ClipEntry { id: 2, content: ClipContent::Text { text: text.into() }, copied_at: 0, pinned: false, app_id: String::new(), class: classify_text(text), collections: Vec::new() }]);
+        }));
+        assert_eq!(gathered, ["clipboard"]);
+        assert_eq!(clip_hits(&ctx), 1);
+        assert_eq!(launcher_looks::settle_mode(mode, &ctx.providers), mode);
+
+        // A new prefix routes at once; an emptied one ends the mode.
+        edited.clipboard.prefix = "cb:".into();
+        assert!(ctx.follow_providers(&edited, |_, id| panic!("gathered {id} for a prefix edit")));
+        assert_eq!(search_with("cb:hello", &[], &index, &ctx).iter().filter(|i| matches!(i, Item::Hit(h) if h.provider == "clipboard")).count(), 1);
+        edited.clipboard.prefix.clear();
+        assert!(ctx.follow_providers(&edited, |_, _| {}));
+        assert_eq!(launcher_looks::settle_mode(mode, &ctx.providers), None);
+    }
+
+    /// Switching the agent or a provider while the launcher is open
+    /// updates the prefix help every look shows, without reopening it; an
+    /// unrelated edit composes nothing.
+    #[test]
+    fn the_prefix_help_follows_settings_while_the_launcher_is_open() {
+        let mut launcher = mandara_config::LauncherConfig::default();
+        let mut ctx = SearchCtx { providers: launcher.providers.clone(), ..SearchCtx::default() };
+        let (mut hint, mut agent) = (launcher_hint::PrefixHelp::default(), launcher.agent.enabled);
+        // A narrow and a roomy field.
+        let shown = |hint: &mut launcher_hint::PrefixHelp, ctx: &SearchCtx, agent: bool| [Some(400.0), Some(4000.0)].map(|w| hint.get(&ctx.providers, agent, w, 14.0).to_string());
+        let before = shown(&mut hint, &ctx, agent);
+        assert!(before.iter().all(|h| !h.contains("“!”")), "the agent is off by default: {before:?}");
+
+        // An unrelated edit: the cached text stays.
+        launcher.max_results += 1;
+        assert!(!follow_prefix_settings(&mut ctx, &mut hint, &mut agent, &launcher, |_, id| panic!("gathered {id}")));
+        let cached = hint.get(&ctx.providers, agent, Some(400.0), 14.0);
+        assert!(std::ptr::eq(cached.as_ref(), hint.get(&ctx.providers, agent, Some(400.0), 14.0).as_ref()));
+
+        // The agent switched on: every form gains its `!`.
+        launcher.agent.enabled = true;
+        assert!(!follow_prefix_settings(&mut ctx, &mut hint, &mut agent, &launcher, |_, id| panic!("gathered {id}")), "not a provider change");
+        assert!(shown(&mut hint, &ctx, agent).iter().all(|h| h.contains("“!”")));
+
+        // A provider switched off and another's prefix changed.
+        launcher.providers.emoji.enabled = false;
+        launcher.providers.windows.prefix = "w:".into();
+        assert!(follow_prefix_settings(&mut ctx, &mut hint, &mut agent, &launcher, |_, _| {}));
+        for h in shown(&mut hint, &ctx, agent) {
+            assert!(!h.contains("“:”") && h.contains("“w:”") && h.contains("“!”"), "{h:?}");
+        }
+
+        // And the agent off again.
+        launcher.agent.enabled = false;
+        follow_prefix_settings(&mut ctx, &mut hint, &mut agent, &launcher, |_, _| {});
+        assert!(shown(&mut hint, &ctx, agent).iter().all(|h| !h.contains("“!”")));
+    }
+
+    #[test]
+    fn the_launcher_stacks_above_a_bottom_dock() {
+        use crate::launcher_place::{Join, for_config};
+        use mandara_config::workflow::{DOCK_PLUGIN_ID, LauncherPosition};
+        const SCREEN: (f32, f32) = (1920.0, 1080.0);
+        let mut cfg = mandara_config::ShellConfig::default();
+        cfg.plugins.enabled.retain(|p| p != DOCK_PLUGIN_ID);
+        // No dock: the shipped drawer pours out of the bottom screen edge.
+        let off = for_config(&cfg, SCREEN, 400.0, true, None);
+        assert_eq!((off.join, off.rect.bottom()), (Join::Flares, SCREEN.1));
+        // A bottom dock: a floating card right above it.
+        cfg.plugins.enabled.push(DOCK_PLUGIN_ID.into());
+        let dock = cfg.dock_bottom_clearance().expect("a bottom dock");
+        for pos in [LauncherPosition::BottomLeft, LauncherPosition::BottomCenter, LauncherPosition::BottomRight, LauncherPosition::Center] {
+            cfg.launcher.look.position = pos;
+            let on = for_config(&cfg, SCREEN, 400.0, true, None);
+            assert_eq!(on.join, Join::Card, "{pos:?}");
+            assert!(on.rect.bottom() <= SCREEN.1 - dock + 0.01, "{pos:?} under the dock: {on:?}");
+        }
+        assert!(!cfg.launcher_hover_enabled(), "click-only while the dock is on");
+        // Top launchers never meet a bottom dock.
+        cfg.launcher.look.position = LauncherPosition::TopCenter;
+        assert_eq!(for_config(&cfg, SCREEN, 400.0, true, None).join, Join::Flares);
+    }
+}

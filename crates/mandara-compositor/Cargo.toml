@@ -1,0 +1,34 @@
+[package]
+name = "mandara-compositor"
+description = "First-class MangoWM, Niri, Hyprland, Umbriel, Sway, River (classic), KWin, Aqueous, labwc and COSMIC drivers for Mandara Shell"
+version = "0.35.2"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+async-channel.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+mandara-config.workspace = true
+mandara-i18n.workspace = true
+# Raw peer credentials can contain PID zero across a PID namespace.
+libc.workspace = true
+# poll(2): one thread multiplexes every Mango watch stream.
+rustix = { workspace = true, features = ["event", "net"] }
+# River: its control and status protocols (generated from protocols/*.xml),
+# outputs (xdg-output) and windows (wlr foreign toplevel).
+wayland-client.workspace = true
+wayland-scanner.workspace = true
+wayland-backend.workspace = true
+wayland-protocols = { workspace = true, features = ["staging"] }
+wayland-protocols-wlr.workspace = true
+wayland-protocols-plasma.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,2 @@
+/nix/store/8lza1b8nnci8lmm4q68p0l33pg975s0q-nix-2.35.4            	  113858984
+/nix/store/pwxj9ycwqd117yra6czifh3xfx5p88lh-bash-interactive-5.3p9	   49506656

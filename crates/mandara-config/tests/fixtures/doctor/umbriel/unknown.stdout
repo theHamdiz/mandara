@@ -1,0 +1,1 @@
+{"diagnostics":[{"column":18,"file":"@FIXTURES@/umbriel/unknown.toml","line":2,"message":"unknown key general.blur_optimized","severity":"warning"},{"column":1,"file":"@FIXTURES@/umbriel/unknown.toml","line":4,"message":"unknown key frobnicate","severity":"warning"}],"path":"@FIXTURES@/umbriel/unknown.toml","valid":false}

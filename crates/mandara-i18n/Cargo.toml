@@ -1,0 +1,19 @@
+[package]
+name = "mandara-i18n"
+description = "Localization for Mandara Shell: twenty-one languages, English-keyed catalogs shipped as language packs, with English fallback"
+version = "0.37.1"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+# Catalog::parse (plugins' own catalogs, and compiling packs).
+toml.workspace = true
+# Packs are tied to the running version.
+mandara-version.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

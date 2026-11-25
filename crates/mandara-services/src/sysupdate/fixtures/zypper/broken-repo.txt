@@ -1,0 +1,13 @@
+Repository 'openSUSE-Tumbleweed-Update' is up to date.
+Retrieving repository 'broken' metadata [.error]
+Repository 'broken' is invalid.
+[broken|https://nonexistent.invalid/repo] Failed to retrieve new repository metadata.
+History:
+ - [|] Error trying to read from 'https://nonexistent.invalid/repo'
+ - Download (curl) error for 'https://nonexistent.invalid/repo/content':
+   Error code: Connection failed Curl error (6)
+   Error message: Could not resolve host: nonexistent.invalid
+Please check if the URIs defined for this repository are pointing to a valid repository.
+Skipping repository 'broken' because of the above error.
+Repository 'openSUSE-Tumbleweed-Oss' is up to date.
+Some of the repositories have not been refreshed because of an error.

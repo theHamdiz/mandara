@@ -1,0 +1,98 @@
+# Component versions and content hashes — maintained by `cargo xtask bump`.
+# A component whose current hash differs from the one recorded here has
+# changed since its last release and gets its version bumped.
+
+[mandara-app]
+kind = "binary"
+version = "0.38.5"
+hash = "8c2be1aa7195abaeb1a7cc7f04f89ee4"
+
+[mandara-compositor]
+kind = "library"
+version = "0.35.2"
+hash = "fdee6a83536f193bcec519f9db09b44f"
+
+[mandara-config]
+kind = "library"
+version = "0.36.2"
+hash = "212958ea3452be5dd0012e0c0f8bab87"
+
+[mandara-core]
+kind = "library"
+version = "0.13.6"
+hash = "58f6682f7f9c44224bce2f386177a120"
+
+[mandara-delta]
+kind = "tool"
+version = "0.6.12"
+hash = "2397a673f83711817f4441d37c1a34a7"
+
+[mandara-greeter]
+kind = "library"
+version = "0.36.5"
+hash = "9dba2cbea69819581bd39ca584c06f9f"
+
+[mandara-i18n]
+kind = "library"
+version = "0.37.1"
+hash = "d3850f433e3eed7dbbc1e7ee03995faa"
+
+[mandara-install]
+kind = "library"
+version = "0.31.1"
+hash = "a11bfa5139d020863ccf771989a7289c"
+
+[mandara-media]
+kind = "library"
+version = "0.2.19"
+hash = "4feaf2694da26f8dca2c4d98d9a2a9a9"
+
+[mandara-plugins]
+kind = "library"
+version = "0.35.3"
+hash = "523c8de11ef58da3de40513b92a87aa7"
+
+[mandara-services]
+kind = "library"
+version = "0.38.3"
+hash = "f333e37bb345eefdd1f32ca89484d7f1"
+
+[mandara-studio]
+kind = "library"
+version = "0.38.5"
+hash = "ccfeabd0151ccd7fb444009fab976033"
+
+[mandara-theme]
+kind = "library"
+version = "0.7.5"
+hash = "74e33756fb032ec0654bcd8d2c2b7be0"
+
+[mandara-ui]
+kind = "library"
+version = "0.36.4"
+hash = "e0284c34d702afdb14a4394ef9aafba7"
+
+[mandara-version]
+kind = "library"
+version = "0.4.2"
+hash = "e07d41f5e7e2057ad9366721b0d6e514"
+
+[mandara-wallgen]
+kind = "library"
+version = "0.35.3"
+hash = "6ba4ef71351c4487aa82d522f1faf750"
+
+[mandara-webp]
+kind = "library"
+version = "0.1.18"
+hash = "3831a54e156980a6336a640b93f5abf1"
+
+[plugin-moon-phase]
+kind = "plugin"
+version = "0.3.3"
+hash = "e43931150e4333c1efe54efe48e4de83"
+
+[xtask]
+kind = "tool"
+version = "0.33.1"
+hash = "eb5bbe8ce3576e12405a67ea5d3ef0e1"

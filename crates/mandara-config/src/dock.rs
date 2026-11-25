@@ -1,0 +1,1231 @@
+//! The app dock (`[dock]`, the built-in opt-in `dock` plugin): placement,
+//! pinned apps and their order, recent apps, stacks, badges, hiding and
+//! the glass it sits on.
+//!
+//! Re-exported from [`crate::workflow`] (its historical home), so
+//! `mandara_config::workflow::DockConfig` keeps working. Every numeric
+//! value has a named [`Span`] in [`ranges`]: Studio's sliders and the
+//! shell's clamps ([`DockConfig::sanitized`]) read the same bounds. Old
+//! configs load unchanged (`#[serde(default)]`); pinned ids written by
+//! older builds are cleaned up by [`DockConfig::normalize_pins`].
+
+use serde::{Deserialize, Serialize};
+
+use crate::surfaces::Span;
+
+/// Plugin id of the app dock (opt-in: on only when listed in
+/// `plugins.enabled`).
+pub const DOCK_PLUGIN_ID: &str = "dock";
+
+/// The launcher button's entry in [`DockConfig::pinned`]: it is kept, moved
+/// and removed like a pinned app, at any position. No desktop id starts
+/// with `@`.
+pub const LAUNCHER_PIN: &str = "@launcher";
+
+/// Default values of the dock settings.
+pub mod defaults {
+    /// Resting icon size: large enough that freestanding icons read clearly
+    /// on the glass without a per-icon plate.
+    pub const DOCK_ICON_PX: f32 = 56.0;
+    pub const DOCK_SPACING_PX: f32 = 6.0;
+    pub const DOCK_PADDING_PX: f32 = 8.0;
+    pub const DOCK_RADIUS_PX: f32 = 22.0;
+    /// Gap between the dock and the screen edge, logical px.
+    pub const DOCK_MARGIN_PX: f32 = 8.0;
+    pub const DOCK_OPACITY: f32 = 1.0;
+    /// Accent mixed into the glass (0 = the plain frame colour).
+    pub const DOCK_TINT: f32 = 0.0;
+    /// Peak scale of the icon under the pointer.
+    pub const DOCK_MAGNIFY: f32 = 1.55;
+    /// Icons on each side of the pointer that grow with it.
+    pub const DOCK_MAGNIFY_SPREAD: f32 = 2.2;
+    /// Opacity of pinned apps that aren't running.
+    pub const DOCK_INACTIVE_OPACITY: f32 = 0.82;
+    /// Pointer dwell before a hidden dock shows / leave delay before it hides, ms.
+    pub const DOCK_SHOW_DELAY_MS: u64 = 120;
+    pub const DOCK_HIDE_DELAY_MS: u64 = 450;
+    /// Speed of the hide / show slide (1 = the default spring).
+    pub const DOCK_HIDE_SPEED: f32 = 1.0;
+    /// Recent apps shown after the running ones (macOS shows three).
+    pub const DOCK_RECENT_COUNT: u32 = 3;
+    /// Files listed in a stack's popover.
+    pub const DOCK_STACK_ITEMS: u32 = 15;
+    /// Most files a fan shows; "Automatic" fans folders with at most this
+    /// many files and opens bigger ones as a grid (like macOS).
+    pub const DOCK_FAN_ITEMS: u32 = 12;
+    /// Icon size in the Applications grid, logical px.
+    pub const DOCK_APPS_ICON_PX: f32 = 72.0;
+    /// The stack every new dock has.
+    pub const DOCK_DOWNLOADS: &str = "~/Downloads";
+    /// Liquid glass: strength of its specular highlights and of the light
+    /// gathered inside its edges (0–1).
+    pub const DOCK_GLOSS: f32 = 0.6;
+    pub const DOCK_REFRACTION: f32 = 0.5;
+    /// How far a hovered icon rises with the Lift hover, logical px.
+    pub const DOCK_HOVER_LIFT_PX: f32 = 6.0;
+    /// Pointer rest on an icon before its name shows, ms (0: at once, as
+    /// the dock always did).
+    pub const DOCK_TOOLTIP_DELAY_MS: u64 = 0;
+}
+
+/// Named bounds of every numeric dock setting (logical px unless noted).
+pub mod ranges {
+    use super::Span;
+
+    pub const ICON_SIZE: Span = Span::new(24.0, 128.0, 1.0);
+    pub const SPACING: Span = Span::new(0.0, 24.0, 1.0);
+    pub const PADDING: Span = Span::new(2.0, 24.0, 1.0);
+    pub const RADIUS: Span = Span::new(0.0, 64.0, 1.0);
+    pub const MARGIN: Span = Span::new(0.0, 40.0, 1.0);
+    /// Glass opacity, 0–1.
+    pub const OPACITY: Span = Span::new(0.0, 1.0, 0.05);
+    /// Accent tint of the glass, 0–0.5.
+    pub const TINT: Span = Span::new(0.0, 0.5, 0.01);
+    pub const INACTIVE_OPACITY: Span = Span::new(0.3, 1.0, 0.05);
+    /// Peak magnification, × the icon size.
+    pub const MAGNIFY: Span = Span::new(1.0, 2.5, 0.05);
+    /// Neighbours that grow along, in icons.
+    pub const MAGNIFY_SPREAD: Span = Span::new(0.6, 4.0, 0.1);
+    pub const SHOW_DELAY_MS: Span = Span::new(0.0, 1000.0, 10.0);
+    pub const HIDE_DELAY_MS: Span = Span::new(0.0, 2000.0, 50.0);
+    /// Hide / show animation speed, × the default.
+    pub const HIDE_SPEED: Span = Span::new(0.25, 3.0, 0.05);
+    /// Most apps (0 = no limit).
+    pub const MAX_APPS: Span = Span::new(0.0, 30.0, 1.0);
+    pub const RECENT_COUNT: Span = Span::new(0.0, 10.0, 1.0);
+    pub const STACK_ITEMS: Span = Span::new(4.0, 40.0, 1.0);
+    /// Files in a fan (a taller fan leaves the screen).
+    pub const FAN_ITEMS: Span = Span::new(4.0, 20.0, 1.0);
+    /// Icon size in the Applications grid.
+    pub const APPS_ICON_SIZE: Span = Span::new(48.0, 128.0, 4.0);
+    /// Liquid glass highlights and inner light, 0–1.
+    pub const GLOSS: Span = Span::new(0.0, 1.0, 0.05);
+    pub const REFRACTION: Span = Span::new(0.0, 1.0, 0.05);
+    /// The Lift hover's height.
+    pub const HOVER_LIFT: Span = Span::new(0.0, 16.0, 1.0);
+    pub const TOOLTIP_DELAY_MS: Span = Span::new(0.0, 1000.0, 50.0);
+}
+
+/// Screen edge the dock sits on.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DockPosition {
+    #[default]
+    Bottom,
+    Left,
+    Right,
+}
+
+/// Where along its edge the dock sits.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DockAlignment {
+    Start,
+    #[default]
+    Center,
+    End,
+}
+
+/// When the dock hides.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DockAutoHide {
+    /// Always visible (macOS's default).
+    #[default]
+    Never,
+    /// Hidden until the pointer touches its edge ("Automatically hide and
+    /// show the Dock").
+    Always,
+    /// Hidden only while a window overlaps it (or one is fullscreen).
+    Smart,
+}
+
+/// Running-app indicator under each icon.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DockIndicator {
+    /// One dot per window (up to three).
+    #[default]
+    Dots,
+    /// A short bar that widens on the focused app.
+    Bar,
+    /// One dot per app, like macOS.
+    Dot,
+    /// A soft line of light under the app, brightest on the focused one.
+    Glow,
+    None,
+}
+
+impl DockIndicator {
+    pub const ALL: [Self; 5] = [Self::Dots, Self::Bar, Self::Dot, Self::Glow, Self::None];
+}
+
+/// What the dock is made of (`dock.material`). Both are drawn by the shell
+/// itself (rounded rectangles, inset highlights and OKLCH gradients), so
+/// they look the same on every compositor, blur or not.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DockMaterial {
+    /// The chromatic glass the dock always had: the frame colour, a 1 px
+    /// specular rim and a soft shadow.
+    #[default]
+    Classic,
+    /// Layered liquid glass: a translucent tinted body that deepens toward
+    /// its bottom, a bright specular top edge, light gathered inside its
+    /// edges and a soft lens highlight across its upper half.
+    Liquid,
+}
+
+impl DockMaterial {
+    pub const ALL: [Self; 2] = [Self::Classic, Self::Liquid];
+}
+
+/// How separators look (`dock.separator_style`, while `separator` is on).
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SeparatorStyle {
+    /// A hairline, like macOS.
+    #[default]
+    Line,
+    /// Only the gap, without a line.
+    Space,
+}
+
+impl SeparatorStyle {
+    pub const ALL: [Self; 2] = [Self::Line, Self::Space];
+}
+
+/// What the name label on hover is made of (`dock.tooltip_style`).
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TooltipStyle {
+    /// A small pill in the frame colour.
+    #[default]
+    Pill,
+    /// The dock's own material: its glass and texture.
+    Material,
+}
+
+impl TooltipStyle {
+    pub const ALL: [Self; 2] = [Self::Pill, Self::Material];
+}
+
+/// What the icon under the pointer does (`[dock.motion] hover`), on top of
+/// magnification.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum HoverMotion {
+    /// Nothing more (the dock as it always was).
+    #[default]
+    None,
+    /// It rises a little on a spring (`dock.hover_lift`).
+    Lift,
+    /// A soft plate fades in behind it.
+    Highlight,
+}
+
+impl HoverMotion {
+    pub const ALL: [Self; 3] = [Self::None, Self::Lift, Self::Highlight];
+}
+
+/// App launch feedback on the dock icon (`[dock.motion] launch`), while the
+/// app starts and until its first window maps.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum LaunchFeedback {
+    /// The icon hops (the classic dock bounce).
+    #[default]
+    Bounce,
+    /// The icon swells and settles, again and again.
+    Pulse,
+    /// Rings spread out from under the icon.
+    Ripple,
+    None,
+}
+
+impl LaunchFeedback {
+    pub const ALL: [Self; 4] = [Self::Bounce, Self::Pulse, Self::Ripple, Self::None];
+}
+
+/// How an icon asks for attention (`[dock.motion] attention`): an urgent
+/// window or a critical notification.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AttentionFeedback {
+    #[default]
+    Bounce,
+    Pulse,
+    /// A quick side-to-side jiggle.
+    Wiggle,
+    None,
+}
+
+impl AttentionFeedback {
+    pub const ALL: [Self; 4] = [Self::Bounce, Self::Pulse, Self::Wiggle, Self::None];
+}
+
+/// How running indicators come and go (`[dock.motion] indicator`).
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum IndicatorMotion {
+    /// Dots and bars grow in when an app opens and shrink away when it closes.
+    #[default]
+    Spring,
+    /// They fade in and out at full size.
+    Fade,
+    /// They appear and vanish at once.
+    None,
+}
+
+impl IndicatorMotion {
+    pub const ALL: [Self; 3] = [Self::Spring, Self::Fade, Self::None];
+}
+
+/// The app icon's answer when one of its windows minimizes
+/// (`[dock.motion] minimize`). The window's own animation belongs to the
+/// compositor.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum MinimizeFeedback {
+    /// The icon squashes into the dock and springs back.
+    #[default]
+    Dip,
+    /// The icon swells once.
+    Pulse,
+    None,
+}
+
+impl MinimizeFeedback {
+    pub const ALL: [Self; 3] = [Self::Dip, Self::Pulse, Self::None];
+}
+
+/// How icons arrive, leave and make room (`[dock.motion] items`).
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ItemMotion {
+    /// New icons grow in from nothing, removed ones shrink out, and the
+    /// others slide over on springs (also when you reorder).
+    #[default]
+    Spring,
+    /// Icons fade in and out while the others glide over.
+    Fade,
+    /// Icons appear and vanish at once.
+    None,
+}
+
+impl ItemMotion {
+    pub const ALL: [Self; 3] = [Self::Spring, Self::Fade, Self::None];
+}
+
+/// Spring constants for magnification, press, bounce and gap parting
+/// (`dock.spring_feel`). Off snaps instantly (also when Reduce Motion is on).
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DockSpringFeel {
+    /// High stiffness, short settle (~90–120 ms): Mandara's snappy default.
+    #[default]
+    Crisp,
+    /// Softer travel with a little more overshoot.
+    Fluid,
+    /// Very stiff, almost no overshoot.
+    Taut,
+    /// No spring: values jump to their targets.
+    Off,
+}
+
+impl DockSpringFeel {
+    pub const ALL: [Self; 4] = [Self::Crisp, Self::Fluid, Self::Taut, Self::Off];
+
+    /// Magnify / hover scale spring `(stiffness, damping)`.
+    /// Crisp targets ~90–120 ms settle at ζ ≈ 0.85 (no sluggish trailing).
+    pub const fn magnify(self) -> (f32, f32) {
+        match self {
+            Self::Crisp => (1900.0, 74.0),
+            Self::Fluid => (520.0, 34.0),
+            Self::Taut => (2800.0, 90.0),
+            Self::Off => (1900.0, 74.0),
+        }
+    }
+
+    /// Click press-down compression `(stiffness, damping)`.
+    pub const fn press(self) -> (f32, f32) {
+        match self {
+            Self::Crisp => (2400.0, 82.0),
+            Self::Fluid => (650.0, 38.0),
+            Self::Taut => (3200.0, 96.0),
+            Self::Off => (2400.0, 82.0),
+        }
+    }
+
+    /// Launch / attention bounce impulse `(stiffness, damping)`.
+    pub const fn bounce(self) -> (f32, f32) {
+        match self {
+            Self::Crisp => (1400.0, 48.0),
+            Self::Fluid => (360.0, 16.0),
+            Self::Taut => (2000.0, 60.0),
+            Self::Off => (1400.0, 48.0),
+        }
+    }
+
+    /// Horizontal gap parting while reordering `(stiffness, damping)`.
+    pub const fn gap(self) -> (f32, f32) {
+        match self {
+            Self::Crisp => (1600.0, 68.0),
+            Self::Fluid => (460.0, 30.0),
+            Self::Taut => (2200.0, 80.0),
+            Self::Off => (1600.0, 68.0),
+        }
+    }
+
+    /// Auto-hide slide `(stiffness, damping)` before `hide_speed` scaling.
+    pub const fn hide(self) -> (f32, f32) {
+        match self {
+            Self::Crisp => (380.0, 28.0),
+            Self::Fluid => (240.0, 24.0),
+            Self::Taut => (520.0, 36.0),
+            Self::Off => (380.0, 28.0),
+        }
+    }
+
+    /// Whether springs snap instead of integrating.
+    pub const fn instant(self) -> bool {
+        matches!(self, Self::Off)
+    }
+}
+
+/// What a left-click on a running app does (`dock.click_behavior`).
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DockClickBehavior {
+    /// Focus the app; cycle its windows when already focused; minimize when
+    /// it has one focused window (macOS-style).
+    #[default]
+    FocusCycle,
+    /// Focus when unfocused; minimize / restore the focused app's windows.
+    MinimizeRestore,
+}
+
+impl DockClickBehavior {
+    pub const ALL: [Self; 2] = [Self::FocusCycle, Self::MinimizeRestore];
+}
+
+/// How the dock shows and hides, auto-hide included (`[dock.motion] reveal`).
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DockReveal {
+    /// Slides in from its screen edge.
+    #[default]
+    Slide,
+    /// Fades in place.
+    Fade,
+    /// Grows out of its screen edge while fading in.
+    Scale,
+}
+
+impl DockReveal {
+    pub const ALL: [Self; 3] = [Self::Slide, Self::Fade, Self::Scale];
+}
+
+/// The dock's animations (`[dock.motion]`). Each is drawn from the dock's
+/// own springs and clocks; reduced motion turns all of them off and
+/// `motion.surfaces.dock` sets their speed. Older files load the defaults:
+/// the classic bounces and slide, plus animated indicators, minimizing and
+/// icons arriving or leaving.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DockMotion {
+    pub launch: LaunchFeedback,
+    pub attention: AttentionFeedback,
+    pub indicator: IndicatorMotion,
+    pub minimize: MinimizeFeedback,
+    pub items: ItemMotion,
+    pub reveal: DockReveal,
+    pub hover: HoverMotion,
+}
+
+/// Which displays show the dock.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DockDisplays {
+    #[default]
+    All,
+    /// The first output only.
+    Primary,
+    /// Only the outputs listed in `monitors`.
+    Listed,
+}
+
+/// How a stack opens.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum StackView {
+    /// Fan for a few items, grid for more (macOS "Automatic").
+    #[default]
+    Auto,
+    Fan,
+    Grid,
+    List,
+}
+
+/// Order of a stack's files.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum StackSort {
+    /// Newest first, by when the file appeared in the folder.
+    #[default]
+    DateAdded,
+    DateModified,
+    Name,
+    Kind,
+}
+
+/// What a stack's dock icon shows.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum StackDisplay {
+    /// The newest file on top of a folder (macOS "Stack").
+    #[default]
+    Stack,
+    /// The folder icon.
+    Folder,
+}
+
+/// How the Applications folder opens.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AppsView {
+    /// Large icons on a Launchpad-style grid.
+    #[default]
+    Grid,
+    /// Rows with a small icon and the app's description.
+    List,
+}
+
+/// Order of the Applications folder.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AppsOrder {
+    /// A–Z by name.
+    #[default]
+    Name,
+    /// Most used first (the launcher's frecency), then A–Z.
+    MostUsed,
+    /// Grouped under their `.desktop` category, A–Z inside.
+    Categories,
+}
+
+/// The Applications folder on the right side of the dock (`[dock.applications]`):
+/// a Launchpad-style grid of every installed app, and the drop target that
+/// installs apps.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DockApplications {
+    pub enabled: bool,
+    pub view: AppsView,
+    pub order: AppsOrder,
+    /// Icon size in the grid, logical px.
+    pub icon_size: f32,
+}
+
+impl Default for DockApplications {
+    fn default() -> Self {
+        Self { enabled: true, view: AppsView::Grid, order: AppsOrder::Name, icon_size: defaults::DOCK_APPS_ICON_PX }
+    }
+}
+
+/// A folder on the right side of the dock.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DockStack {
+    /// Folder path (`~` expands to your home).
+    pub path: String,
+    pub view: StackView,
+    pub sort: StackSort,
+    pub display: StackDisplay,
+}
+
+impl Default for DockStack {
+    fn default() -> Self {
+        Self { path: defaults::DOCK_DOWNLOADS.into(), view: StackView::default(), sort: StackSort::default(), display: StackDisplay::default() }
+    }
+}
+
+impl DockStack {
+    pub fn folder(path: &str) -> Self {
+        Self { path: path.trim().to_string(), ..Self::default() }
+    }
+
+    /// The folder with `~` expanded against `home`.
+    pub fn resolve(&self, home: &std::path::Path) -> std::path::PathBuf {
+        let p = self.path.trim();
+        match p.strip_prefix("~/") {
+            Some(rest) => home.join(rest),
+            None if p == "~" => home.to_path_buf(),
+            None => std::path::PathBuf::from(p),
+        }
+    }
+}
+
+/// The app dock (the built-in `dock` plugin).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DockConfig {
+    // ── Layout ──
+    pub position: DockPosition,
+    pub alignment: DockAlignment,
+    pub displays: DockDisplays,
+    /// Output names for [`DockDisplays::Listed`].
+    pub monitors: Vec<String>,
+    /// Only windows on the dock's own output count as running.
+    pub isolate_displays: bool,
+
+    // ── Apps ──
+    /// Pinned apps (desktop ids without `.desktop`), in order;
+    /// [`LAUNCHER_PIN`] is the launcher button.
+    pub pinned: Vec<String>,
+    pub show_running: bool,
+    /// Recently used apps that aren't pinned or running, after the running
+    /// ones ("Show suggested and recent apps in Dock").
+    pub show_recent: bool,
+    pub recent_count: u32,
+    /// Hairlines between the apps, the recent apps and the right side
+    /// (stacks, minimized windows, trash).
+    pub separator: bool,
+    /// Window-count badge on apps with two or more windows.
+    pub badges: bool,
+    /// Unread-notification count on the app's icon.
+    pub notification_badges: bool,
+    /// A progress ring from notifications that report progress.
+    pub progress_badges: bool,
+    pub indicator: DockIndicator,
+    /// Most apps shown (0 = no limit).
+    pub max_apps: u32,
+    /// The pin defaults `pinned` was written for (see [`crate::upgrade`]):
+    /// missing in older files, whose launcher button then moves into
+    /// `pinned` ([`DockConfig::upgrade_launcher_button`]).
+    #[serde(default)]
+    pub pins_version: u32,
+    /// Before 0.23: a launcher button fixed at the dock's start (or end).
+    /// [`DockConfig::upgrade_launcher_button`] moves it into `pinned` as
+    /// [`LAUNCHER_PIN`] and drops these keys.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub launcher_button: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub launcher_at_end: Option<bool>,
+    /// The Applications folder on the right side (a Launchpad-style grid
+    /// of your apps; drop apps on it to install them). Replaces the
+    /// `applications_slot` switch of 0.1, which every config saved as off
+    /// before the folder existed, so old configs get it on.
+    pub applications: DockApplications,
+    /// A trash entry at the end (drop files to trash them; right-click to
+    /// empty it).
+    pub trash: bool,
+    /// Minimized windows stay in their app's icon; off puts each one on
+    /// the right side of the dock.
+    pub minimize_to_app: bool,
+    /// A now-playing chip (album art, title, play / pause) at the dock's
+    /// end while a media player is active.
+    pub media_chip: bool,
+
+    // ── Behaviour ──
+    pub auto_hide: DockAutoHide,
+    /// Reserve its space so windows tile around it (only when never hiding).
+    pub reserve_space: bool,
+    /// Above fullscreen windows (overlay layer).
+    pub overlay: bool,
+    pub show_delay_ms: u64,
+    pub hide_delay_ms: u64,
+    /// Speed of the hide / show slide.
+    pub hide_speed: f32,
+    /// Icons bounce while their app starts ("Animate opening applications").
+    pub bounce_on_launch: bool,
+    /// Icons bounce when their app wants attention (an urgent window or a
+    /// critical notification).
+    pub bounce_on_attention: bool,
+    /// Limit launch and attention bounces to active media playback.
+    pub bounce_only_music: bool,
+    /// How launching, attention, indicators, minimizing, icons and showing /
+    /// hiding animate (`bounce_on_launch` / `bounce_on_attention` still
+    /// switch their feedback off).
+    pub motion: DockMotion,
+    /// App names above the icons on hover.
+    pub tooltips: bool,
+    /// What the name label is made of.
+    pub tooltip_style: TooltipStyle,
+    /// Pointer rest on an icon before its name shows, ms.
+    pub tooltip_delay_ms: u64,
+    /// How far a hovered icon rises with `motion.hover = "lift"`, logical px.
+    pub hover_lift: f32,
+    /// Icons grow under the pointer.
+    pub magnification: bool,
+    pub magnify: f32,
+    pub magnify_spread: f32,
+    /// Magnify / press / bounce / gap spring feel (`Crisp` by default).
+    pub spring_feel: DockSpringFeel,
+    /// Left-click on a running app: focus/cycle or minimize/restore.
+    pub click_behavior: DockClickBehavior,
+    /// Bake irregular theme icons into freestanding squircles (disk-cached).
+    pub auto_squircle: bool,
+
+    // ── Stacks ──
+    pub stacks: Vec<DockStack>,
+    /// Files listed when a stack opens.
+    pub stack_items: u32,
+    /// Most files a fan shows (Automatic fans folders this small).
+    pub fan_items: u32,
+    /// File names beside fan items and under grid icons.
+    pub stack_names: bool,
+
+    // ── Appearance ──
+    /// Classic glass or liquid glass.
+    pub material: DockMaterial,
+    /// Liquid glass: specular highlight strength (0–1).
+    pub gloss: f32,
+    /// Liquid glass: light gathered inside its edges and the lens
+    /// highlight (0–1).
+    pub refraction: f32,
+    /// Grain over the glass (`[dock.grain]`; off by default).
+    pub grain: crate::grain::Grain,
+    /// What `separator` draws.
+    pub separator_style: SeparatorStyle,
+    pub icon_size: f32,
+    pub spacing: f32,
+    pub padding: f32,
+    pub radius: f32,
+    pub margin: f32,
+    /// Background opacity (0–1).
+    pub opacity: f32,
+    /// Accent tint of the glass (0–0.5).
+    pub tint: f32,
+    /// 1 px specular rim on the glass.
+    pub rim: bool,
+    pub shadow: bool,
+    /// Opacity of pinned apps that aren't running.
+    pub inactive_opacity: f32,
+}
+
+impl Default for DockConfig {
+    fn default() -> Self {
+        Self {
+            position: DockPosition::Bottom,
+            alignment: DockAlignment::Center,
+            displays: DockDisplays::All,
+            monitors: Vec::new(),
+            isolate_displays: false,
+            pinned: [LAUNCHER_PIN, "org.gnome.Nautilus", "firefox", "com.mitchellh.ghostty", "dev.zed.Zed"].iter().map(|s| s.to_string()).collect(),
+            show_running: true,
+            show_recent: true,
+            recent_count: defaults::DOCK_RECENT_COUNT,
+            separator: true,
+            badges: true,
+            notification_badges: true,
+            progress_badges: true,
+            indicator: DockIndicator::Dots,
+            max_apps: 0,
+            pins_version: crate::upgrade::DOCK_PINS_VERSION,
+            launcher_button: None,
+            launcher_at_end: None,
+            applications: DockApplications::default(),
+            trash: true,
+            minimize_to_app: true,
+            media_chip: false,
+            auto_hide: DockAutoHide::Never,
+            reserve_space: true,
+            overlay: false,
+            show_delay_ms: defaults::DOCK_SHOW_DELAY_MS,
+            hide_delay_ms: defaults::DOCK_HIDE_DELAY_MS,
+            hide_speed: defaults::DOCK_HIDE_SPEED,
+            bounce_on_launch: true,
+            bounce_on_attention: true,
+            bounce_only_music: false,
+            motion: DockMotion::default(),
+            tooltips: true,
+            tooltip_style: TooltipStyle::Pill,
+            tooltip_delay_ms: defaults::DOCK_TOOLTIP_DELAY_MS,
+            hover_lift: defaults::DOCK_HOVER_LIFT_PX,
+            magnification: true,
+            magnify: defaults::DOCK_MAGNIFY,
+            magnify_spread: defaults::DOCK_MAGNIFY_SPREAD,
+            spring_feel: DockSpringFeel::default(),
+            click_behavior: DockClickBehavior::default(),
+            auto_squircle: true,
+            stacks: vec![DockStack::default()],
+            stack_items: defaults::DOCK_STACK_ITEMS,
+            fan_items: defaults::DOCK_FAN_ITEMS,
+            stack_names: true,
+            material: DockMaterial::Classic,
+            gloss: defaults::DOCK_GLOSS,
+            refraction: defaults::DOCK_REFRACTION,
+            grain: crate::grain::Grain::default(),
+            separator_style: SeparatorStyle::Line,
+            icon_size: defaults::DOCK_ICON_PX,
+            spacing: defaults::DOCK_SPACING_PX,
+            padding: defaults::DOCK_PADDING_PX,
+            radius: defaults::DOCK_RADIUS_PX,
+            margin: defaults::DOCK_MARGIN_PX,
+            opacity: defaults::DOCK_OPACITY,
+            tint: defaults::DOCK_TINT,
+            rim: true,
+            shadow: true,
+            inactive_opacity: defaults::DOCK_INACTIVE_OPACITY,
+        }
+    }
+}
+
+/// `id` as the dock stores it: trimmed, without `.desktop`.
+pub fn pin_id(id: &str) -> String {
+    let id = id.trim();
+    id.strip_suffix(".desktop").unwrap_or(id).to_string()
+}
+
+impl DockConfig {
+    /// The dock's resting footprint from its screen edge: margin, icons and
+    /// padding (also the exclusive zone it reserves), logical px.
+    pub fn band(&self) -> f32 {
+        self.margin + self.icon_size + self.padding * 2.0
+    }
+
+    /// Launch feedback, or [`LaunchFeedback::None`] while `bounce_on_launch`
+    /// is off.
+    pub fn launch_feedback(&self) -> LaunchFeedback {
+        if self.bounce_on_launch { self.motion.launch } else { LaunchFeedback::None }
+    }
+
+    /// Attention feedback, or [`AttentionFeedback::None`] while
+    /// `bounce_on_attention` is off.
+    pub fn attention_feedback(&self) -> AttentionFeedback {
+        if self.bounce_on_attention { self.motion.attention } else { AttentionFeedback::None }
+    }
+
+    /// Whether the dock appears on output `name` (`index` in output order).
+    pub fn shows_on(&self, name: &str, index: usize) -> bool {
+        match self.displays {
+            DockDisplays::All => true,
+            DockDisplays::Primary => index == 0,
+            DockDisplays::Listed => self.monitors.iter().any(|m| m == name),
+        }
+    }
+
+    /// Every numeric value inside its [`ranges`] span (hand-edited configs
+    /// never break the layout).
+    pub fn sanitized(&self) -> Self {
+        let d = Self::default();
+        let ms = |v: u64, r: Span| (v as f32).clamp(r.min, r.max) as u64;
+        let count = |v: u32, r: Span| (v as f32).clamp(r.min, r.max) as u32;
+        Self {
+            icon_size: ranges::ICON_SIZE.clamp(self.icon_size, d.icon_size),
+            spacing: ranges::SPACING.clamp(self.spacing, d.spacing),
+            padding: ranges::PADDING.clamp(self.padding, d.padding),
+            radius: ranges::RADIUS.clamp(self.radius, d.radius),
+            margin: ranges::MARGIN.clamp(self.margin, d.margin),
+            opacity: ranges::OPACITY.clamp(self.opacity, d.opacity),
+            tint: ranges::TINT.clamp(self.tint, d.tint),
+            inactive_opacity: ranges::INACTIVE_OPACITY.clamp(self.inactive_opacity, d.inactive_opacity),
+            magnify: ranges::MAGNIFY.clamp(self.magnify, d.magnify),
+            magnify_spread: ranges::MAGNIFY_SPREAD.clamp(self.magnify_spread, d.magnify_spread),
+            hide_speed: ranges::HIDE_SPEED.clamp(self.hide_speed, d.hide_speed),
+            gloss: ranges::GLOSS.clamp(self.gloss, d.gloss),
+            refraction: ranges::REFRACTION.clamp(self.refraction, d.refraction),
+            grain: self.grain.sanitized(),
+            hover_lift: ranges::HOVER_LIFT.clamp(self.hover_lift, d.hover_lift),
+            tooltip_delay_ms: ms(self.tooltip_delay_ms, ranges::TOOLTIP_DELAY_MS),
+            show_delay_ms: ms(self.show_delay_ms, ranges::SHOW_DELAY_MS),
+            hide_delay_ms: ms(self.hide_delay_ms, ranges::HIDE_DELAY_MS),
+            max_apps: count(self.max_apps, ranges::MAX_APPS),
+            recent_count: count(self.recent_count, ranges::RECENT_COUNT),
+            stack_items: count(self.stack_items, ranges::STACK_ITEMS),
+            fan_items: count(self.fan_items, ranges::FAN_ITEMS),
+            applications: DockApplications { icon_size: ranges::APPS_ICON_SIZE.clamp(self.applications.icon_size, d.applications.icon_size), ..self.applications.clone() },
+            ..self.clone()
+        }
+    }
+
+    // ── Pins ──
+
+    /// Index of pinned app `id` (case-insensitive, `.desktop` optional).
+    pub fn pin_index(&self, id: &str) -> Option<usize> {
+        let id = pin_id(id);
+        self.pinned.iter().position(|p| p.eq_ignore_ascii_case(&id))
+    }
+
+    pub fn is_pinned(&self, id: &str) -> bool {
+        self.pin_index(id).is_some()
+    }
+
+    /// Pins `id` at the end (a pinned app stays where it is). Returns
+    /// whether it was added.
+    pub fn pin(&mut self, id: &str) -> bool {
+        !self.is_pinned(id) && self.pin_at(id, usize::MAX)
+    }
+
+    /// Pins `id` at `index` (clamped), or moves it there when already
+    /// pinned. Returns whether anything changed.
+    pub fn pin_at(&mut self, id: &str, index: usize) -> bool {
+        let id = pin_id(id);
+        if id.is_empty() {
+            return false;
+        }
+        let before = self.pinned.clone();
+        if let Some(i) = self.pin_index(&id) {
+            self.pinned.remove(i);
+        }
+        let at = index.min(self.pinned.len());
+        self.pinned.insert(at, id);
+        self.pinned != before
+    }
+
+    /// Unpins `id`. Returns whether it was pinned.
+    pub fn unpin(&mut self, id: &str) -> bool {
+        match self.pin_index(id) {
+            Some(i) => {
+                self.pinned.remove(i);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// "Keep in Dock": pins or unpins `id`. Returns whether it is pinned now.
+    pub fn toggle_pin(&mut self, id: &str) -> bool {
+        if self.unpin(id) {
+            false
+        } else {
+            self.pin(id)
+        }
+    }
+
+    /// Moves the pin at `from` to `to` (both clamped).
+    pub fn move_pin(&mut self, from: usize, to: usize) -> bool {
+        if from >= self.pinned.len() || self.pinned.is_empty() {
+            return false;
+        }
+        let to = to.min(self.pinned.len() - 1);
+        if from == to {
+            return false;
+        }
+        let v = self.pinned.remove(from);
+        self.pinned.insert(to, v);
+        true
+    }
+
+    /// Whether the launcher button is in the dock.
+    pub fn launcher_pinned(&self) -> bool {
+        self.is_pinned(LAUNCHER_PIN)
+    }
+
+    /// Moves the launcher button of a dock written before
+    /// [`crate::upgrade::DOCK_PINS_VERSION`] into the pinned list where it
+    /// showed: first, or after the pinned apps with `launcher_at_end`. It
+    /// was on unless `launcher_button = false`, also in hand-written
+    /// tables that only list `pinned`. The old keys are dropped and the
+    /// version recorded, so it runs once and a button you remove later
+    /// stays removed. Returns whether anything changed.
+    pub fn upgrade_launcher_button(&mut self) -> bool {
+        let (button, at_end) = (self.launcher_button.take(), self.launcher_at_end.take());
+        // A table without `pinned` loads the default list, launcher first.
+        let default_list = self.pinned == Self::default().pinned;
+        if self.pins_version >= crate::upgrade::DOCK_PINS_VERSION {
+            return button.is_some() || at_end.is_some();
+        }
+        self.pins_version = crate::upgrade::DOCK_PINS_VERSION;
+        if button == Some(false) {
+            // Switched off: a table without `pinned` loads the default list,
+            // which already holds the launcher.
+            self.pinned.retain(|p| p != LAUNCHER_PIN);
+        } else if !self.launcher_pinned() {
+            self.pin_at(LAUNCHER_PIN, if at_end.unwrap_or(false) { usize::MAX } else { 0 });
+        } else if default_list && at_end == Some(true) {
+            // The default list's launcher goes where the old setting put it.
+            self.pinned.retain(|p| p != LAUNCHER_PIN);
+            self.pin_at(LAUNCHER_PIN, usize::MAX);
+        }
+        true
+    }
+
+    /// Cleans pins written by older builds: trims them, drops `.desktop`
+    /// suffixes, empty entries and duplicates (first wins, any case), and
+    /// drops stacks without a folder. Returns whether anything changed.
+    pub fn normalize_pins(&mut self) -> bool {
+        let before = (self.pinned.clone(), self.stacks.len());
+        let mut out: Vec<String> = Vec::with_capacity(self.pinned.len());
+        for p in &self.pinned {
+            let id = pin_id(p);
+            if !id.is_empty() && !out.iter().any(|o| o.eq_ignore_ascii_case(&id)) {
+                out.push(id);
+            }
+        }
+        self.pinned = out;
+        self.stacks.retain(|s| !s.path.trim().is_empty());
+        (self.pinned.clone(), self.stacks.len()) != before
+    }
+
+    // ── Stacks ──
+
+    /// Adds a stack for `folder` (no duplicates). Returns whether it was added.
+    pub fn add_stack(&mut self, folder: &str) -> bool {
+        let folder = folder.trim().trim_end_matches('/');
+        if folder.is_empty() || self.stacks.iter().any(|s| s.path.trim().trim_end_matches('/') == folder) {
+            return false;
+        }
+        self.stacks.push(DockStack::folder(folder));
+        true
+    }
+
+    /// Removes the stack for `folder` (or at that index, when it parses as
+    /// one). Returns whether one was removed.
+    pub fn remove_stack(&mut self, folder: &str) -> bool {
+        let folder = folder.trim().trim_end_matches('/');
+        let before = self.stacks.len();
+        match self.stacks.iter().position(|s| s.path.trim().trim_end_matches('/') == folder) {
+            Some(i) => {
+                self.stacks.remove(i);
+            }
+            None => {
+                if let Ok(i) = folder.parse::<usize>()
+                    && i < self.stacks.len()
+                {
+                    self.stacks.remove(i);
+                }
+            }
+        }
+        self.stacks.len() != before
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pin_unpin_toggle() {
+        let mut d = DockConfig { pinned: vec!["firefox".into()], ..DockConfig::default() };
+        assert!(d.pin("org.demo.Alpha.desktop"));
+        assert_eq!(d.pinned, ["firefox", "org.demo.Alpha"]);
+        assert!(!d.pin("ORG.DEMO.ALPHA"), "already pinned (any case)");
+        assert!(d.is_pinned("org.demo.alpha.desktop"));
+        assert!(!d.toggle_pin("firefox"), "toggle unpins a pinned app");
+        assert_eq!(d.pinned, ["org.demo.Alpha"]);
+        assert!(d.toggle_pin("firefox"), "and pins it again");
+        assert_eq!(d.pinned, ["org.demo.Alpha", "firefox"]);
+        assert!(d.unpin("firefox") && !d.unpin("firefox"));
+        assert!(!d.pin("  "), "blank ids are refused");
+    }
+
+    #[test]
+    fn pin_order_and_moves() {
+        let mut d = DockConfig { pinned: vec!["a".into(), "b".into(), "c".into()], ..DockConfig::default() };
+        assert!(d.pin_at("x", 1));
+        assert_eq!(d.pinned, ["a", "x", "b", "c"]);
+        assert!(d.pin_at("c", 0), "pinning a pinned app moves it");
+        assert_eq!(d.pinned, ["c", "a", "x", "b"]);
+        assert!(d.move_pin(0, 99));
+        assert_eq!(d.pinned, ["a", "x", "b", "c"]);
+        assert!(!d.move_pin(9, 0) && !d.move_pin(1, 1));
+    }
+
+    #[test]
+    fn old_pinned_lists_migrate() {
+        // A pre-0.2 dock: ids with `.desktop`, blanks and duplicates, no
+        // stacks key at all.
+        let old: DockConfig = toml::from_str("pinned = [\"firefox.desktop\", \" org.gnome.Nautilus \", \"\", \"Firefox\"]\nauto_hide = \"smart\"\n").unwrap();
+        assert_eq!(old.auto_hide, DockAutoHide::Smart, "explicit choices survive");
+        assert_eq!(old.stacks, vec![DockStack::default()], "new keys take their defaults");
+        let mut m = old.clone();
+        assert!(m.normalize_pins());
+        assert_eq!(m.pinned, ["firefox", "org.gnome.Nautilus"]);
+        assert!(!m.normalize_pins(), "idempotent");
+        let text = toml::to_string(&m).unwrap();
+        assert_eq!(toml::from_str::<DockConfig>(&text).unwrap(), m);
+    }
+
+    /// The launcher button of older builds lands in the pinned list where
+    /// it showed, once; the old keys are not written back.
+    #[test]
+    fn the_old_launcher_button_moves_into_the_pinned_list() {
+        let old = |text: &str| -> DockConfig { toml::from_str(text).unwrap() };
+        // At the start: every config saved both keys explicitly.
+        let mut start = old("pinned = [\"firefox\", \"dev.zed.Zed\"]\nlauncher_button = true\nlauncher_at_end = false\n");
+        assert!(start.upgrade_launcher_button());
+        assert_eq!(start.pinned, [LAUNCHER_PIN, "firefox", "dev.zed.Zed"]);
+        assert!(!start.upgrade_launcher_button(), "runs once");
+        let text = toml::to_string(&start).unwrap();
+        assert!(!text.contains("launcher_button") && !text.contains("launcher_at_end"), "{text}");
+        let mut reloaded: DockConfig = toml::from_str(&text).unwrap();
+        assert!(!reloaded.upgrade_launcher_button());
+        assert_eq!(reloaded, start);
+        // At the end: after the pinned apps.
+        let mut end = old("pinned = [\"firefox\"]\nlauncher_button = true\nlauncher_at_end = true\n");
+        assert!(end.upgrade_launcher_button());
+        assert_eq!(end.pinned, ["firefox", LAUNCHER_PIN]);
+        // Switched off: not pinned.
+        let mut off = old("pinned = [\"firefox\"]\nlauncher_button = false\nlauncher_at_end = true\n");
+        assert!(off.upgrade_launcher_button());
+        assert_eq!(off.pinned, ["firefox"]);
+        // Switched off in a table without `pinned`: the default list (which
+        // holds the launcher) loads, and the button is still removed.
+        let mut off_default = old("launcher_button = false\n");
+        assert!(off_default.upgrade_launcher_button());
+        assert!(!off_default.launcher_pinned(), "{:?}", off_default.pinned);
+        // At the end in a table without `pinned`: after the default apps.
+        let mut end_default = old("launcher_at_end = true\n");
+        assert!(end_default.upgrade_launcher_button());
+        assert_eq!(end_default.pinned.last().map(String::as_str), Some(LAUNCHER_PIN), "{:?}", end_default.pinned);
+        // Only the position saved: the button was on (its old default).
+        let mut only_end = old("pinned = [\"firefox\"]\nlauncher_at_end = true\n");
+        assert!(only_end.upgrade_launcher_button());
+        assert_eq!(only_end.pinned, ["firefox", LAUNCHER_PIN]);
+        // Already pinned (moved by you): it stays where it is.
+        let mut kept = old("pinned = [\"firefox\", \"@launcher\", \"dev.zed.Zed\"]\nlauncher_button = true\n");
+        assert!(kept.upgrade_launcher_button());
+        assert_eq!(kept.pinned, ["firefox", LAUNCHER_PIN, "dev.zed.Zed"]);
+        // A hand-written table that lists only the apps: the button was on.
+        let mut listed = old("pinned = [\"firefox\"]\n");
+        assert!(listed.upgrade_launcher_button());
+        assert_eq!(listed.pinned, [LAUNCHER_PIN, "firefox"]);
+        // Written by this version: nothing moves, stray old keys go.
+        let mut current = old("pins_version = 1\npinned = [\"firefox\"]\n");
+        assert!(!current.upgrade_launcher_button());
+        let mut stray = old("pins_version = 1\npinned = [\"firefox\"]\nlauncher_button = true\n");
+        assert!(stray.upgrade_launcher_button());
+        assert_eq!((stray.pinned.as_slice(), stray.launcher_button), (["firefox".to_string()].as_slice(), None));
+        // A new dock has it first; removing it sticks across a save.
+        let mut fresh = DockConfig::default();
+        assert_eq!(fresh.pinned.first().map(String::as_str), Some(LAUNCHER_PIN));
+        assert!(fresh.unpin(LAUNCHER_PIN));
+        let mut saved: DockConfig = toml::from_str(&toml::to_string(&fresh).unwrap()).unwrap();
+        assert!(!saved.upgrade_launcher_button() && !saved.launcher_pinned());
+    }
+
+    /// The launcher button moves, pins and unpins at any index like an app.
+    #[test]
+    fn the_launcher_button_takes_any_position() {
+        let mut d = DockConfig { pinned: vec!["a".into(), "b".into(), "c".into()], ..DockConfig::default() };
+        assert!(d.pin_at(LAUNCHER_PIN, 0));
+        assert_eq!(d.pinned, [LAUNCHER_PIN, "a", "b", "c"]);
+        assert!(d.pin_at(LAUNCHER_PIN, 2), "moved to the middle");
+        assert_eq!(d.pinned, ["a", "b", LAUNCHER_PIN, "c"]);
+        assert!(d.move_pin(2, 99), "and to the end");
+        assert_eq!(d.pinned, ["a", "b", "c", LAUNCHER_PIN]);
+        assert!(!d.toggle_pin(LAUNCHER_PIN) && !d.launcher_pinned(), "toggled off");
+        assert!(d.toggle_pin(LAUNCHER_PIN) && d.pinned.last().map(String::as_str) == Some(LAUNCHER_PIN), "and back on at the end");
+        assert!(!d.pin(LAUNCHER_PIN), "never twice");
+        assert!(!d.normalize_pins(), "a valid pin");
+    }
+
+    #[test]
+    fn the_applications_folder_comes_on_over_the_old_switch() {
+        // 0.1 saved `applications_slot = false` into every config.
+        let old: DockConfig = toml::from_str("applications_slot = false\nstack_items = 9\n").unwrap();
+        assert!(old.applications.enabled, "the folder is on by default");
+        assert_eq!((old.applications.view, old.applications.order), (AppsView::Grid, AppsOrder::Name));
+        assert_eq!(old.fan_items, defaults::DOCK_FAN_ITEMS);
+        let off: DockConfig = toml::from_str("[applications]\nenabled = false\norder = \"most-used\"\n").unwrap();
+        assert!(!off.applications.enabled);
+        assert_eq!(off.applications.order, AppsOrder::MostUsed);
+        let wild = DockConfig { fan_items: 500, applications: DockApplications { icon_size: 4.0, ..Default::default() }, ..DockConfig::default() }.sanitized();
+        assert_eq!(wild.fan_items, ranges::FAN_ITEMS.max as u32);
+        assert_eq!(wild.applications.icon_size, ranges::APPS_ICON_SIZE.min);
+    }
+
+    #[test]
+    fn sanitized_clamps_to_ranges() {
+        let wild = DockConfig { icon_size: 900.0, opacity: f32::NAN, magnify: 0.2, recent_count: 99, hide_delay_ms: 60_000, ..DockConfig::default() };
+        let s = wild.sanitized();
+        assert_eq!(s.icon_size, ranges::ICON_SIZE.max);
+        assert_eq!(s.opacity, defaults::DOCK_OPACITY);
+        assert_eq!(s.magnify, ranges::MAGNIFY.min);
+        assert_eq!(s.recent_count, ranges::RECENT_COUNT.max as u32);
+        assert_eq!(s.hide_delay_ms, ranges::HIDE_DELAY_MS.max as u64);
+        assert_eq!(DockConfig::default().sanitized(), DockConfig::default(), "defaults sit inside their ranges");
+    }
+
+    #[test]
+    fn stacks_add_remove_and_resolve() {
+        let mut d = DockConfig::default();
+        assert!(!d.add_stack("~/Downloads/"), "no duplicates");
+        assert!(d.add_stack("~/Documents"));
+        assert_eq!(d.stacks.len(), 2);
+        assert_eq!(d.stacks[1].resolve(std::path::Path::new("/home/u")), std::path::PathBuf::from("/home/u/Documents"));
+        assert_eq!(DockStack::folder("/srv/x").resolve(std::path::Path::new("/home/u")), std::path::PathBuf::from("/srv/x"));
+        assert!(d.remove_stack("0"));
+        assert_eq!(d.stacks[0].path, "~/Documents");
+        assert!(d.remove_stack("~/Documents") && d.stacks.is_empty());
+    }
+
+    #[test]
+    fn old_dock_tables_load_the_default_motion() {
+        // A dock table from before `[dock.motion]` existed.
+        let old: DockConfig = toml::from_str("bounce_on_launch = true\nhide_speed = 1.5\n").unwrap();
+        assert_eq!(old.motion, DockMotion::default());
+        assert_eq!(old.launch_feedback(), LaunchFeedback::Bounce, "the classic bounce");
+        assert_eq!(old.attention_feedback(), AttentionFeedback::Bounce);
+        assert_eq!(old.motion.reveal, DockReveal::Slide, "the classic slide");
+        // The old switches still turn their feedback off, whatever the style.
+        let off: DockConfig = toml::from_str("bounce_on_launch = false\nbounce_on_attention = false\n[motion]\nlaunch = \"ripple\"\nattention = \"wiggle\"\n").unwrap();
+        assert_eq!((off.motion.launch, off.motion.attention), (LaunchFeedback::Ripple, AttentionFeedback::Wiggle));
+        assert_eq!(off.launch_feedback(), LaunchFeedback::None);
+        assert_eq!(off.attention_feedback(), AttentionFeedback::None);
+        // A partial table fills the rest from the defaults, and round-trips.
+        let partial: DockConfig = toml::from_str("[motion]\nreveal = \"scale\"\nitems = \"none\"\n").unwrap();
+        assert_eq!(partial.motion, DockMotion { reveal: DockReveal::Scale, items: ItemMotion::None, ..DockMotion::default() });
+        let back: DockConfig = toml::from_str(&toml::to_string(&partial).unwrap()).unwrap();
+        assert_eq!(back, partial);
+        assert_eq!(DockConfig::default().sanitized().motion, DockMotion::default());
+    }
+
+    #[test]
+    fn dock_motion_ids_are_kebab_case_and_complete() {
+        fn ids<T: Serialize>(all: &[T]) -> Vec<String> {
+            all.iter().map(|v| serde_json::to_value(v).unwrap().as_str().unwrap().to_string()).collect()
+        }
+        assert_eq!(ids(&LaunchFeedback::ALL), ["bounce", "pulse", "ripple", "none"]);
+        assert_eq!(ids(&AttentionFeedback::ALL), ["bounce", "pulse", "wiggle", "none"]);
+        assert_eq!(ids(&IndicatorMotion::ALL), ["spring", "fade", "none"]);
+        assert_eq!(ids(&MinimizeFeedback::ALL), ["dip", "pulse", "none"]);
+        assert_eq!(ids(&ItemMotion::ALL), ["spring", "fade", "none"]);
+        assert_eq!(ids(&DockReveal::ALL), ["slide", "fade", "scale"]);
+        assert_eq!(ids(&DockSpringFeel::ALL), ["crisp", "fluid", "taut", "off"]);
+        assert_eq!(ids(&DockClickBehavior::ALL), ["focus-cycle", "minimize-restore"]);
+    }
+
+    #[test]
+    fn old_docks_load_crisp_springs_and_auto_squircle() {
+        let old: DockConfig = toml::from_str("icon_size = 48\nmagnification = true\n").unwrap();
+        assert_eq!(old.spring_feel, DockSpringFeel::Crisp);
+        assert_eq!(old.click_behavior, DockClickBehavior::FocusCycle);
+        assert!(old.auto_squircle);
+        assert_eq!(DockConfig::default().icon_size, defaults::DOCK_ICON_PX);
+        assert_eq!(DockSpringFeel::Crisp.magnify(), (1900.0, 74.0));
+        assert!(DockSpringFeel::Off.instant());
+    }
+
+    /// A dock table from before materials, grain, hover and name labels
+    /// loads exactly the look it had; the new values clamp and round-trip.
+    #[test]
+    fn old_dock_tables_keep_their_look() {
+        let old: DockConfig = toml::from_str("opacity = 0.8\nrim = true\nindicator = \"bar\"\n[motion]\nlaunch = \"pulse\"\n").unwrap();
+        assert_eq!(old.material, DockMaterial::Classic);
+        assert!(!old.grain.is_on());
+        assert_eq!((old.separator_style, old.tooltip_style, old.tooltip_delay_ms), (SeparatorStyle::Line, TooltipStyle::Pill, 0));
+        assert_eq!(old.motion.hover, HoverMotion::None, "no hover feedback unless chosen");
+        assert_eq!(old.motion.launch, LaunchFeedback::Pulse);
+        let wild = DockConfig { gloss: 7.0, refraction: -1.0, hover_lift: 99.0, tooltip_delay_ms: 90_000, grain: crate::grain::Grain { amount: 3.0, ..crate::grain::Grain::with_style(crate::grain::GrainStyle::Film) }, ..DockConfig::default() }.sanitized();
+        assert_eq!((wild.gloss, wild.refraction, wild.hover_lift), (ranges::GLOSS.max, ranges::REFRACTION.min, ranges::HOVER_LIFT.max));
+        assert_eq!(wild.tooltip_delay_ms, ranges::TOOLTIP_DELAY_MS.max as u64);
+        assert_eq!(wild.grain.amount, crate::grain::ranges::AMOUNT.max);
+        let liquid: DockConfig = toml::from_str("material = \"liquid\"\nindicator = \"glow\"\n[grain]\nstyle = \"paper\"\n[motion]\nhover = \"lift\"\n").unwrap();
+        assert_eq!((liquid.material, liquid.indicator, liquid.grain.style, liquid.motion.hover), (DockMaterial::Liquid, DockIndicator::Glow, crate::grain::GrainStyle::Paper, HoverMotion::Lift));
+        assert_eq!(toml::from_str::<DockConfig>(&toml::to_string(&liquid).unwrap()).unwrap(), liquid);
+    }
+
+    #[test]
+    fn display_filter() {
+        let mut d = DockConfig::default();
+        assert!(d.shows_on("DP-1", 3));
+        d.displays = DockDisplays::Primary;
+        assert!(d.shows_on("DP-1", 0) && !d.shows_on("DP-2", 1));
+        d.displays = DockDisplays::Listed;
+        d.monitors = vec!["HDMI-A-1".into()];
+        assert!(d.shows_on("HDMI-A-1", 1) && !d.shows_on("DP-1", 0));
+    }
+}

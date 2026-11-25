@@ -1,0 +1,22 @@
+id = "pharos-night"
+name = "Pharos Night"
+description = "The ancient lighthouse: a luminous beam across deep night navy and harbour lights."
+signature = true
+
+[dark]
+surface = "#070b19"
+surface_variant = "#101a32"
+on_surface = "#e7ecff"
+primary = "#ffd56e"
+secondary = "#7eabff"
+tertiary = "#ff92b4"
+error = "#ff7a85"
+
+[light]
+surface = "#f5f7ff"
+surface_variant = "#e5eafb"
+on_surface = "#0d152f"
+primary = "#855f00"
+secondary = "#2a5ec2"
+tertiary = "#b4306a"
+error = "#b3261e"

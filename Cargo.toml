@@ -1,0 +1,297 @@
+[workspace]
+resolver = "2"
+# Example plugins build on their own for wasm32-wasip2; the delta-update
+# tool is its own root so plugin authors can `cargo install` it alone.
+exclude = ["plugins", "tools/mandara-delta", "vendor/xkbcommon"]
+members = [
+    "crates/mandara-app",
+    "crates/mandara-compositor",
+    "crates/mandara-core",
+    "crates/mandara-plugins",
+    "crates/mandara-services",
+    "crates/mandara-studio",
+    "crates/mandara-config",
+    "crates/mandara-theme",
+    "crates/mandara-ui",
+    "crates/mandara-i18n",
+    "crates/mandara-greeter",
+    "crates/mandara-media",
+    "crates/mandara-wallgen",
+    "crates/mandara-install",
+    "crates/mandara-version",
+    "crates/mandara-webp",
+    "xtask",
+]
+
+[workspace.package]
+edition = "2024"
+license = "GPL-3.0-or-later"
+authors = ["Mandara Shell contributors"]
+repository = "https://github.com/theHamdiz/mandara"
+
+# Warnings are errors, everywhere: rustc's and clippy's default set. Every
+# crate opts in with `[lints] workspace = true`; fix the cause rather than
+# allowing a lint, and when an allow is truly right, put it on the item with
+# its reason (`#[expect(lint, reason = "…")]`).
+[workspace.lints.rust]
+warnings = "deny"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+# GPUI views are built by small free functions that take the palette, the
+# panel context and a handful of values, and hand callbacks around as
+# `Rc<dyn Fn(…)>`: these two style lints would only push that into structs
+# made for one call.
+too_many_arguments = "allow"
+type_complexity = "allow"
+
+[workspace.dependencies]
+# Internal crates
+mandara-core = { path = "crates/mandara-core" }
+mandara-config = { path = "crates/mandara-config" }
+mandara-theme = { path = "crates/mandara-theme" }
+mandara-compositor = { path = "crates/mandara-compositor" }
+mandara-services = { path = "crates/mandara-services" }
+mandara-i18n = { path = "crates/mandara-i18n" }
+mandara-version = { path = "crates/mandara-version" }
+mandara-plugins = { path = "crates/mandara-plugins" }
+mandara-ui = { path = "crates/mandara-ui" }
+mandara-studio = { path = "crates/mandara-studio" }
+mandara-greeter = { path = "crates/mandara-greeter" }
+# Pure-Rust video pipeline (WebM / IVF, AV1 via rav1d): wallpapers and the greeter.
+mandara-media = { path = "crates/mandara-media" }
+# Procedural wallpaper engine (styles, palettes, lossless output, AV1 loops).
+mandara-wallgen = { path = "crates/mandara-wallgen" }
+# Lossless WebP encoder (wallpapers, embedded plugin icons); no dependencies.
+mandara-webp = { path = "crates/mandara-webp" }
+mandara-install = { path = "crates/mandara-install" }
+# Delta-update format (own root so plugin authors can `cargo install` it);
+# the shell uses the apply side only, release tooling adds `create`.
+mandara-delta = { path = "tools/mandara-delta", default-features = false, features = ["archive", "verify"] }
+semver = "1"
+
+# UI — upstream Zed GPUI pinned to a revision with native zwlr_layer_shell_v1
+# windows and `Window::set_input_region`.
+gpui = { git = "https://github.com/zed-industries/zed", rev = "ec86047d67acd6fddd81392f44ed6ebcc6e7f531", default-features = false, features = ["wayland", "font-kit"] }
+gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "ec86047d67acd6fddd81392f44ed6ebcc6e7f531", default-features = false, features = ["wayland", "font-kit"] }
+# The renderer itself (patched below): Mandara sets its font fallback chain.
+gpui_wgpu = { git = "https://github.com/zed-industries/zed", rev = "ec86047d67acd6fddd81392f44ed6ebcc6e7f531", default-features = false, features = ["vulkan", "gles"] }
+wayland-protocols-plasma = { version = "0.3.12", features = ["client"] }
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+wayland-protocols-misc = { version = "0.3", features = ["client"] }
+# Client code for protocols no crate carries (River's control and status).
+wayland-scanner = "0.31"
+wayland-backend = "0.3"
+wl-clipboard-rs = "0.9"
+# 0.8: the version GPUI's Linux platform (gpui_linux) links; 0.9 would be a
+# second copy of the bindings.
+xkbcommon = { version = "0.8", default-features = false }
+smallvec = { version = "1.16.4", features = ["union", "const_new"] }
+
+# Color science & imaging
+# No `approx`: the tests compare plain floats, never palette types.
+palette = { version = "0.7.7", default-features = false, features = ["std"] }
+material-colors = { version = "0.5", features = ["std", "quantize"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+
+# Config & serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+minijinja = { version = "3.1.0", default-features = false, features = ["builtins", "debug", "serde", "fuel"] }
+# Read + serde everywhere; crates that also write TOML add `display`.
+toml = { version = "1.2", default-features = false, features = ["std", "parse", "serde"] }
+# Format-preserving edits of a user's TOML config (Umbriel's include line).
+toml_edit = "0.25.18"
+roxmltree = "0.21.2"
+ron = { version = "0.12.3", default-features = false }
+full_moon = { version = "3.0.0", default-features = false, features = ["lua54"] }
+# The RustCrypto 0.10 generation (digest 0.10) that GPUI's oo7 keyring client
+# and cranelift / wasmtime-environ link: sha2 0.11 would add a second
+# digest / block-buffer / sha2 stack.
+sha2 = "0.10"
+# Legacy catalog checksums detect mixed download revisions; SHA-256 names the installed package.
+md-5 = { version = "0.10", default-features = false }
+# SHA-512 crypt ($6$) password hashes for AccountsService.SetPassword.
+# 0.5: 0.6 is on sha2 0.11 (see sha2 above).
+sha-crypt = { version = "0.5", default-features = false }
+# Test-only: the emitters' tests parse the generated niri drop-ins.
+kdl = { version = "6", default-features = false, features = ["v1"] }
+# No `macos_fsevent`: inotify is the Linux backend and is always built.
+notify = { version = "8", default-features = false }
+# 6: the version GPUI's font-kit links. On Linux it is identical to 7, which
+# only changes Windows' `preference_dir`, so one copy is linked.
+dirs = "6"
+
+# Wi-Fi share QR codes (hotspot, saved networks): pure Rust, no deps.
+qrcodegen = "1.8"
+
+# Search
+nucleo-matcher = "0.3"
+# Notes: CommonMark + GFM (tables, task lists) with source offsets; pure Rust.
+pulldown-cmark = { version = "0.13.6", default-features = false }
+pulseaudio = "0.3"
+# Pure-Rust MP3 decoding only: the Qur'an plugin's per-ayah recitation.
+symphonia = { version = "0.5.5", default-features = false, features = ["mp3", "aac", "ogg", "vorbis"] }
+rustfft = "6.4"
+flate2 = "1.1"
+# No `xattr`: Mandara never restores extended attributes when unpacking.
+tar = { version = "0.4", default-features = false }
+
+# System
+rustix = { version = "1", features = ["fs", "param", "process"] }
+libc = "0.2"
+# 0.11 (with resvg / usvg 0.46): the versions vendored GPUI draws SVGs with.
+# resvg 0.49 (tiny-skia 0.12) needs fontdb 0.24 and harfrust 0.12 for SVG
+# text, but cosmic-text 0.19 (the latest; GPUI's text stack) is on fontdb 0.23
+# and harfrust 0.5, so moving would link two copies of both.
+tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd"] }
+rav1e = { version = "0.8", default-features = false, features = ["threading"] }
+# Pure-Rust AV1 decoder (dav1d port); `asm` off so no nasm / C toolchain.
+rav1d = { version = "1.1", default-features = false, features = ["bitdepth_8", "bitdepth_16"] }
+# Lean: no `parallel-compilation` (a rayon pool for a one-time compile —
+# compiled plugins are cached on disk), no cache/pooling/profiling/WASI-p1.
+wasmtime = { version = "50", default-features = false, features = ["runtime", "cranelift", "component-model", "std"] }
+wasmtime-wasi = { version = "50", default-features = false }
+
+# Async & errors
+# 5: the major GPUI's accesskit, ashpd and oo7 use, so one zbus is linked.
+zbus = { version = "5", default-features = false, features = ["async-io"] }
+# Share GPUI's keyring client and async runtime rather than linking another.
+oo7 = { git = "https://github.com/zed-industries/oo7", rev = "731c1215edb6905876c6137ab300428c7b8d7c13", default-features = false, features = ["async-std", "native_crypto"] }
+async-io = "2"
+pure-onnx-ocr = "0.3.2"
+# The ONNX engine pure-onnx-ocr runs on (same version, nothing new to
+# build): the wallpaper depth model (mandara-services depth_model.rs).
+tract-onnx = "0.23.10"
+ureq = { version = "3.5.1", default-features = false, features = ["rustls"] }
+async-channel = "2.5"
+futures = "0.3"
+anyhow = "1"
+thiserror = "2"
+# Share GPUI's lock implementation for service state; tract uses its own
+# newer generation internally.
+parking_lot = "0.12"
+
+# Time
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "unstable-locales"] }
+
+# Browser CSS declarations; color parsing and serialization are not used.
+cssparser = { version = "0.38", default-features = false, features = ["fast_match_byte"] }
+
+# CLI & logging
+clap = { version = "4.6.7", features = ["derive"] }
+# No `attributes`: Mandara has no `#[instrument]` spans.
+tracing = { version = "0.1", default-features = false, features = ["std"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# Test-only
+tempfile = "3"
+approx = "0.5"
+
+# Patches that upstream GPUI's workspace relies on (git deps don't inherit them).
+[patch.crates-io]
+xkbcommon = { path = "vendor/xkbcommon" }
+async-task = { git = "https://github.com/zed-industries/async-task.git", rev = "015845a19fc31752c02367567d3b8900a406f9da" }
+calloop = { git = "https://github.com/zed-industries/calloop", rev = "3759371fee14c40066d64777e2a36b6ffcc22590" }
+khronos-egl = { git = "https://github.com/zed-industries/khronos-egl", rev = "42214b36347b108fd9630ca6254b96dde59e04fe" }
+# The OCR engine without the `image` crate's default features, which turned
+# on every codec (and the AVIF encoder) in the whole shell:
+# vendor/pure-onnx-ocr/MANDARA-PATCHES.md.
+pure-onnx-ocr = { path = "vendor/pure-onnx-ocr" }
+
+# GPUI's wgpu renderer with Mandara's per-window GPU-memory patches (lazy,
+# bounding-box-sized path/MSAA textures, tunable MSAA / present mode, smaller
+# initial atlas + instance buffers): vendor/gpui_wgpu/MANDARA-PATCHES.md.
+[patch."https://github.com/zed-industries/zed"]
+gpui_wgpu = { path = "vendor/gpui_wgpu" }
+# GPUI core with rounded content masks, so `.rounded_*().overflow_hidden()`
+# clips children to the rounded shape, and `.hover()` that repaints on pointer
+# motion without an `.id()`: vendor/gpui/MANDARA-PATCHES.md.
+gpui = { path = "vendor/gpui" }
+# GPUI's Linux platform with touchscreen input: the Wayland client asks the
+# seat for `wl_touch` and feeds GPUI's own touch recognizer, so taps click and
+# swipes scroll on the bar, panels and Studio (#130):
+# vendor/gpui_linux/MANDARA-PATCHES.md.
+gpui_linux = { path = "vendor/gpui_linux" }
+
+[profile.dev]
+# GPUI is painfully slow unoptimized; keep our code debuggable but deps fast.
+# Line tables only (backtraces, profilers) and split DWARF keep the debug
+# binary and incremental link small: full DWARF for GPUI + wgpu + wasmtime
+# made a 2 GB executable.
+opt-level = 1
+debug = "line-tables-only"
+split-debuginfo = "unpacked"
+
+[profile.dev.package."*"]
+# Dependencies: optimized enough that GPUI renders smoothly in debug builds,
+# without the compile time of opt-level 3, and no debug info at all.
+opt-level = 2
+debug = false
+
+# wgpu turns on Vulkan validation layers (and their per-draw CPU cost and
+# memory) whenever `wgpu-types` is built with debug assertions; debug builds
+# should profile like the shipped binary.
+[profile.dev.package.wgpu-types]
+debug-assertions = false
+
+# The AV1 decoder (video wallpapers, login-screen videos) is ~300× slower with debug checks.
+[profile.dev.package.rav1d]
+opt-level = 3
+debug-assertions = false
+overflow-checks = false
+
+# Its YUV conversion runs per pixel of every video frame: optimized in
+# debug builds too, so video wallpapers play smoothly there.
+[profile.dev.package.mandara-media]
+opt-level = 3
+
+# Unit and integration tests need assertions, not the interactive renderer's
+# optimization level. Keep their cold build small; sandbox binaries use dev.
+[profile.test]
+opt-level = 0
+debug = false
+incremental = false
+
+[profile.test.package."*"]
+# Basic optimization keeps dependency artifacts smaller than unoptimized
+# machine code, without dev's more expensive optimization passes.
+opt-level = 1
+debug = false
+
+[profile.release]
+# Maximum runtime performance: whole-program (fat) LTO, a single codegen
+# unit so LLVM sees every inlining opportunity, and no debug info / symbols
+# in the shipped binary. Panics unwind (not abort): plugin calls
+# (`mandara-plugins::guard`) and the PAM conversation (`lock/pam.rs`) rely on
+# `catch_unwind` so a faulty plugin is caught at its boundary instead of
+# killing the shell.
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "unwind"
+debug = false
+strip = "symbols"
+incremental = false
+overflow-checks = false
+debug-assertions = false
+
+[profile.release.package."*"]
+opt-level = 3
+codegen-units = 1
+
+# `cargo native` (see .cargo/config.toml): release + tuned for this CPU
+# (AVX2/AVX-512, etc.). Not portable to older machines.
+[profile.release-native]
+inherits = "release"
+
+# `cargo profiling`: release code with line tables and symbols kept, for
+# `perf record` / heaptrack / samply. Thin LTO so it links in seconds.
+[profile.profiling]
+inherits = "release"
+lto = "thin"
+codegen-units = 16
+debug = "line-tables-only"
+strip = "none"

@@ -1,0 +1,45 @@
+@nix {"action":"msg","level":4,"msg":"evaluating file '«nix-internal»/derivation-internal.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '/tmp/d.nix'"}
+@nix {"action":"stop","id":532575944705}
+@nix {"action":"start","fields":["/nix/store/67f6srw3y84fj99b75zgsff0ivznh870-mandara-demo","https://cache.nixos.org"],"id":532575944706,"level":4,"parent":0,"text":"querying info about '/nix/store/67f6srw3y84fj99b75zgsff0ivznh870-mandara-demo' on 'https://cache.nixos.org'","type":109}
+@nix {"action":"start","fields":["/nix/store/wim097v97613f2nzs1hk71rbk16nbimg-mandara-dep","https://cache.nixos.org"],"id":532575944708,"level":4,"parent":0,"text":"querying info about '/nix/store/wim097v97613f2nzs1hk71rbk16nbimg-mandara-dep' on 'https://cache.nixos.org'","type":109}
+@nix {"action":"stop","id":532575944708}
+@nix {"action":"stop","id":532575944709}
+@nix {"action":"stop","id":532575944706}
+@nix {"action":"stop","id":532575944707}
+@nix {"action":"stop","id":532575944704}
+@nix {"action":"msg","level":3,"msg":"these 2 derivations will be built:"}
+@nix {"action":"msg","level":3,"msg":"  /nix/store/4vamsg393v3yj3q4cmj68l0124km0saa-mandara-demo.drv"}
+@nix {"action":"msg","level":3,"msg":"  /nix/store/dz0a7n6nfa0xib04d36aa49aazfqbqgm-mandara-dep.drv"}
+@nix {"action":"start","id":532575944710,"level":0,"parent":0,"text":"","type":102}
+@nix {"action":"start","id":532575944711,"level":0,"parent":0,"text":"","type":104}
+@nix {"action":"start","id":532575944712,"level":0,"parent":0,"text":"","type":103}
+@nix {"action":"result","fields":[0,0,0,0],"id":532575944711,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":532575944712,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":532575944711,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":532575944712,"type":105}
+@nix {"action":"result","fields":[0,1,0,0],"id":532575944711,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":532575944712,"type":105}
+@nix {"action":"result","fields":[0,2,0,0],"id":532575944711,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":532575944712,"type":105}
+@nix {"action":"start","fields":["/nix/store/4vamsg393v3yj3q4cmj68l0124km0saa-mandara-demo.drv","",1,1],"id":532575944713,"level":3,"parent":0,"text":"building '/nix/store/4vamsg393v3yj3q4cmj68l0124km0saa-mandara-demo.drv'","type":105}
+@nix {"action":"result","fields":[0,2,1,0],"id":532575944711,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":532575944712,"type":105}
+@nix {"action":"result","fields":["building demo"],"id":532575944713,"type":101}
+@nix {"action":"result","fields":["step 1"],"id":532575944713,"type":101}
+@nix {"action":"result","fields":["step 2"],"id":532575944713,"type":101}
+@nix {"action":"result","fields":["step 3"],"id":532575944713,"type":101}
+@nix {"action":"result","fields":[1,3,0,0],"id":532575944711,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":532575944712,"type":105}
+@nix {"action":"stop","id":532575944713}
+@nix {"action":"start","fields":["/nix/store/dz0a7n6nfa0xib04d36aa49aazfqbqgm-mandara-dep.drv","",1,1],"id":532575944714,"level":3,"parent":0,"text":"building '/nix/store/dz0a7n6nfa0xib04d36aa49aazfqbqgm-mandara-dep.drv'","type":105}
+@nix {"action":"result","fields":[1,2,1,0],"id":532575944711,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":532575944712,"type":105}
+@nix {"action":"result","fields":[2,3,0,0],"id":532575944711,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":532575944712,"type":105}
+@nix {"action":"stop","id":532575944714}
+@nix {"action":"stop","id":532575944712}
+@nix {"action":"stop","id":532575944711}
+@nix {"action":"stop","id":532575944710}
+/nix/store/67f6srw3y84fj99b75zgsff0ivznh870-mandara-demo
+/nix/store/wim097v97613f2nzs1hk71rbk16nbimg-mandara-dep

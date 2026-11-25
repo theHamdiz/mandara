@@ -1,0 +1,21 @@
+id = "night-citrine"
+name = "Night Citrine"
+description = "Deep midnight navy with pale citrine, soft lavender and mint."
+
+[dark]
+surface = "#070722"
+surface_variant = "#11112d"
+on_surface = "#f3edf7"
+primary = "#fff59b"
+secondary = "#a9aefe"
+tertiary = "#9bfece"
+error = "#fd4663"
+
+[light]
+surface = "#f6f5fb"
+surface_variant = "#e7e6f3"
+on_surface = "#141432"
+primary = "#6b6200"
+secondary = "#4a4fa3"
+tertiary = "#00704a"
+error = "#b3261e"

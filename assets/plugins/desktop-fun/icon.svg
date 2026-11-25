@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <title>Desktop fun</title>
+  <defs>
+    <linearGradient id="desktop-fun-tile" x1="64" y1="40" x2="448" y2="496" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0E3A5B"/><stop offset="1" stop-color="#072238"/>
+    </linearGradient>
+    <radialGradient id="desktop-fun-light" cx="0" cy="0" r="1" gradientTransform="translate(98 48) rotate(45) scale(440 354)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".22"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="desktop-fun-rim" x1="76" y1="28" x2="446" y2="482" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".72"/><stop offset=".5" stop-color="#FFFFFF" stop-opacity=".08"/><stop offset="1" stop-color="#FFFFFF" stop-opacity=".24"/>
+    </linearGradient>
+    <clipPath id="desktop-fun-tile-clip"><rect x="16" y="16" width="480" height="480" rx="108"/></clipPath>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#desktop-fun-tile)"/>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#desktop-fun-light)"/>
+  <g clip-path="url(#desktop-fun-tile-clip)">
+    <path d="M-28 324C126 476 349 518 544 274v238H-28z" fill="#FFFFFF" opacity=".045"/>
+  </g>
+  <rect x="19" y="19" width="474" height="474" rx="105" stroke="url(#desktop-fun-rim)" stroke-width="2"/>
+  <path d="M120 253V169c0-11 7-14 15-7l58 43c23-9 50-9 74 0l42-30c8-6 15-3 15 8v71c12 16 19 35 19 55 0 54-46 86-113 86s-113-32-113-86c0-21 2-39 3-56Z" fill="#5EEAD4"/>
+  <g fill="#072238">
+    <circle cx="183" cy="278" r="14"/>
+    <circle cx="272" cy="278" r="14"/>
+    <path d="M218 310c-5-5-1-11 5-11h10c6 0 10 6 5 11l-10 10Z"/>
+  </g>
+  <circle cx="376" cy="138" r="42" stroke="#F2D7A6" stroke-width="22"/>
+  <path d="M356 138a20 20 0 0 1 20-20" stroke="#5EEAD4" stroke-width="10" stroke-linecap="round"/>
+</svg>

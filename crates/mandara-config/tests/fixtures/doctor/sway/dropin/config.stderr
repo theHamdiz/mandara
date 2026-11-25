@@ -1,0 +1,11 @@
+00:00:00.002 [INFO] [sway/config.c:422] Loading config from @FIXTURES@/sway/dropin/config.conf
+00:00:00.002 [INFO] [sway/commands.c:381] Config command: bindsym Mod4+t exec foot
+00:00:00.002 [INFO] [sway/commands.c:404] After replacement: bindsym Mod4+t exec foot
+00:00:00.002 [INFO] [sway/commands.c:381] Config command: include mandara/generated/sway.conf
+00:00:00.002 [INFO] [sway/commands.c:404] After replacement: include mandara/generated/sway.conf
+00:00:00.003 [INFO] [sway/config.c:422] Loading config from @FIXTURES@/sway/dropin/mandara/generated/sway.conf
+00:00:00.003 [INFO] [sway/commands.c:381] Config command: for_window [app_id="^x$"] floating enable
+00:00:00.003 [INFO] [sway/commands.c:404] After replacement: for_window [app_id="^x$"] floating enable
+00:00:00.003 [INFO] [sway/commands.c:381] Config command: blur enable
+00:00:00.003 [ERROR] [sway/config.c:814] Error on line 3 'blur enable': Unknown/invalid command 'blur' (@FIXTURES@/sway/dropin/mandara/generated/sway.conf)
+00:00:00.003 [ERROR] [sway/config.c:440] Error(s) loading config!

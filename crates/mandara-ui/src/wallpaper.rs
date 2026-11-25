@@ -1,0 +1,2409 @@
+//! Wallpaper: Mandara draws the desktop background itself (one
+//! `mandara-wallpaper` background layer per output, crossfading between
+//! images) and offers a minimal picker — wallpapers floating centred on a
+//! light veil, the focused one large in the middle — with thumbnails cached under
+//! `~/.cache/mandara/thumbnails/` by bounded jobs on GPUI's background
+//! executor.
+
+use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use gpui::{
+    AnyElement, App, AppContext as _, Task, BoxShadow, Context, Entity, FocusHandle, FontWeight, Global, InteractiveElement, IntoElement, KeyDownEvent,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ObjectFit, ParentElement, Render, ScrollEvent, StatefulInteractiveElement, Styled,
+    StyledImage as _, Window, div, img, point, prelude::FluentBuilder as _, px,
+};
+use mandara_config::ConfigStore;
+use mandara_core::{FrameClock, SpringConfig, SpringValue, ToGpui};
+use mandara_i18n::{t, tf};
+use mandara_services::wallhaven::{self, Wall};
+use mandara_theme::{SchemeVariant, ThemeSource};
+
+use crate::dismiss::KeepInside as _;
+use crate::first_frame::{self, FirstFrame};
+use crate::fonts::fonts;
+use crate::icons::icon;
+use crate::kit::text;
+use crate::shell::frame_color;
+use crate::style::ClipRounded as _;
+use crate::state::{ShellState, config, shell, update_config};
+
+mod cache;
+
+/// An online wallpaper is prefetched once the pointer rests on it this long (network politeness).
+const PREFETCH_DWELL: Duration = Duration::from_millis(450);
+/// Online search waits this long after the last keystroke (API rate politeness).
+const SEARCH_DEBOUNCE: Duration = Duration::from_millis(600);
+
+/// Image files the library lists (video clips: [`mandara_media::VIDEO_EXTENSIONS`]).
+const EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "webp"];
+const THUMB_W: u32 = 720;
+const THUMB_H: u32 = 450;
+/// Re-encode quality of picker thumbnails.
+const THUMB_QUALITY: u8 = 82;
+/// Re-encode quality of display copies (wallpapers larger than the output).
+const DISPLAY_QUALITY: u8 = 92;
+/// Re-encode quality of a video wallpaper's poster (its first frame, shown
+/// while it crossfades in and wherever a still is needed): high enough
+/// that the hand-over to the live frames is invisible.
+const POSTER_QUALITY: u8 = 95;
+
+// ── Library ──────────────────────────────────────────────────────────────
+
+/// Whether `path` is a wallpaper the library lists: an image, or an AV1
+/// video clip (`.webm`, `.mkv`, `.ivf`).
+pub fn is_wallpaper(path: &Path) -> bool {
+    path.extension().and_then(|x| x.to_str()).is_some_and(|x| EXTENSIONS.contains(&x.to_ascii_lowercase().as_str())) || mandara_media::is_video(path)
+}
+
+/// Whether `path` is a video wallpaper (by extension).
+pub fn is_video(path: &Path) -> bool {
+    mandara_media::is_video(path)
+}
+
+/// Wallpapers (images and video clips) directly inside `dir` (and one
+/// level of sub-folders), sorted by name.
+pub fn list(dir: &Path) -> Vec<PathBuf> {
+    list_depth(dir, 1)
+}
+
+/// [`list`] looking `depth` levels of (non-hidden) sub-folders deep.
+pub fn list_depth(dir: &Path, depth: u8) -> Vec<PathBuf> {
+    fn scan(dir: &Path, depth: u8, out: &mut Vec<PathBuf>) {
+        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        for e in entries.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                if depth > 0 && !p.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')) {
+                    scan(&p, depth - 1, out);
+                }
+            } else if is_wallpaper(&p) {
+                out.push(p);
+            }
+        }
+    }
+    let mut out = Vec::new();
+    scan(dir, depth, &mut out);
+    out.sort_by_key(|p| p.file_name().map(|n| n.to_string_lossy().to_lowercase()));
+    out
+}
+
+pub fn directory(cx: &App) -> PathBuf {
+    mandara_config::paths::wallpaper_dir(&config(cx).read(cx).get().wallpaper.directory)
+}
+
+/// A cache key that changes when the file does.
+pub(crate) fn cache_key(path: &Path, tag: &str) -> String {
+    let meta = std::fs::metadata(path).ok();
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    path.hash(&mut h);
+    tag.hash(&mut h);
+    meta.as_ref().map(|m| m.len()).hash(&mut h);
+    meta.and_then(|m| m.modified().ok()).and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs()).hash(&mut h);
+    format!("{:016x}.jpg", h.finish())
+}
+
+/// Center-crops `img` to `w:h` and resizes it to exactly `w × h`.
+pub(crate) fn cover(img: &image::DynamicImage, w: u32, h: u32) -> image::DynamicImage {
+    let (iw, ih) = (img.width().max(1), img.height().max(1));
+    let target = w as f32 / h as f32;
+    let (cw, ch) = if iw as f32 / ih as f32 > target { ((ih as f32 * target) as u32, ih) } else { (iw, (iw as f32 / target) as u32) };
+    shrink_region(img, ((iw - cw) / 2, (ih - ch) / 2, cw.max(1), ch.max(1)), w, h)
+}
+
+/// From this much smaller on, a picture is box-averaged straight to its
+/// size instead of resampled: the same anti-aliased result for a large
+/// shrink, without the float buffer of `w × source height × 16` bytes a
+/// two-pass resize allocates (265 MB to bring an 8K picture to 4K).
+const BOX_SHRINK: f32 = 1.25;
+
+/// `img` resized to exactly `w × h` (see [`shrink_region`]).
+pub fn shrink(img: &image::DynamicImage, w: u32, h: u32) -> image::DynamicImage {
+    shrink_region(img, (0, 0, img.width(), img.height()), w, h)
+}
+
+/// The `(x, y, width, height)` region of `img`, resized to exactly
+/// `w × h`. A large shrink reads the region in place (no cropped copy) and
+/// box-averages it; anything else (an upscale) is resampled from the
+/// region in place, one row at a time ([`crate::resample::triangle`]).
+pub(crate) fn shrink_region(img: &image::DynamicImage, (x, y, cw, ch): (u32, u32, u32, u32), w: u32, h: u32) -> image::DynamicImage {
+    use image::{DynamicImage, GenericImageView as _, imageops};
+    let (w, h) = (w.max(1), h.max(1));
+    if (cw as f32) < w as f32 * BOX_SHRINK || (ch as f32) < h as f32 * BOX_SHRINK {
+        return crate::resample::triangle(img, (x, y, cw, ch), w, h);
+    }
+    match img {
+        DynamicImage::ImageRgb8(b) => DynamicImage::ImageRgb8(imageops::thumbnail(&*b.view(x, y, cw, ch), w, h)),
+        DynamicImage::ImageRgba8(b) => DynamicImage::ImageRgba8(imageops::thumbnail(&*b.view(x, y, cw, ch), w, h)),
+        other => DynamicImage::ImageRgba8(imageops::thumbnail(&*other.view(x, y, cw, ch), w, h)),
+    }
+}
+
+/// `img` scaled to fit within `max_w × max_h`, keeping its shape (like
+/// [`image::DynamicImage::resize`], through [`shrink`]).
+pub fn fit_within(img: &image::DynamicImage, max_w: u32, max_h: u32) -> image::DynamicImage {
+    let scale = (max_w as f32 / img.width().max(1) as f32).min(max_h as f32 / img.height().max(1) as f32);
+    shrink(img, (img.width() as f32 * scale).round() as u32, (img.height() as f32 * scale).round() as u32)
+}
+
+pub(crate) fn save_jpeg(img: &image::DynamicImage, out: &Path, quality: u8) -> Result<(), String> {
+    cache::write(out, |writer| image::codecs::jpeg::JpegEncoder::new_with_quality(writer, quality).encode_image(&img.to_rgb8()).map_err(|e| e.to_string()))
+}
+
+/// A picker thumbnail (cached); a video's comes from its first frame.
+pub fn thumbnail(path: &Path) -> Result<PathBuf, String> {
+    thumbnail_in(path, &mandara_config::paths::cache_dir())
+}
+
+/// [`thumbnail`] with the cache under `cache`.
+pub fn thumbnail_in(path: &Path, cache: &Path) -> Result<PathBuf, String> {
+    let out = cache.join("thumbnails").join(cache_key(path, &format!("thumb{THUMB_W}")));
+    if out.exists() {
+        return Ok(out);
+    }
+    let img = open_still(path)?;
+    save_jpeg(&cover(&img, THUMB_W, THUMB_H), &out, THUMB_QUALITY)?;
+    Ok(out)
+}
+
+/// Longest edge of a [`preview`] (a large card at 1.5× fits in it).
+const PREVIEW_EDGE: u32 = 1600;
+/// Re-encode quality of previews.
+const PREVIEW_QUALITY: u8 = 88;
+
+/// A wallpaper shown large (Studio's current-wallpaper card): a cached,
+/// uncropped copy at most [`PREVIEW_EDGE`] on its longest side, and what
+/// the file is.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Preview {
+    pub file: PathBuf,
+    /// The wallpaper's own size in pixels.
+    pub size: (u32, u32),
+    pub video: bool,
+    pub bytes: u64,
+}
+
+/// Makes (or finds) the [`Preview`] of `path`. Blocking: call it off the
+/// UI thread.
+pub fn preview(path: &Path) -> Result<Preview, String> {
+    let video = mandara_media::is_video(path);
+    let bytes = std::fs::metadata(path).map_err(|e| format!("{}: {e}", path.display()))?.len();
+    let size = if video {
+        mandara_media::Demuxer::open(path).map(|d| d.info()).map(|i| (i.width, i.height)).map_err(|e| format!("{}: {e}", path.display()))?
+    } else {
+        image::image_dimensions(path).map_err(|e| format!("{}: {e}", path.display()))?
+    };
+    let file = mandara_config::paths::cache_dir().join("thumbnails").join(cache_key(path, &format!("preview{PREVIEW_EDGE}")));
+    if !file.exists() {
+        let img = open_still(path)?;
+        let img = if img.width().max(img.height()) > PREVIEW_EDGE { std::sync::Arc::new(fit_within(&img, PREVIEW_EDGE, PREVIEW_EDGE)) } else { img };
+        save_jpeg(&img, &file, PREVIEW_QUALITY)?;
+    }
+    Ok(Preview { file, size, video, bytes })
+}
+
+/// Decodes a wallpaper as a picture: the image itself, or a video's first
+/// frame. A picture is decoded once for everyone reading it at the same
+/// time ([`mandara_theme::material::open_shared`]).
+pub fn open_still(path: &Path) -> Result<std::sync::Arc<image::DynamicImage>, String> {
+    if mandara_media::is_video(path) {
+        return mandara_media::first_frame(path).map(|frame| std::sync::Arc::new(image::DynamicImage::ImageRgba8(frame)));
+    }
+    mandara_theme::material::open_shared(path).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// Width of the frosted copy (the GPU stretches it; the blur hides it).
+const FROSTED_W: u32 = 640;
+const FROSTED_SIGMA: f32 = 9.0;
+
+/// Where the frosted copy of a wallpaper stands ([`frosted`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Frost {
+    /// The blurred copy, ready to draw.
+    Ready(PathBuf),
+    /// Being made in the background; ask again shortly.
+    Making,
+    /// This wallpaper can't be read (it isn't retried until it changes).
+    Unavailable,
+}
+
+/// A small, heavily blurred copy of `path` for frosted glass (the main
+/// menu): its cached file when it exists, else made once in the background
+/// (callers redraw shortly and ask again).
+pub fn frosted(path: &Path) -> Frost {
+    use std::collections::HashSet;
+    use std::sync::Mutex;
+    static MAKING: Mutex<Option<PathBuf>> = Mutex::new(None);
+    static FAILED: Mutex<Option<HashSet<PathBuf>>> = Mutex::new(None);
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    path.hash(&mut h);
+    std::fs::metadata(path).and_then(|m| m.modified()).ok().hash(&mut h);
+    let out = mandara_config::paths::cache_dir().join("frosted").join(format!("{:016x}.png", h.finish()));
+    if out.is_file() {
+        return Frost::Ready(out);
+    }
+    if FAILED.lock().ok().is_some_and(|f| f.as_ref().is_some_and(|f| f.contains(&out))) {
+        return Frost::Unavailable;
+    }
+    let Ok(mut making) = MAKING.lock() else { return Frost::Unavailable };
+    if making.as_ref() == Some(&out) {
+        return Frost::Making;
+    }
+    *making = Some(out.clone());
+    let src = path.to_path_buf();
+    std::thread::spawn(move || {
+        let made = (|| -> Result<(), String> {
+            let img = open_still(&src)?.thumbnail(FROSTED_W, FROSTED_W).to_rgb8();
+            let blurred = image::imageops::blur(&img, FROSTED_SIGMA);
+            cache::write(&out, |writer| image::DynamicImage::ImageRgb8(blurred).write_to(writer, image::ImageFormat::Png).map_err(|e| e.to_string()))
+        })();
+        if let Err(e) = made {
+            tracing::debug!("frosted wallpaper: {e}");
+            if let Ok(mut f) = FAILED.lock() {
+                f.get_or_insert_with(HashSet::new).insert(out.clone());
+            }
+        }
+        if let Ok(mut m) = MAKING.lock() {
+            *m = None;
+        }
+    });
+    Frost::Making
+}
+
+/// Largest copy shared with the login screen (it fills the screen with
+/// a gentle zoom; 1440p covers it without a multi-megabyte file).
+const LOGIN_SHARE_MAX: (u32, u32) = (2560, 1600);
+const LOGIN_SHARE_QUALITY: u8 = 88;
+
+/// Keeps a copy of your wallpaper where Mandara Login can show it when
+/// your account is picked (shell process). Off with
+/// `wallpaper.share_with_login = false`; nothing happens until Mandara
+/// Login's shared folder exists.
+pub fn init_login_share(cx: &mut App) {
+    let last: std::rc::Rc<std::cell::RefCell<Option<PathBuf>>> = Default::default();
+    let share = move |cx: &mut App| {
+        let c = config(cx).read(cx).snapshot();
+        if !c.wallpaper.share_with_login {
+            return;
+        }
+        let Some(shown) = mandara_config::desktop::effective_wallpaper(c.wallpaper.path.as_ref(), &c.wallpaper.variants, None, c.theme.mode.is_dark()) else { return };
+        if last.borrow().as_ref() == Some(&shown) {
+            return;
+        }
+        *last.borrow_mut() = Some(shown.clone());
+        cx.background_executor()
+            .spawn(async move {
+                if let Err(e) = share_with_login(&shown, Path::new(mandara_config::paths::LOGIN_WALLPAPER_DIR)) {
+                    tracing::debug!("login screen wallpaper: {e}");
+                }
+            })
+            .detach();
+    };
+    share(cx);
+    cx.observe(&config(cx), move |_, cx| share(cx)).detach();
+}
+
+/// Writes `path` (a picture or a video's first frame) into `dir` as this
+/// user's login wallpaper: a JPEG at most [`LOGIN_SHARE_MAX`], replaced
+/// atomically.
+fn share_with_login(path: &Path, dir: &Path) -> Result<(), String> {
+    use std::os::unix::fs::OpenOptionsExt as _;
+    if !dir.is_dir() || rustix::fs::access(dir, rustix::fs::Access::WRITE_OK).is_err() {
+        return Ok(());
+    }
+    let user = std::env::var("USER").ok().filter(|u| !u.is_empty() && !u.contains('/')).ok_or("no user name")?;
+    let uid = rustix::process::getuid().as_raw();
+    let img = open_still(path)?;
+    let img = if img.width() > LOGIN_SHARE_MAX.0 || img.height() > LOGIN_SHARE_MAX.1 { std::sync::Arc::new(fit_within(&img, LOGIN_SHARE_MAX.0, LOGIN_SHARE_MAX.1)) } else { img };
+    let target = mandara_config::paths::login_wallpaper_target(dir, &user, uid);
+    let tmp = dir.join(format!(".{user}.{uid}.tmp"));
+    let _ = std::fs::remove_file(&tmp);
+    let file = std::fs::OpenOptions::new().write(true).create_new(true).mode(0o644).open(&tmp).map_err(|e| format!("{}: {e}", tmp.display()))?;
+    let mut out = std::io::BufWriter::new(file);
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, LOGIN_SHARE_QUALITY).encode_image(&img.to_rgb8()).map_err(|e| e.to_string())?;
+    drop(out);
+    std::fs::rename(&tmp, &target).map_err(|e| format!("{}: {e}", target.display()))
+}
+
+/// The file to read when a wallpaper is needed as a picture (fill copies,
+/// the lock screen, previews): the image itself, or for a video its
+/// poster, the first frame cached under `~/.cache/mandara/posters/`.
+pub fn still(path: &Path) -> Result<PathBuf, String> {
+    still_in(path, &mandara_config::paths::cache_dir())
+}
+
+/// [`still`] with the cache under `cache`.
+pub fn still_in(path: &Path, cache: &Path) -> Result<PathBuf, String> {
+    if !mandara_media::is_video(path) {
+        return Ok(path.to_path_buf());
+    }
+    let out = cache.join("posters").join(cache_key(path, "poster"));
+    if !out.exists() {
+        save_jpeg(&*open_still(path)?, &out, POSTER_QUALITY)?;
+    }
+    Ok(out)
+}
+
+/// [`still`] for the UI thread, which must never decode video: the image
+/// itself, or a video's poster when it is already cached. A missing poster is
+/// generated once on a background thread (shown from the next render on); a
+/// video that cannot be decoded is remembered and not tried again.
+pub fn still_ready(path: &Path) -> Option<PathBuf> {
+    static TRIED: std::sync::Mutex<Option<HashSet<PathBuf>>> = std::sync::Mutex::new(None);
+    if !mandara_media::is_video(path) {
+        return Some(path.to_path_buf());
+    }
+    let poster = mandara_config::paths::cache_dir().join("posters").join(cache_key(path, "poster"));
+    if poster.exists() {
+        return Some(poster);
+    }
+    let first_try = TRIED.lock().unwrap_or_else(std::sync::PoisonError::into_inner).get_or_insert_with(HashSet::new).insert(path.to_path_buf());
+    if first_try {
+        let path = path.to_path_buf();
+        std::thread::Builder::new()
+            .name("mandara-poster".into())
+            .spawn(move || {
+                if let Err(e) = still(&path) {
+                    tracing::warn!("poster for {}: {e}", path.display());
+                }
+            })
+            .map_err(|e| tracing::warn!("poster thread: {e}"))
+            .ok();
+    }
+    None
+}
+
+/// Horizontal lean of a slice: the top edge sits this fraction of the
+/// height to the right of the bottom edge.
+pub const SHEAR: f32 = 0.2;
+
+/// A wallpaper rendered as a slanted slice (`w × h` box plus the lean):
+/// anti-aliased parallelogram with transparent corners, cached as PNG.
+pub fn slant(path: &Path, w: u32, h: u32) -> Result<PathBuf, String> {
+    use tiny_skia::{FillRule, FilterQuality, IntSize, Paint, PathBuilder, Pattern, Pixmap, SpreadMode, Transform};
+    let dir = mandara_config::paths::cache_dir().join("slices");
+    let out = dir.join(cache_key(path, &format!("slant{w}x{h}")).replace(".jpg", ".png"));
+    if out.exists() {
+        return Ok(out);
+    }
+    let src = if w <= THUMB_W && h <= THUMB_H { std::sync::Arc::new(image::open(thumbnail(path)?).map_err(|e| format!("{}: {e}", path.display()))?) } else { open_still(path)? };
+    let cov = cover(&src, w, h).to_rgba8();
+    let off = (h as f32 * SHEAR).round() as u32;
+    let size = IntSize::from_wh(w, h).ok_or("bad size")?;
+    // Opaque photos: straight RGBA equals premultiplied.
+    let source = Pixmap::from_vec(cov.into_raw(), size).ok_or("bad source")?;
+    let mut canvas = Pixmap::new(w + off, h).ok_or("bad canvas")?;
+    let mut pb = PathBuilder::new();
+    pb.move_to(off as f32, 0.0);
+    pb.line_to((w + off) as f32, 0.0);
+    pb.line_to(w as f32, h as f32);
+    pb.line_to(0.0, h as f32);
+    pb.close();
+    let shape = pb.finish().ok_or("bad path")?;
+    // x' = x + off − SHEAR·y: the photo leans with its frame.
+    let paint = Paint { anti_alias: true, shader: Pattern::new(source.as_ref(), SpreadMode::Pad, FilterQuality::Bilinear, 1.0, Transform::from_row(1.0, 0.0, -SHEAR, 1.0, off as f32, 0.0)), ..Paint::default() };
+    canvas.fill_path(&shape, &paint, FillRule::Winding, Transform::identity(), None);
+    // Back to straight alpha for PNG.
+    let mut rgba = canvas.take();
+    for px in rgba.as_chunks_mut::<4>().0 {
+        let a = px[3] as u32;
+        if a > 0 && a < 255 {
+            for c in &mut px[..3] {
+                *c = ((*c as u32 * 255 + a / 2) / a).min(255) as u8;
+            }
+        }
+    }
+    let img = image::RgbaImage::from_raw(w + off, h, rgba).ok_or("bad output")?;
+    cache::write(&out, |writer| image::DynamicImage::ImageRgba8(img).write_to(writer, image::ImageFormat::Png).map_err(|e| e.to_string()))?;
+    let _ = prune(&dir, 400 * 1024 * 1024);
+    Ok(out)
+}
+
+/// Set when pruning removed fitted images, so the worker forgets where
+/// they were (a remembered path to a deleted file would never be redone).
+static FIT_PRUNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Keeps a cache directory under `limit` bytes, oldest files first.
+/// Returns whether any file was removed.
+fn prune(dir: &Path, limit: u64) -> bool {
+    let Ok(entries) = std::fs::read_dir(dir) else { return false };
+    let mut files: Vec<(std::time::SystemTime, u64, PathBuf)> = entries
+        .flatten()
+        .filter_map(|e| {
+            let m = e.metadata().ok()?;
+            Some((m.modified().ok()?, m.len(), e.path()))
+        })
+        .collect();
+    let mut total: u64 = files.iter().map(|f| f.1).sum();
+    if total <= limit {
+        return false;
+    }
+    files.sort();
+    let mut removed = false;
+    for (_, len, path) in files {
+        if total <= limit * 9 / 10 {
+            break;
+        }
+        if std::fs::remove_file(&path).is_ok() {
+            total -= len;
+            removed = true;
+        }
+    }
+    removed
+}
+
+/// A copy no larger than the output (physical pixels), so a 6000 px photo
+/// isn't kept on the GPU at full size. Small images are used as they are.
+pub fn display_copy(path: &Path, w: u32, h: u32) -> Result<PathBuf, String> {
+    let out = mandara_config::paths::cache_dir().join("wallpapers").join(cache_key(path, &format!("{w}x{h}")));
+    if out.exists() {
+        return Ok(out);
+    }
+    let source = still(path)?;
+    let (iw, ih) = image::image_dimensions(&source).map_err(|e| format!("{}: {e}", path.display()))?;
+    if iw <= w + w / 4 && ih <= h + h / 4 {
+        return Ok(source);
+    }
+    let img = open_still(&source)?;
+    save_jpeg(&cover(&img, w, h), &out, DISPLAY_QUALITY)?;
+    Ok(out)
+}
+
+// ── Thumbnail cache (background executor) ───────────────────────────────
+
+/// A thumbnail job: `(image, width, height)`; `0 × 0` is the plain
+/// picker thumbnail, any other size a slanted slice of that size.
+pub type Job = (PathBuf, u32, u32);
+
+/// Set on a job's height to ask for a plain [`fit`] picture of
+/// `width × (height & !FIT_JOB)` instead of a slanted slice: plugin images
+/// (album covers, folder pictures, plugin assets) decoded at their drawn
+/// size through the same bounded worker.
+pub const FIT_JOB: u32 = 1 << 31;
+
+/// Longest side of a [`fit`] picture (physical px): a plugin can't ask
+/// the worker for a huge decode target.
+pub const FIT_MAX_SIDE: u32 = 2048;
+/// [`fit`] sizes are rounded up to this step, so a plugin choosing odd
+/// sizes can't fill the cache with near-identical copies.
+pub const FIT_STEP: u32 = 16;
+/// Largest picture [`fit`] decodes, read from its header first: about an
+/// 8K photo. Anything larger is refused before a byte of pixels is
+/// allocated (a tiny, highly compressed file can't expand into gigabytes).
+pub const FIT_MAX_SOURCE_PIXELS: u64 = 40_000_000;
+pub const FIT_MAX_SOURCE_SIDE: u32 = 12_000;
+/// Byte budget of the `plugin-images` cache: plugins can draw one picture
+/// at several sizes, so the oldest copies go past this.
+const FIT_CACHE_BYTES: u64 = 400 * 1024 * 1024;
+
+/// A fit job's size rounded to [`FIT_STEP`] (and clamped).
+pub fn fit_size(px: f32) -> u32 {
+    let px = if px.is_finite() { px.max(1.0) as u32 } else { 1 };
+    px.div_ceil(FIT_STEP).saturating_mul(FIT_STEP).clamp(FIT_STEP, FIT_MAX_SIDE)
+}
+
+/// `path` cover-cropped to exactly `w × h` (physical px, at most
+/// [`FIT_MAX_SIDE`]), cached: PNG when it has transparency, else JPEG.
+pub fn fit(path: &Path, w: u32, h: u32) -> Result<PathBuf, String> {
+    let (w, h) = (w.clamp(1, FIT_MAX_SIDE), h.clamp(1, FIT_MAX_SIDE));
+    let dir = mandara_config::paths::cache_dir().join("plugin-images");
+    let key = cache_key(path, &format!("fit{w}x{h}"));
+    let (jpeg, png) = (dir.join(&key), dir.join(key.replace(".jpg", ".png")));
+    if jpeg.exists() {
+        return Ok(jpeg);
+    }
+    if png.exists() {
+        return Ok(png);
+    }
+    if !mandara_media::is_video(path) {
+        let (sw, sh) = image::ImageReader::open(path).and_then(|r| r.with_guessed_format()).map_err(|e| e.to_string())?.into_dimensions().map_err(|e| e.to_string())?;
+        if sw > FIT_MAX_SOURCE_SIDE || sh > FIT_MAX_SOURCE_SIDE || u64::from(sw) * u64::from(sh) > FIT_MAX_SOURCE_PIXELS {
+            return Err(format!("{}: {sw}×{sh} is too large to show", path.display()));
+        }
+    }
+    let src = open_still(path)?;
+    let out = cover(&src, w, h);
+    drop(src);
+    if out.color().has_alpha() {
+        use image::ImageEncoder as _;
+        let rgba = out.to_rgba8();
+        drop(out);
+        cache::write(&png, |writer| image::codecs::png::PngEncoder::new(writer).write_image(rgba.as_raw(), rgba.width(), rgba.height(), image::ExtendedColorType::Rgba8).map_err(|e| e.to_string()))?;
+        if prune(&dir, FIT_CACHE_BYTES) {
+            FIT_PRUNED.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        Ok(png)
+    } else {
+        save_jpeg(&out, &jpeg, THUMB_QUALITY)?;
+        if prune(&dir, FIT_CACHE_BYTES) {
+            FIT_PRUNED.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        Ok(jpeg)
+    }
+}
+
+/// Most thumbnail decodes in flight at once. Jobs run on GPUI's shared
+/// background executor (no dedicated threads); the cap bounds the transient
+/// memory of full-size decodes (a 4K JPEG decodes to ~33 MB).
+const MAX_THUMB_JOBS: usize = 3;
+/// Thumbnails waiting to be made; a page that asks for more drops the
+/// least important ones (they are asked for again when shown).
+const MAX_QUEUED_THUMBS: usize = 256;
+/// Finished and failed thumbnails remembered before the lists start over.
+const MAX_REMEMBERED_THUMBS: usize = 4096;
+
+#[derive(Default)]
+pub struct Thumbnails {
+    ready: HashMap<Job, PathBuf>,
+    failed: HashSet<Job>,
+    requested: HashSet<Job>,
+    /// Waiting jobs; the most important is last (popped first).
+    queue: Vec<Job>,
+    in_flight: usize,
+}
+
+impl Thumbnails {
+    pub fn get(&self, path: &Path) -> Option<&PathBuf> {
+        self.ready.get(&(path.to_path_buf(), 0, 0))
+    }
+
+    pub fn failed(&self, path: &Path) -> bool {
+        self.failed.contains(&(path.to_path_buf(), 0, 0))
+    }
+
+    pub fn get_job(&self, job: &Job) -> Option<&PathBuf> {
+        self.ready.get(job)
+    }
+
+    /// Whether `job` failed (an unreadable or corrupt file).
+    pub fn failed_job(&self, job: &Job) -> bool {
+        self.failed.contains(job)
+    }
+
+    /// Queues plain thumbnails (most important last).
+    pub fn request(&mut self, paths: impl IntoIterator<Item = PathBuf>, cx: &mut Context<Self>) {
+        self.request_jobs(paths.into_iter().map(|p| (p, 0, 0)), cx);
+    }
+
+    /// Queues jobs (most important last: jobs are taken from the end).
+    pub fn request_jobs(&mut self, jobs: impl IntoIterator<Item = Job>, cx: &mut Context<Self>) {
+        for job in jobs {
+            if self.ready.contains_key(&job) || self.failed.contains(&job) {
+                continue;
+            }
+            if self.requested.insert(job.clone()) {
+                self.queue.push(job);
+                // Bounded: past the limit the least important waiting job
+                // (the front: the most important is last) is dropped.
+                if self.queue.len() > MAX_QUEUED_THUMBS {
+                    let dropped = self.queue.remove(0);
+                    self.requested.remove(&dropped);
+                }
+            } else if let Some(i) = self.queue.iter().position(|x| *x == job) {
+                // Re-prioritise something already queued.
+                let job = self.queue.remove(i);
+                self.queue.push(job);
+            }
+        }
+        self.pump(cx);
+    }
+
+    /// Starts queued jobs up to [`MAX_THUMB_JOBS`].
+    fn pump(&mut self, cx: &mut Context<Self>) {
+        while self.in_flight < MAX_THUMB_JOBS {
+            let Some(job) = self.queue.pop() else { break };
+            self.in_flight += 1;
+            let work = job.clone();
+            let task = cx.background_executor().spawn(async move {
+                if work.1 == 0 {
+                    thumbnail(&work.0)
+                } else if work.2 & FIT_JOB != 0 {
+                    fit(&work.0, work.1, work.2 & !FIT_JOB)
+                } else {
+                    slant(&work.0, work.1, work.2)
+                }
+            });
+            cx.spawn(async move |this, cx| {
+                let result = task.await;
+                let _ = this.update(cx, |t, cx| {
+                    t.in_flight -= 1;
+                    t.requested.remove(&job);
+                    // The maps only remember where cached files are: past a
+                    // bound they start over (the files stay on disk).
+                    if t.ready.len() >= MAX_REMEMBERED_THUMBS {
+                        t.ready = HashMap::new();
+                    }
+                    if t.failed.len() >= MAX_REMEMBERED_THUMBS {
+                        t.failed = HashSet::new();
+                    }
+                    // Fitted images may have been pruned: they are made again
+                    // when next asked for (a cheap check when the file stayed).
+                    if FIT_PRUNED.swap(false, std::sync::atomic::Ordering::Relaxed) {
+                        t.ready.retain(|job, _| job.2 & FIT_JOB == 0);
+                    }
+                    match result {
+                        Ok(thumb) => {
+                            t.ready.insert(job, thumb);
+                        }
+                        Err(err) => {
+                            tracing::debug!("thumbnail: {err}");
+                            t.failed.insert(job);
+                        }
+                    }
+                    t.pump(cx);
+                    cx.notify();
+                });
+            })
+            .detach();
+        }
+        if self.queue.is_empty() {
+            self.queue.shrink_to_fit();
+        }
+    }
+}
+
+#[derive(Clone)]
+struct GlobalThumbnails(Entity<Thumbnails>);
+impl Global for GlobalThumbnails {}
+
+pub fn thumbnails(cx: &mut App) -> Entity<Thumbnails> {
+    if let Some(g) = cx.try_global::<GlobalThumbnails>() {
+        return g.0.clone();
+    }
+    let entity = cx.new(|_| Thumbnails::default());
+    cx.set_global(GlobalThumbnails(entity.clone()));
+    entity
+}
+
+/// Sets the wallpaper (the theme follows it when "match colors" is on —
+/// see [`reconcile_theme`]).
+pub fn apply(path: PathBuf, cx: &mut App) {
+    crate::plugins::external::live::stop_all(cx);
+    update_config(cx, |c| c.wallpaper.path = Some(path));
+}
+
+/// Keeps the theme source consistent with `wallpaper.match_colors`:
+/// on → Material You colors from the current wallpaper (remembering the
+/// catalog theme it replaced); off → back to that theme. Returns `true` if
+/// it changed anything.
+pub fn reconcile_theme(c: &mut mandara_config::ShellConfig) -> bool {
+    // The colours follow the image on screen: the light / dark variant
+    // when one is set, else the main wallpaper.
+    let shown = mandara_config::desktop::effective_wallpaper(c.wallpaper.path.as_ref(), &c.wallpaper.variants, None, c.theme.mode.is_dark());
+    match (&c.theme.source, c.wallpaper.match_colors, shown) {
+        // A new wallpaper keeps the scheme style; the seed choice resets.
+        (ThemeSource::Wallpaper { path, variant, .. }, true, Some(wp)) if *path != wp => {
+            c.theme.source = ThemeSource::Wallpaper { path: wp, variant: *variant, seed: 0 };
+            true
+        }
+        (ThemeSource::Wallpaper { .. }, true, _) => false,
+        (source, true, Some(wp)) => {
+            if let ThemeSource::Preset { preset } = source {
+                c.theme.last_preset = Some(preset.clone());
+            }
+            c.theme.source = ThemeSource::Wallpaper { path: wp, variant: SchemeVariant::default(), seed: 0 };
+            true
+        }
+        (ThemeSource::Wallpaper { .. }, false, _) => {
+            let preset = c.theme.last_preset.clone().unwrap_or_else(|| mandara_theme::DEFAULT_THEME.to_string());
+            c.theme.source = ThemeSource::Preset { preset };
+            true
+        }
+        _ => false,
+    }
+}
+
+/// Watches the config and applies [`reconcile_theme`] (shell process).
+pub fn init_theme_sync(cx: &mut App) {
+    let store = config(cx);
+    let sync = |cx: &mut App| {
+        let mut next = (*config(cx).read(cx).snapshot()).clone();
+        if reconcile_theme(&mut next) {
+            update_config(cx, |c| *c = next);
+        }
+    };
+    sync(cx);
+    cx.observe(&store, move |_, cx| sync(cx)).detach();
+}
+
+/// A window matching `covers` is on output `monitor`'s active workspace /
+/// tags.
+fn window_on(monitor: &str, cx: &App, covers: impl Fn(&mandara_compositor::ClientInfo) -> bool) -> bool {
+    let Some(hub) = cx.try_global::<crate::hub::GlobalHub>().map(|g| g.0.clone()) else { return false };
+    let hub = hub.read(cx);
+    let navigation = hub.navigation.get(monitor);
+    hub.clients.iter().any(|c| c.monitor == monitor && covers(c) && navigation.is_some_and(|n| n.contains_active(&c.tags)))
+}
+
+/// No tiled or fullscreen window covers output `monitor`'s active
+/// workspace / tags (so the desktop, and its audio ring, can be seen).
+pub(crate) fn desktop_visible(monitor: &str, cx: &App) -> bool {
+    !window_on(monitor, cx, |c| c.fullscreen || !c.floating)
+}
+
+/// A fullscreen window is on output `monitor`'s active workspace / tags.
+pub(crate) fn fullscreen_on(monitor: &str, cx: &App) -> bool {
+    window_on(monitor, cx, |c| c.fullscreen)
+}
+
+/// A player is playing something with a title.
+pub(crate) fn music_playing(cx: &App) -> bool {
+    cx.try_global::<crate::hub::GlobalHub>()
+        .is_some_and(|g| g.0.read(cx).media.as_ref().is_some_and(|m| m.status == mandara_services::PlaybackStatus::Playing && !m.title.is_empty()))
+}
+
+// ── Background surface ───────────────────────────────────────────────────
+
+/// Changes only when live wallpaper ownership changes.
+#[derive(Default)]
+pub struct LiveRevision(u64);
+impl gpui::Global for LiveRevision {}
+
+pub(crate) fn live_changed(cx: &mut App) {
+    let revision = cx.default_global::<LiveRevision>();
+    revision.0 = revision.0.wrapping_add(1);
+}
+
+/// Whether a renderer owns this output's wallpaper right now.
+pub fn live_on(output: &str) -> bool {
+    crate::plugins::external::live::covers(output)
+}
+
+fn clock_visible(cfg: &mandara_config::ShellConfig, monitor: Option<&str>, editing: bool, enabled: bool) -> bool {
+    cfg.wallpaper.enabled && cfg.wallpaper.desktop_clock && enabled
+        && (!cfg.desktop.widgets.hidden || editing)
+        && cfg.desktop.widgets.depth_clock().is_none_or(|(widget, _)| widget.place.displays.is_empty()
+            || monitor.is_some_and(|monitor| widget.place.displays.iter().any(|display| display.eq_ignore_ascii_case(monitor))))
+}
+
+/// Whether a load completion still owns the view: same generation and path.
+fn load_still_current(load_gen: u64, token: u64, target: Option<&Path>, source: &Path) -> bool {
+    load_gen == token && target == Some(source)
+}
+
+pub struct WallpaperView {
+    config: Entity<ConfigStore>,
+    /// Output this background belongs to (for "is the desktop visible").
+    monitor: Option<String>,
+    /// The configured source path being shown (or being prepared).
+    target: Option<PathBuf>,
+    current: Option<PathBuf>,
+    previous: Option<PathBuf>,
+    /// Pixel sizes of the shown images and the fill they were prepared for.
+    current_size: (u32, u32),
+    previous_size: (u32, u32),
+    fill: mandara_config::desktop::WallpaperFill,
+    since: Instant,
+    /// Wallpaper changes so far (varies each transition's seams and
+    /// shards) and where the running one started (Ripple, Shatter).
+    changes: u32,
+    origin: Option<[f32; 2]>,
+    /// Last effect that started (random no-repeat).
+    last_transition: Option<mandara_config::desktop::WallpaperTransition>,
+    /// Length of the transition that started with [`Self::last_transition`]
+    /// (slideshow-owned length or desktop `crossfade_ms`).
+    active_crossfade_ms: u64,
+    /// Bumped on every [`Self::load`]; completions must match so a stale
+    /// same-path job (e.g. fill change) cannot overwrite a newer look.
+    load_gen: u64,
+    /// When true, this GPUI wallpaper is only a fill under a live scene and
+    /// must not steal desktop clicks (the live surface or software canvas owns them).
+    /// Otherwise we take right-clicks for the desktop menu — the software
+    /// wallpaper canvas is not running when this view exists.
+    pass_clicks: bool,
+    /// Small copy of the shown wallpaper: picks the clock's ink.
+    tone: Option<Arc<image::RgbImage>>,
+    /// A change's images for the transition shader, until the next frame
+    /// starts playing them, and the transition playing (or, to keep Sketch's
+    /// outline, resting on its last frame).
+    frames: Option<(crate::wallpaper_shader::Frames, bool)>,
+    player: Option<crate::wallpaper_shader::Shared>,
+    /// Depth layer 3: the subject cut-out over the clock (and the one
+    /// fading out).
+    masks: Entity<crate::depth::DepthMasks>,
+    cutout: Option<Cutout>,
+    retired: Option<Cutout>,
+    cutout_key: Option<(PathBuf, PathBuf, u64)>,
+    stale_images: Vec<Arc<gpui::RenderImage>>,
+    /// Audio ring: spectrum while music plays and the desktop shows.
+    tap: std::rc::Rc<std::cell::RefCell<crate::plugins::panel_fx::SpectrumTap>>,
+    ring: f32,
+    ring_at: Instant,
+    /// Date pill text, rebuilt once a minute.
+    date: Option<(i64, crate::desktop::DateLine)>,
+}
+
+/// A layer-3 image with its fade.
+struct Cutout {
+    /// The subject's pixels, cropped to its bounding box.
+    image: Arc<gpui::RenderImage>,
+    /// Full displayed image size and the crop within it (for placement).
+    full: (u32, u32),
+    crop: (u32, u32, u32, u32),
+    /// Small aligned alpha: how much of the clock the subject covers.
+    map: Arc<image::GrayImage>,
+    at: Instant,
+    fade: Duration,
+}
+
+impl Cutout {
+    fn progress(&self) -> f32 {
+        let t = (self.at.elapsed().as_secs_f32() / self.fade.as_secs_f32().max(0.001)).clamp(0.0, 1.0);
+        t * t * (3.0 - 2.0 * t)
+    }
+}
+
+impl WallpaperView {
+    pub fn new(cx: &mut Context<Self>) -> Self {
+        Self::with_monitor(None, cx)
+    }
+
+    /// The background for output `monitor`.
+    pub fn on_monitor(monitor: String, cx: &mut Context<Self>) -> Self {
+        Self::with_monitor(Some(monitor), cx)
+    }
+
+    fn with_monitor(monitor: Option<String>, cx: &mut Context<Self>) -> Self {
+        let config = config(cx);
+        cx.observe(&config, |_, _, cx| cx.notify()).detach();
+        let masks = crate::depth::masks(cx);
+        cx.observe(&masks, |_, _, cx| cx.notify()).detach();
+        let now = Instant::now();
+        Self {
+            config,
+            monitor,
+            target: None,
+            current: None,
+            previous: None,
+            current_size: (0, 0),
+            previous_size: (0, 0),
+            fill: mandara_config::desktop::WallpaperFill::default(),
+            since: now,
+            changes: 0,
+            origin: None,
+            last_transition: None,
+            active_crossfade_ms: mandara_config::defaults::WALLPAPER_CROSSFADE_MS,
+            load_gen: 0,
+            pass_clicks: false,
+            tone: None,
+            frames: None,
+            player: None,
+            masks,
+            cutout: None,
+            retired: None,
+            cutout_key: None,
+            stale_images: Vec::new(),
+            tap: Default::default(),
+            ring: 0.0,
+            ring_at: now,
+            date: None,
+        }
+    }
+
+    /// Prepares a display-sized copy off the UI thread, then crossfades.
+    /// A transition the shader draws also gets the outgoing and incoming
+    /// images at output size (and Sketch's helper image) from the same job.
+    fn load(&mut self, path: PathBuf, size: (u32, u32), fill: mandara_config::desktop::WallpaperFill, cx: &mut Context<Self>) {
+        use crate::wallpaper_shader as shader;
+        self.fill = fill;
+        self.target = Some(path.clone());
+        let cfg = self.config.read(cx).get();
+        let reduced = cfg.motion.reduced(mandara_core::spring::system_reduced_motion());
+        let (picked, crossfade_ms) = crate::slideshow::change_look(&cfg.wallpaper, self.last_transition, crate::slideshow::seed(), cx);
+        self.load_gen = self.load_gen.wrapping_add(1);
+        let token = self.load_gen;
+        let kind = shader::effective(picked, reduced);
+        // The shader needs the image shown now (a first wallpaper has none).
+        let old = self.current.clone().filter(|_| shader::uses_shader(kind));
+        let fill_color = crate::wallpaper_fill::fill_color(&cfg.wallpaper.fill_color);
+        let sketch = (kind == mandara_config::desktop::WallpaperTransition::Sketch).then(|| {
+            let sk = &cfg.wallpaper.sketch;
+            let accent = mandara_core::theme_entity(cx).read(cx).target().primary;
+            (shader::existing_mask(&path, crate::depth::Request::of(&cfg.wallpaper)), sk.keep_outline.then_some((sk.ink, accent)))
+        });
+        let sketch_draw = cfg.wallpaper.sketch.draw();
+        let task = cx.background_executor().spawn(async move {
+            let (shown, shown_size) = crate::wallpaper_fill::prepare(&path, fill, size.0, size.1)?;
+            let decoded = image::open(&shown).ok();
+            let tone = decoded.as_ref().map(|i| Arc::new(i.thumbnail(TONE_MAP_PX, TONE_MAP_PX).to_rgb8()));
+            let frames = match (old, decoded) {
+                (Some(old), Some(img)) => shader_frames(img, &old, fill, size, fill_color, sketch).map_err(|e| tracing::warn!("wallpaper transition: {e}")).ok(),
+                _ => None,
+            };
+            Ok::<_, String>((path, (shown, shown_size), tone, frames))
+        });
+        // Capture this load's look and generation: a newer load (same path,
+        // different fill) must not be overwritten by a stale completion.
+        cx.spawn(async move |this, cx| {
+            let result = task.await;
+            let _ = this.update(cx, |this, cx| match result {
+                Ok((source, (shown, shown_size), tone, frames)) if load_still_current(this.load_gen, token, this.target.as_deref(), &source) => {
+                    this.previous = this.current.take();
+                    this.previous_size = this.current_size;
+                    this.current = Some(shown);
+                    this.current_size = shown_size;
+                    this.tone = tone;
+                    this.frames = frames;
+                    this.since = Instant::now();
+                    this.changes = this.changes.wrapping_add(1);
+                    this.origin = None;
+                    this.last_transition = Some(picked);
+                    this.active_crossfade_ms = crossfade_ms;
+                    // The old subject leaves with its wallpaper (under a
+                    // Sketch, as the wash covers the old image).
+                    let mut fade = Duration::from_millis(crossfade_ms.max(1));
+                    if picked == mandara_config::desktop::WallpaperTransition::Sketch && this.frames.is_some() {
+                        fade = fade.mul_f32(sketch_draw * SKETCH_WASH_RISE);
+                    }
+                    this.retire(fade);
+                    this.cutout_key = None;
+                    cx.notify();
+                }
+                Ok(_) => {}
+                Err(err) => tracing::warn!("wallpaper: {err}"),
+            });
+        })
+        .detach();
+    }
+
+    fn retire(&mut self, fade: Duration) {
+        if let Some(old) = self.retired.take() {
+            self.stale_images.push(old.image);
+        }
+        self.retired = self.cutout.take().map(|c| Cutout { at: Instant::now(), fade, ..c });
+    }
+
+    fn clear_cutouts(&mut self) {
+        self.stale_images.extend(self.cutout.take().map(|c| c.image));
+        self.stale_images.extend(self.retired.take().map(|c| c.image));
+        self.cutout_key = None;
+    }
+
+    /// Keeps layer 3 in step with the shown wallpaper and its mask.
+    fn sync_cutout(&mut self, request: Option<crate::depth::Request>, cx: &mut Context<Self>) {
+        let (Some(source), Some(shown)) = (self.target.clone(), self.current.clone()) else { return };
+        if request.is_none() {
+            if self.cutout.is_some() {
+                self.retire(CUTOUT_EXIT_FADE);
+                self.cutout_key = None;
+            }
+            return;
+        }
+        let status = self.masks.update(cx, |m, cx| m.status(&source, request, cx));
+        let crate::depth::MaskStatus::Ready(resolved) = status else {
+            if matches!(status, crate::depth::MaskStatus::Unavailable(_)) && self.cutout.is_some() {
+                self.retire(CUTOUT_EXIT_FADE);
+                self.cutout_key = None;
+            }
+            return;
+        };
+        let key = (shown.clone(), resolved.path.clone(), self.masks.read(cx).generation);
+        if self.cutout_key.as_ref() == Some(&key) {
+            return;
+        }
+        self.cutout_key = Some(key.clone());
+        let mask = resolved.path;
+        let task = cx.background_executor().spawn(async move {
+            crate::depth::cutout(&shown, &source, &mask).map(|c| (Arc::new(gpui::RenderImage::new(smallvec::smallvec![image::Frame::new(c.bgra)])), Arc::new(c.map), c.full, c.crop))
+        });
+        cx.spawn(async move |this, cx| {
+            let result = task.await;
+            let _ = this.update(cx, |this, cx| {
+                if this.cutout_key.as_ref() != Some(&key) {
+                    return;
+                }
+                match result {
+                    Ok((image, map, full, crop)) => {
+                        this.retire(CUTOUT_FADE);
+                        this.cutout = Some(Cutout { image, full, crop, map, at: Instant::now(), fade: CUTOUT_FADE });
+                    }
+                    Err(err) => tracing::warn!("depth cut-out: {err}"),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn desktop_visible(&self, cx: &App) -> bool {
+        self.monitor.as_deref().is_none_or(|m| desktop_visible(m, cx))
+    }
+
+    fn music_playing(cx: &App) -> bool {
+        music_playing(cx)
+    }
+
+    /// Depth layer 2 for this frame (and the redraw it needs).
+    fn clock_layer(&mut self, cfg: &mandara_config::ShellConfig, window: &mut Window, cx: &mut Context<Self>) -> (gpui::AnyElement, Option<gpui::AnyElement>) {
+        use crate::desktop;
+        let vp = window.viewport_size();
+        let (w, h) = (f32::from(vp.width).max(1.0), f32::from(vp.height).max(1.0));
+        let wc = &cfg.wallpaper;
+        let l = desktop::layout(w, h, wc);
+        let now = chrono::Local::now();
+        let lines = desktop::clock_lines(&now.naive_local(), wc.clock_style, cfg.general.clock_24h);
+        let tone = self.tone.as_ref().map(|t| desktop::region_tone(t, (l.center.0 / w, l.center.1 / h), (l.size * 1.3 / w, l.block_h * 0.6 / h)));
+        let palette = mandara_core::frame_palette(window, cx);
+        let ink = desktop::ink_for(tone, palette.primary);
+        let minute = crate::widgets::clock::local_stamp(&now, false);
+        let date = if wc.show_date {
+            if self.date.as_ref().is_none_or(|(m, _)| *m != minute) {
+                self.date = Some((minute, desktop::date_line(cfg, wc.show_weather, cx)));
+            }
+            self.date.as_ref().map(|(_, d)| d.clone())
+        } else {
+            None
+        };
+        // The ring listens only while music plays and the desktop shows.
+        let want = wc.audio_ring && Self::music_playing(cx) && self.desktop_visible(cx);
+        let bands = crate::plugins::panel_fx::SpectrumTap::bands(&self.tap, want, cx);
+        let dt = self.ring_at.elapsed().as_secs_f32().min(RING_MAX_DT_S);
+        self.ring_at = Instant::now();
+        let target = if bands.is_some() { 1.0 } else { 0.0 };
+        self.ring += (target - self.ring) * (1.0 - (-dt * RING_EASE_RATE).exp());
+        if self.ring < RING_REST && target == 0.0 {
+            self.ring = 0.0;
+        }
+        let delay = if self.ring > 0.0 || bands.is_some() {
+            RING_FRAME
+        } else if want {
+            // Waiting for sound: poll gently.
+            RING_POLL
+        } else {
+            // Next minute boundary (the clock shows minutes only).
+            let into_minute = u64::try_from(now.timestamp_millis().rem_euclid(MS_PER_MINUTE)).unwrap_or(0);
+            Duration::from_millis(MS_PER_MINUTE.unsigned_abs() - into_minute) + MINUTE_WAKE_SLACK
+        };
+        crate::plugins::panel_fx::redraw_in(delay, window, cx);
+        desktop::element(desktop::ClockFrame { layout: l, lines, style: wc.clock_style, ink, date, bands, ring: self.ring, fonts: fonts(cx), width: w })
+    }
+}
+
+impl Render for WallpaperView {
+    /// Paint the active wallpaper and release stale images before advancing transitions.
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Frame timing (`diagnostics frames`), like the shell's own views.
+        let _frame = crate::plugins::diagnostics::frame(cx.entity_id().as_u64());
+        for image in self.stale_images.drain(..) {
+            let _ = window.drop_image(image);
+        }
+        let cfg = self.config.read(cx).snapshot();
+        let live = self.monitor.as_deref().is_some_and(live_on);
+        // Live scenes own the desktop; otherwise this GPUI layer *is* the
+        // desktop (software canvas unavailable) and must take right-clicks.
+        self.pass_clicks = live;
+        if self.pass_clicks {
+            window.set_input_region(Some(&[]));
+        } else {
+            window.set_input_region(None);
+        }
+        if !cfg.wallpaper.enabled || live {
+            self.target = None;
+            for shown in [self.current.take(), self.previous.take()].into_iter().flatten() {
+                crate::image_cache::evict_path(&shown, window, cx);
+            }
+            self.clear_cutouts();
+            for image in self.stale_images.drain(..) { let _ = window.drop_image(image); }
+            self.frames = None;
+            self.tone = None;
+            self.drop_player(window);
+            let mut root = div().size_full().relative();
+            if live && clock_visible(&cfg, self.monitor.as_deref(), crate::desktop_edit::active(cx), crate::desktop_plugins::enabled(mandara_config::desktop_widgets::plugin_ids::CLOCKS, &cfg, cx)) {
+                let (clock, pill) = self.clock_layer(&cfg, window, cx);
+                root = root.child(clock).children(pill);
+            }
+            return self.with_desktop_menu(root, cx);
+        }
+        // Per-output and light / dark variants, then the main wallpaper.
+        let wanted = mandara_config::desktop::effective_wallpaper(cfg.wallpaper.path.as_ref(), &cfg.wallpaper.variants, self.monitor.as_deref(), cfg.theme.mode.is_dark());
+        if wanted != self.target || (wanted.is_some() && cfg.wallpaper.fill != self.fill) {
+            match wanted {
+                Some(path) => {
+                    let vp = window.viewport_size();
+                    let scale = window.scale_factor();
+                    let size = ((f32::from(vp.width) * scale).round() as u32, (f32::from(vp.height) * scale).round() as u32);
+                    self.load(path, size, cfg.wallpaper.fill, cx);
+                }
+                None => {
+                    self.target = None;
+                    if let Some(shown) = self.current.take() {
+                        crate::image_cache::evict_path(&shown, window, cx);
+                    }
+                    self.clear_cutouts();
+                }
+            }
+        }
+        use mandara_config::desktop::WallpaperTransition;
+        use crate::wallpaper_shader as shader;
+        let reduced = cfg.motion.reduced(mandara_core::spring::system_reduced_motion());
+        // Reduced motion: a plain fade (a cut stays a cut). Prefer the
+        // effect captured when this change loaded (random rolls once).
+        let transition = shader::effective(self.last_transition.unwrap_or(cfg.wallpaper.transition), reduced);
+        let instant = transition == WallpaperTransition::None;
+        let fade = Duration::from_millis(if instant { 1 } else { self.active_crossfade_ms.max(1) });
+        let t = (self.since.elapsed().as_secs_f32() / fade.as_secs_f32()).clamp(0.0, 1.0);
+        let vp = window.viewport_size();
+        let (vw, vh) = (f32::from(vp.width).max(1.0), f32::from(vp.height).max(1.0));
+        // A Ripple or Shatter starts where the pointer was when it began
+        // (or the centre), fixed for the whole transition.
+        let pointer = window.mouse_position();
+        let pointer = Some((f32::from(pointer.x), f32::from(pointer.y)));
+        let origin = *self.origin.get_or_insert_with(|| if cfg.wallpaper.transition_origin == mandara_config::desktop::TransitionOrigin::Pointer { shader::fraction(pointer, (vw, vh)) } else { [0.5, 0.5] });
+        // A change the shader draws starts playing on this frame.
+        if let Some((frames, subject)) = self.frames.take() {
+            self.drop_player(window);
+            if self.previous.is_some() && shader::uses_shader(transition) {
+                let palette = mandara_core::frame_palette(window, cx);
+                let dominant = self.tone.as_deref().map_or(palette.primary, shader::dominant);
+                let look = shader::Look {
+                    kind: transition,
+                    origin,
+                    focus: shader::fraction(pointer, (vw, vh)),
+                    seed: self.changes.wrapping_mul(0x9e37_79b9),
+                    intensity: cfg.motion.intensity(),
+                    logical: (vw, vh),
+                    scale: window.scale_factor(),
+                    rtl: cfg.general.locale.is_rtl(),
+                    accent: palette.primary,
+                    dominant,
+                    sketch: cfg.wallpaper.sketch.clone(),
+                    subject,
+                };
+                self.player = Some(std::rc::Rc::new(std::cell::RefCell::new(shader::Player::new(look, frames, fade))));
+            }
+        }
+        let keep_outline = transition == WallpaperTransition::Sketch && cfg.wallpaper.sketch.keep_outline;
+        let playing = self.player.as_ref().map(|p| p.borrow().state());
+        match playing {
+            Some(shader::State::Done) if keep_outline => {
+                // Its last frame (with the faint outline) stays as the wallpaper.
+                if let Some(p) = &self.player {
+                    p.borrow_mut().settle(window);
+                }
+            }
+            Some(shader::State::Done | shader::State::Lost) => self.drop_player(window),
+            Some(_) => window.request_animation_frame(),
+            None => {}
+        }
+        if t < 1.0 {
+            window.request_animation_frame();
+        } else if let Some(old) = self.previous.take() {
+            // The crossfade is over: release the outgoing image (decoded
+            // copy + atlas texture), unless it is shown again.
+            if self.current.as_ref() != Some(&old) {
+                crate::image_cache::evict_path(&old, window, cx);
+            }
+        }
+        let eased = t * t * (3.0 - 2.0 * t);
+
+        // Layer 2 (clock) needs a wallpaper to sit in; layer 3 needs both.
+        let clock = self.current.is_some() && clock_visible(&cfg, self.monitor.as_deref(), crate::desktop_edit::active(cx), crate::desktop_plugins::enabled(mandara_config::desktop_widgets::plugin_ids::CLOCKS, &cfg, cx));
+        // The subject cut-out is aligned to a cover-cropped image only.
+        let covers = self.fill == mandara_config::desktop::WallpaperFill::Cover;
+        let request = if clock && covers { crate::depth::Request::of(&cfg.wallpaper) } else { None };
+        self.sync_cutout(request, cx);
+        let (clock_el, pill_el) = match clock.then(|| self.clock_layer(&cfg, window, cx)) {
+            Some((c, p)) => (Some(c), p),
+            None => (None, None),
+        };
+        let fading = |c: &Cutout| c.progress() < 1.0;
+        if self.cutout.as_ref().is_some_and(fading) || self.retired.as_ref().is_some_and(fading) {
+            window.request_animation_frame();
+        }
+        if self.retired.as_ref().is_some_and(|r| !fading(r))
+            && let Some(r) = self.retired.take() {
+                self.stale_images.push(r.image);
+            }
+        let crossfading = self.previous.is_some();
+        // A subject may overlap the clock but never swallow it; the date
+        // pill rises above a subject that would hide it.
+        let clock_layout = crate::desktop::layout(vw, vh, &cfg.wallpaper);
+        let frac = |b: (f32, f32, f32, f32)| (b.0 / vw, b.1 / vh, b.2 / vw, b.3 / vh);
+        let digits = frac(crate::desktop::digit_box(&clock_layout, cfg.wallpaper.clock_style));
+        let limit = |c: &Cutout| -> f32 { crate::depth::overlap_alpha(crate::depth::coverage(&c.map, digits)) };
+        let pill_on_top = self.cutout.as_ref().is_some_and(|c| crate::depth::coverage(&c.map, frac(crate::desktop::pill_box(&clock_layout))) * limit(c) > crate::desktop::PILL_LIFT);
+        let (pill_below, pill_above) = if pill_on_top { (None, pill_el) } else { (pill_el, None) };
+        let cut = |c: &Cutout, alpha: f32| {
+            let (x, y, w, h) = crate::depth::cover_rect(c.full, c.crop, (vw, vh));
+            img(gpui::ImageSource::Render(c.image.clone())).absolute().left(px(x)).top(px(y)).w(px(w)).h(px(h)).object_fit(ObjectFit::Fill).opacity(alpha)
+        };
+
+        let scale = window.scale_factor();
+        let fill = self.fill;
+        let layer = |p: &PathBuf, size: (u32, u32)| crate::wallpaper_fill::layer(p, size, fill, (vw, vh), scale);
+        let rtl = cfg.general.locale.is_rtl();
+        let fill_bg = (fill != mandara_config::desktop::WallpaperFill::Cover && self.current.is_some()).then(|| crate::wallpaper_fill::fill_color(&cfg.wallpaper.fill_color).hsla());
+        let (previous_size, current_size) = (self.previous_size, self.current_size);
+        // The new subject (layer 3) arrives with its image: under a Sketch,
+        // with the fill, not while the lines are drawn.
+        let sketching = self.player.is_some() && transition == WallpaperTransition::Sketch;
+        let subject_in = match (crossfading, sketching) {
+            (false, _) => 1.0,
+            (true, false) => eased,
+            (true, true) => {
+                let draw = cfg.wallpaper.sketch.draw();
+                let f = ((t - draw) / (1.0 - draw).max(f32::EPSILON)).clamp(0.0, 1.0);
+                f * f * (3.0 - 2.0 * f)
+            }
+        };
+        let wallpaper: Vec<gpui::AnyElement> = match (self.player.as_ref(), self.current.as_ref(), self.previous.as_ref()) {
+            // The shader draws both images (the whole viewport, fill included).
+            (Some(player), _, _) => vec![shader::TransitionElement(player.clone()).into_any_element()],
+            (None, Some(cur), Some(prev)) if crossfading => {
+                // Fade, Wipe, or a change the shader could not take: layers.
+                let kind = if matches!(transition, WallpaperTransition::Wipe | WallpaperTransition::None) { transition } else { WallpaperTransition::Fade };
+                vec![layer(prev, previous_size), crate::wallpaper_fill::reveal(layer(cur, current_size), kind, eased, (vw, vh), rtl)]
+            }
+            (None, Some(cur), _) => vec![layer(cur, current_size)],
+            (None, None, Some(p)) => vec![layer(p, previous_size)],
+            (None, None, None) => Vec::new(),
+        };
+        self.with_desktop_menu(
+            div()
+                .size_full()
+                .relative()
+                // 1 · wallpaper (crossfading)
+                .when_some(fill_bg, |el, bg| el.bg(bg))
+                .children(wallpaper)
+                // 2 · clock, date, weather, audio ring
+                .when_some(clock_el, |el, c| el.child(c))
+                .when_some(pill_below, |el, p| el.child(p))
+                // 3 · the subject in front of the clock
+                .when_some(self.retired.as_ref(), |el, c| el.child(cut(c, (1.0 - c.progress()) * limit(c))))
+                .when_some(self.cutout.as_ref(), |el, c| el.child(cut(c, c.progress() * limit(c) * subject_in)))
+                .when_some(pill_above, |el, p| el.child(p)),
+            cx,
+        )
+    }
+}
+
+impl WallpaperView {
+    /// Ends the transition the shader plays: its textures leave the atlas.
+    fn drop_player(&mut self, window: &mut Window) {
+        if let Some(p) = self.player.take() {
+            p.borrow_mut().release(window);
+        }
+    }
+
+    /// Right-click / drag handlers for the desktop menu when this layer owns input.
+    fn with_desktop_menu(&self, root: gpui::Div, cx: &mut Context<Self>) -> AnyElement {
+        if self.pass_clicks {
+            return root.into_any_element();
+        }
+        root.on_mouse_down(MouseButton::Right, cx.listener(|this, e: &MouseDownEvent, window, cx| {
+            this.open_desktop_menu((f32::from(e.position.x), f32::from(e.position.y)), window, true, cx);
+        }))
+        .on_mouse_move(cx.listener(|this, e: &MouseMoveEvent, _, cx| {
+            if e.pressed_button != Some(MouseButton::Right) {
+                return;
+            }
+            let Some(output) = this.monitor.as_deref() else { return };
+            crate::desktop_menu::drag_moved(output, (f32::from(e.position.x), f32::from(e.position.y)), cx);
+        }))
+        .on_mouse_up(MouseButton::Right, cx.listener(|this, e: &MouseUpEvent, _, cx| {
+            let Some(output) = this.monitor.as_deref() else { return };
+            crate::desktop_menu::drag_released(output, (f32::from(e.position.x), f32::from(e.position.y)), cx);
+        }))
+        .into_any_element()
+    }
+
+    fn open_desktop_menu(&self, at: (f32, f32), window: &Window, held: bool, cx: &mut App) {
+        let Some(output) = self.monitor.clone() else { return };
+        let vp = window.viewport_size();
+        let size = Some((f32::from(vp.width), f32::from(vp.height)));
+        crate::desktop_text::after_save(cx, move |cx| {
+            if let Err(output) = crate::bar::gaps::route(output, at, size, cx) {
+                if held {
+                    crate::desktop_menu::open_pressed(&output, at, size, cx);
+                } else {
+                    crate::desktop_menu::open_sized(&output, at, size, cx);
+                }
+            }
+        });
+    }
+}
+
+/// The shader's images for a change from the shown image `old` (a display
+/// copy) to `new` (decoded), placed for `fill` at output `size`, and
+/// Sketch's helper image; `bool` = it has the subject. Blocking: run on a
+/// background job. `sketch` = (subject mask, keep-the-outline colour).
+fn shader_frames(
+    new: image::DynamicImage,
+    old: &std::path::Path,
+    fill: mandara_config::desktop::WallpaperFill,
+    size: (u32, u32),
+    fill_color: mandara_theme::Color,
+    sketch: Option<(Option<PathBuf>, Option<(mandara_config::desktop::SketchInk, mandara_theme::Color)>)>,
+) -> Result<(crate::wallpaper_shader::Frames, bool), String> {
+    use crate::wallpaper_shader as shader;
+    let mut to = crate::backdrop::paint::background(new, fill, size, fill_color)?;
+    let (mut aux, mut subject) = (None, false);
+    if let Some((mask, keep)) = sketch {
+        let mask = mask.and_then(|m| shader::aux_mask(&m, fill, size));
+        subject = mask.is_some();
+        let keep = keep.map(|(ink, accent)| {
+            let [r, g, b, _] = shader::sketch_colours(ink, accent, shader::dominant(&to.tone)).0.to_rgba8();
+            [r, g, b]
+        });
+        aux = Some(shader::build_aux(to.pixmap.data_mut(), size, mask.as_ref(), keep));
+    }
+    let to = shader::Image::from_rgba(size, to.pixmap.take());
+    let old = image::open(old).map_err(|e| format!("{}: {e}", old.display()))?;
+    let from = crate::backdrop::paint::background(old, fill, size, fill_color)?;
+    let from = shader::Image::from_rgba(size, from.pixmap.take());
+    Ok((shader::Frames { from, to, aux }, subject))
+}
+
+/// Sketch: share of its drawing phase the wash takes to settle (the old
+/// subject leaves as fast).
+const SKETCH_WASH_RISE: f32 = 0.3;
+
+/// Side of the downscaled copy used to pick clock ink from the wallpaper.
+const TONE_MAP_PX: u32 = 160;
+/// Audio ring: frame period while visible, poll period while waiting for
+/// sound, easing rate (1/s), rest threshold and longest easing step.
+const RING_FRAME: Duration = Duration::from_millis(33);
+const RING_POLL: Duration = Duration::from_millis(250);
+const RING_EASE_RATE: f32 = 5.0;
+const RING_REST: f32 = 0.005;
+const RING_MAX_DT_S: f32 = 0.25;
+/// Milliseconds per minute, and the slack after a minute boundary before
+/// the clock redraws (so the new minute is already current).
+const MS_PER_MINUTE: i64 = 60_000;
+const MINUTE_WAKE_SLACK: Duration = Duration::from_millis(20);
+
+/// Fade of a depth cut-out arriving (and of the one it replaces).
+const CUTOUT_FADE: Duration = Duration::from_millis(400);
+/// Fade of a cut-out leaving because depth was switched off / unavailable.
+const CUTOUT_EXIT_FADE: Duration = Duration::from_millis(350);
+
+// ── Picker overlay ───────────────────────────────────────────────────────
+
+/// The "video" badge on picker cards: inset from the card corner, height,
+/// glyph size and glass opacity.
+const BADGE_INSET: f32 = crate::kit::tokens::MD;
+const BADGE_H: f32 = crate::kit::tokens::XL + crate::kit::tokens::XS;
+const BADGE_ICON: f32 = text::LABEL;
+const BADGE_GLASS: f32 = 0.86;
+
+/// The badge marking a video wallpaper (`label`: with the word, else the
+/// glyph alone for narrow slices).
+fn video_badge(palette: &mandara_theme::MandaraPalette, label: bool) -> gpui::Div {
+    div()
+        .absolute()
+        .top(px(BADGE_INSET))
+        .h(px(BADGE_H))
+        .min_w(px(BADGE_H))
+        .px(px(if label { crate::kit::tokens::SM } else { 0.0 }))
+        .rounded_full()
+        .bg(frame_color(palette).with_alpha(BADGE_GLASS).hsla())
+        .flex()
+        .items_center()
+        .justify_center()
+        .gap(px(crate::kit::tokens::XS))
+        .text_size(px(text::LABEL))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(palette.on_surface.hsla())
+        .child(icon("play", BADGE_ICON, palette.on_surface))
+        .when(label, |el| el.child(t("Video")))
+}
+
+/// The badge marking a wallpaper the generator made: the video badge's
+/// glass at the bottom corner, the paintbrush in the accent color.
+fn generated_badge(palette: &mandara_theme::MandaraPalette, label: bool) -> gpui::Div {
+    div()
+        .absolute()
+        .bottom(px(BADGE_INSET))
+        .left(px(BADGE_INSET))
+        .h(px(BADGE_H))
+        .min_w(px(BADGE_H))
+        .px(px(if label { crate::kit::tokens::SM } else { 0.0 }))
+        .rounded_full()
+        .bg(frame_color(palette).with_alpha(BADGE_GLASS).hsla())
+        .flex()
+        .items_center()
+        .justify_center()
+        .gap(px(crate::kit::tokens::XS))
+        .text_size(px(text::LABEL))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(palette.on_surface.hsla())
+        .child(icon("brush", BADGE_ICON, palette.primary))
+        .when(label, |el| el.child(t("Generated")))
+}
+
+/// The mark on a card whose file can't be read: glyph size and opacity.
+const UNREADABLE_GLYPH: f32 = 22.0;
+const UNREADABLE_ALPHA: f32 = 0.6;
+
+/// Progress fractions are shown as whole percents.
+const PERCENT: f32 = 100.0;
+
+const PICKER_SPRING: SpringConfig = SpringConfig::new(320.0, 22.0, 1.0);
+/// Focused card width; neighbours shrink to `SMALL_W` (all 16:10).
+/// Carousel side-tile width at size 1.0; the focused tile is
+/// `picker_focus` times wider.
+const SMALL_W: f32 = 340.0;
+const GAP: f32 = 26.0;
+
+/// Where the picker's wallpapers come from.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum Source {
+    Local,
+    Wallhaven,
+}
+
+/// Wallhaven browsing state.
+#[derive(Default)]
+struct Online {
+    /// Parallel to `all`: the result behind each entry.
+    walls: Vec<Wall>,
+    page: u32,
+    last_page: u32,
+    loading: bool,
+    error: Option<String>,
+    /// Debounced search after typing.
+    search_task: Option<Task<()>>,
+    /// Full-resolution prefetch of the focused result.
+    prefetch_task: Option<Task<()>>,
+    prefetch_for: Option<String>,
+    /// A result being downloaded to apply.
+    applying: Option<String>,
+}
+
+pub struct PickerView {
+    shell: Entity<ShellState>,
+    source: Source,
+    online: Online,
+    thumbs: Entity<Thumbnails>,
+    focus: FocusHandle,
+    all: Vec<PathBuf>,
+    shown: Vec<usize>,
+    query: String,
+    selected: usize,
+    offset: SpringValue<f32>,
+    appear: SpringValue<f32>,
+    clock: FrameClock,
+    closing: bool,
+    /// Waits for the size of the output it opened for, a few frames at
+    /// most: without a limit it stayed invisible on an output of another
+    /// size, holding the keyboard, and Esc never reached it
+    /// ([`crate::first_frame`]).
+    first: FirstFrame,
+    scroll_accum: f32,
+    /// Wallpaper generator: the local items made by it (the "Generated"
+    /// marker, Remix), the picker's own job and its last error.
+    generated: HashSet<PathBuf>,
+    gen_job: Option<u64>,
+    gen_error: Option<String>,
+    /// Images drawn this session (thumbnails, slices, previews): released
+    /// from GPUI's image cache when the picker goes, or every session kept
+    /// its decoded pixels for good.
+    painted: HashSet<PathBuf>,
+}
+
+impl PickerView {
+    pub fn new(expected: (f32, f32), window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let shell = shell(cx);
+        cx.observe(&shell, |this: &mut Self, shell, cx| {
+            this.closing = !shell.read(cx).wallpaper_open;
+            cx.notify();
+        })
+        .detach();
+        let thumbs = thumbnails(cx);
+        cx.observe(&thumbs, |_, _, cx| cx.notify()).detach();
+        cx.observe(&config(cx), |_, _, cx| cx.notify()).detach();
+        let focus = cx.focus_handle();
+        focus.focus(window, cx);
+        first_frame::guard("wallpaper picker", window, cx, |this| this.first.drawn(), |this, cx| this.close(cx));
+        let all = list(&directory(cx));
+        let current = config(cx).read(cx).get().wallpaper.path.clone();
+        let selected = current.and_then(|c| all.iter().position(|p| *p == c)).unwrap_or(0);
+        let mut offset = SpringValue::new(selected as f32, PICKER_SPRING);
+        offset.set_target(selected as f32);
+        // No local wallpapers: browse Wallhaven instead (only with the
+        // opt-in Wallhaven plugin on; otherwise no request is ever made).
+        let online_first = all.is_empty() && config(cx).read(cx).get().wallhaven_enabled();
+        let mut this = Self {
+            shell,
+            source: Source::Local,
+            online: Online::default(),
+            thumbs,
+            focus,
+            shown: (0..all.len()).collect(),
+            all,
+            query: String::new(),
+            selected,
+            offset,
+            appear: SpringValue::new(0.0, PICKER_SPRING),
+            clock: FrameClock::new(),
+            closing: false,
+            first: FirstFrame::new(expected),
+            scroll_accum: 0.0,
+            generated: HashSet::new(),
+            gen_job: None,
+            gen_error: None,
+            painted: HashSet::new(),
+        };
+        // A picker removed without its outro (its output went away) still
+        // lets go of its images.
+        cx.on_release(|this: &mut Self, cx| {
+            for path in this.painted.drain() {
+                crate::image_cache::forget_path(&path, cx);
+            }
+        })
+        .detach();
+        if crate::plugins::wallpaper_generator::enabled(cx) {
+            this.generated = crate::plugins::wallpaper_generator::model::generated_among(&this.all);
+            let generator = crate::plugins::wallpaper_generator::wallgen(cx);
+            cx.observe(&generator, |this: &mut Self, generator, cx| this.generator_changed(&generator, cx)).detach();
+        }
+        if online_first {
+            this.set_source(Source::Wallhaven, cx);
+        }
+        this
+    }
+
+    /// Switches between the local folder and Wallhaven.
+    fn set_source(&mut self, source: Source, cx: &mut Context<Self>) {
+        if source == self.source {
+            return;
+        }
+        self.source = source;
+        self.query.clear();
+        self.selected = 0;
+        self.offset = SpringValue::new(0.0, PICKER_SPRING);
+        self.online = Online::default();
+        match source {
+            Source::Local => {
+                self.all = list(&directory(cx));
+                self.shown = (0..self.all.len()).collect();
+                if crate::plugins::wallpaper_generator::enabled(cx) {
+                    self.generated = crate::plugins::wallpaper_generator::model::generated_among(&self.all);
+                }
+            }
+            Source::Wallhaven => {
+                self.all.clear();
+                self.shown.clear();
+                self.search_online(true, cx);
+            }
+        }
+        cx.notify();
+    }
+
+    /// Fetches a Wallhaven page (and its previews): a fresh search when
+    /// `reset`, else the next page appended.
+    fn search_online(&mut self, reset: bool, cx: &mut Context<Self>) {
+        let cfg = config(cx).read(cx).snapshot();
+        if (self.online.loading && !reset) || !cfg.wallhaven_enabled() {
+            return;
+        }
+        let text = if self.query.trim().is_empty() { cfg.wallpaper.wallhaven_query.clone() } else { self.query.clone() };
+        let page = if reset { 1 } else { self.online.page + 1 };
+        let q = wallhaven::Query { text, sorting: if self.query.trim().is_empty() { cfg.wallpaper.wallhaven_sorting.clone() } else { "relevance".into() }, atleast: "1920x1080".into(), page };
+        self.online.loading = true;
+        self.online.error = None;
+        let task = cx.background_executor().spawn(async move {
+            let page = wallhaven::search(&q)?;
+            // Previews in parallel, keeping result order.
+            let previews: Vec<Option<PathBuf>> = std::thread::scope(|s| {
+                let handles: Vec<_> = page.walls.iter().map(|w| s.spawn(move || wallhaven::preview(w).ok())).collect();
+                handles.into_iter().map(|h| h.join().ok().flatten()).collect()
+            });
+            Ok::<_, String>((page, previews))
+        });
+        cx.spawn(async move |this, cx| {
+            let result = task.await;
+            let _ = this.update(cx, |this, cx| {
+                this.online.loading = false;
+                match result {
+                    Ok((page, previews)) => {
+                        if reset {
+                            this.all.clear();
+                            this.online.walls.clear();
+                            this.selected = 0;
+                            this.offset = SpringValue::new(0.0, PICKER_SPRING);
+                        }
+                        for (w, p) in page.walls.into_iter().zip(previews) {
+                            if let Some(p) = p {
+                                this.all.push(p);
+                                this.online.walls.push(w);
+                            }
+                        }
+                        this.shown = (0..this.all.len()).collect();
+                        this.online.page = page.page;
+                        this.online.last_page = page.last_page;
+                        if this.all.is_empty() {
+                            this.online.error = Some(t("No Wallhaven results").into());
+                        }
+                    }
+                    Err(e) => this.online.error = Some(e),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    /// Wallhaven: loads the focused result at full resolution after a short
+    /// dwell (sharper preview, instant apply), and the next page near the end.
+    fn online_upkeep(&mut self, cx: &mut Context<Self>) {
+        if self.source != Source::Wallhaven {
+            return;
+        }
+        if !self.online.loading && self.online.page < self.online.last_page && self.selected + 5 >= self.shown.len() && !self.shown.is_empty() {
+            self.search_online(false, cx);
+        }
+        let Some(&i) = self.shown.get(self.selected) else { return };
+        let Some(wall) = self.online.walls.get(i).cloned() else { return };
+        if self.online.prefetch_for.as_deref() == Some(wall.id.as_str()) || self.all[i].starts_with(wallhaven::download_dir()) {
+            return;
+        }
+        self.online.prefetch_for = Some(wall.id.clone());
+        self.online.prefetch_task = Some(cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(PREFETCH_DWELL).await;
+            let w = wall.clone();
+            let full = cx.background_executor().spawn(async move { wallhaven::download(&w) }).await;
+            let _ = this.update(cx, |this, cx| {
+                if let Ok(path) = full
+                    && let Some(pos) = this.online.walls.iter().position(|x| x.id == wall.id) {
+                        this.all[pos] = path;
+                    }
+                cx.notify();
+            });
+        }));
+    }
+
+    fn close(&mut self, cx: &mut Context<Self>) {
+        self.closing = true;
+        self.shell.update(cx, |s, cx| s.set_wallpaper_picker(false, cx));
+    }
+
+    /// The focused local wallpaper, if the generator made it.
+    fn focused_generated(&self) -> Option<&PathBuf> {
+        if self.source != Source::Local {
+            return None;
+        }
+        self.shown.get(self.selected).map(|&i| &self.all[i]).filter(|p| self.generated.contains(*p))
+    }
+
+    /// Generate: a variation of the focused generated wallpaper, else a
+    /// random one; a second press while it runs cancels it.
+    fn generate(&mut self, cx: &mut Context<Self>) {
+        use crate::plugins::wallpaper_generator as wg;
+        let generator = wg::wallgen(cx);
+        if self.gen_job.is_some() && generator.read(cx).busy() {
+            generator.update(cx, |w, cx| w.cancel(cx));
+            return;
+        }
+        let base = self.focused_generated().and_then(|p| mandara_wallgen::recipe_for(p));
+        self.gen_error = None;
+        match wg::generate_from_picker(base, cx) {
+            Ok(id) => self.gen_job = Some(id),
+            Err(e) => self.gen_error = Some(e),
+        }
+        cx.notify();
+    }
+
+    /// The picker's job ended: list the new file and focus it.
+    fn generator_changed(&mut self, generator: &Entity<crate::plugins::wallpaper_generator::Wallgen>, cx: &mut Context<Self>) {
+        let Some(job) = self.gen_job else {
+            cx.notify();
+            return;
+        };
+        let Some(finished) = generator.read(cx).finished.clone().filter(|f| f.id == job) else {
+            cx.notify();
+            return;
+        };
+        self.gen_job = None;
+        match finished.result {
+            Ok(done) if self.source == Source::Local => {
+                self.all = list(&directory(cx));
+                self.generated = crate::plugins::wallpaper_generator::model::generated_among(&self.all);
+                self.query.clear();
+                self.shown = (0..self.all.len()).collect();
+                if let Some(slot) = self.all.iter().position(|p| *p == done.file.path) {
+                    self.selected = slot;
+                }
+            }
+            Ok(_) => {}
+            Err(e) => self.gen_error = Some(e),
+        }
+        cx.notify();
+    }
+
+    /// Re-filters by the query, keeping the selected image selected when
+    /// it still matches.
+    fn filter(&mut self) {
+        if self.source == Source::Wallhaven {
+            return;
+        }
+        let keep = self.shown.get(self.selected).copied();
+        let q = self.query.to_lowercase();
+        self.shown = (0..self.all.len()).filter(|&i| q.is_empty() || self.all[i].file_stem().is_some_and(|s| s.to_string_lossy().to_lowercase().contains(&q))).collect();
+        let selected = keep.and_then(|k| self.shown.iter().position(|&i| i == k));
+        self.selected = selected.unwrap_or(0);
+        if selected.is_none() {
+            self.offset = SpringValue::new(0.0, PICKER_SPRING);
+        }
+    }
+
+    fn step(&mut self, delta: isize) {
+        if self.shown.is_empty() {
+            return;
+        }
+        self.selected = (self.selected as isize + delta).clamp(0, self.shown.len() as isize - 1) as usize;
+    }
+
+    fn apply_selected(&mut self, cx: &mut Context<Self>) {
+        let Some(&i) = self.shown.get(self.selected) else { return };
+        if self.source == Source::Wallhaven && !self.all[i].starts_with(wallhaven::download_dir()) {
+            let Some(wall) = self.online.walls.get(i).cloned() else { return };
+            self.online.applying = Some(wall.id.clone());
+            cx.spawn(async move |this, cx| {
+                let full = cx.background_executor().spawn(async move { wallhaven::download(&wall) }).await;
+                let _ = this.update(cx, |this, cx| {
+                    this.online.applying = None;
+                    match full {
+                        Ok(path) => {
+                            if let Some(slot) = this.all.get_mut(i) {
+                                *slot = path.clone();
+                            }
+                            apply(path, cx);
+                        }
+                        Err(e) => this.online.error = Some(e),
+                    }
+                    cx.notify();
+                });
+            })
+            .detach();
+            cx.notify();
+            return;
+        }
+        apply(self.all[i].clone(), cx);
+    }
+
+    /// Typing in Wallhaven mode searches after a pause.
+    fn query_changed(&mut self, cx: &mut Context<Self>) {
+        if self.source != Source::Wallhaven {
+            self.filter();
+            return;
+        }
+        self.online.search_task = Some(cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(SEARCH_DEBOUNCE).await;
+            let _ = this.update(cx, |this, cx| this.search_online(true, cx));
+        }));
+    }
+
+    fn on_key(&mut self, e: &KeyDownEvent, cx: &mut Context<Self>) {
+        let k = &e.keystroke;
+        match k.key.as_str() {
+            "escape" if !self.query.is_empty() => {
+                self.query.clear();
+                self.query_changed(cx);
+            }
+            "tab" if config(cx).read(cx).get().wallhaven_enabled() => {
+                let next = if self.source == Source::Local { Source::Wallhaven } else { Source::Local };
+                self.set_source(next, cx);
+            }
+            "escape" => self.close(cx),
+            "left" => self.step(-1),
+            "right" => self.step(1),
+            "pageup" => self.step(-5),
+            "pagedown" => self.step(5),
+            "home" => self.step(-(self.shown.len() as isize)),
+            "end" => self.step(self.shown.len() as isize),
+            "enter" => self.apply_selected(cx),
+            "backspace" => {
+                if self.query.pop().is_some() {
+                    self.query_changed(cx);
+                }
+            }
+            _ => {
+                if let Some(ch) = k.key_char.as_ref().filter(|_| !k.modifiers.control && !k.modifiers.alt) {
+                    self.query.push_str(ch);
+                    self.query_changed(cx);
+                }
+            }
+        }
+        self.online_upkeep(cx);
+        cx.notify();
+    }
+}
+
+/// Horizontal centre of a carousel card `rel` slots from the focused one
+/// (focused cards `big` wide, others `small`), interpolated continuously so
+/// the carousel glides while the offset spring moves.
+fn slot_center(rel: f32, big: f32, small: f32, gap: f32) -> f32 {
+    rel.signum() * (rel.abs() * (small + gap) + (big - small) / 2.0 * rel.abs().min(1.0))
+}
+
+fn slot_width(rel: f32, big: f32, small: f32) -> f32 {
+    small + (big - small) * (1.0 - rel.abs()).clamp(0.0, 1.0)
+}
+
+/// Slices layout (Omarchy-style): a large 16:9 preview with slanted slices
+/// overlapping on either side.
+#[derive(Copy, Clone)]
+struct Slices {
+    preview_x: f32,
+    center_y: f32,
+    expanded: (f32, f32),
+    slice: (f32, f32),
+    spacing: f32,
+}
+
+impl Slices {
+    fn new(sw: f32, sh: f32, size: f32, center_y: f32) -> Self {
+        let ew = (sw * 0.5 * size).min(sw * 0.86);
+        let eh = (sh * 0.7).min(ew * 9.0 / 16.0);
+        let slice = (ew * 0.28, eh * 0.94);
+        Self { preview_x: (sw - ew) / 2.0, center_y, expanded: (ew, eh), slice, spacing: -slice.0 * 0.2 }
+    }
+
+    fn step(&self) -> f32 {
+        self.slice.0 + self.spacing
+    }
+
+    /// Box `(x, y, w, h)` of the item `rel` (integer) places from the focus.
+    fn box_at(&self, rel: f32) -> (f32, f32, f32, f32) {
+        let (ew, eh) = self.expanded;
+        let (w, h, x) = if rel.abs() < 1e-4 {
+            (ew, eh, self.preview_x)
+        } else if rel < 0.0 {
+            (self.slice.0, self.slice.1, self.preview_x + rel * self.step())
+        } else {
+            (self.slice.0, self.slice.1, self.preview_x + ew + self.spacing + (rel - 1.0) * self.step())
+        };
+        (x, self.center_y - h / 2.0, w, h)
+    }
+
+    /// Interpolated box for a fractional position (the strip glides).
+    fn lerp(&self, rel: f32) -> (f32, f32, f32, f32) {
+        let a = rel.floor();
+        let t = rel - a;
+        let (l, r) = (self.box_at(a), self.box_at(a + 1.0));
+        (l.0 + (r.0 - l.0) * t, l.1 + (r.1 - l.1) * t, l.2 + (r.2 - l.2) * t, l.3 + (r.3 - l.3) * t)
+    }
+}
+
+impl Render for PickerView {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let vp = window.viewport_size();
+        let (sw, sh) = (f32::from(vp.width), f32::from(vp.height));
+        if !self.first.ready((sw, sh)) && !self.closing {
+            window.request_animation_frame();
+            return div().id("picker-root").size_full().track_focus(&self.focus).into_any_element();
+        }
+        let palette = mandara_core::frame_palette(window, cx);
+        let f = fonts(cx);
+        let cfg = config(cx).read(cx).snapshot();
+        // Exit without overshoot; the entrance keeps its spring.
+        self.appear.set_config(if self.closing { SpringConfig::critical(420.0) } else { PICKER_SPRING });
+        self.appear.set_target(if self.closing { 0.0 } else { 1.0 });
+        self.offset.set_target(self.selected as f32);
+        let dt = self.clock.tick(Instant::now());
+        let moving = self.appear.step(dt) | self.offset.step(dt);
+        if self.closing && self.appear.value() <= 0.01 {
+            for path in self.painted.drain() {
+                crate::image_cache::evict_path(&path, window, cx);
+            }
+            window.remove_window();
+            return div().id("picker-root").size_full().into_any_element();
+        }
+        if moving {
+            window.request_animation_frame();
+        } else {
+            self.clock.idle();
+        }
+        let appear = self.appear.value().clamp(0.0, 1.2);
+        let shown_alpha = appear.min(1.0);
+        let offset = self.offset.value();
+        let (cx0, cy0) = (sw / 2.0, sh / 2.0 - 30.0);
+        let style = cfg.wallpaper.picker_style;
+        let size = cfg.wallpaper.picker_size.clamp(0.6, 1.6);
+        // Carousel metrics.
+        let small = SMALL_W * size;
+        let big = (small * cfg.wallpaper.picker_focus.clamp(1.5, 4.0)).min(sw * 0.62);
+        let gap = GAP * size;
+        // Slices metrics.
+        let slices = Slices::new(sw, sh, size, cy0);
+        let reach = match style {
+            mandara_config::PickerStyle::Carousel => ((sw / 2.0) / (small + gap)).ceil() as isize + 1,
+            mandara_config::PickerStyle::Slices => ((slices.preview_x / slices.step()).ceil() as isize).clamp(1, 6) + 1,
+        };
+
+        // Thumbnails for what's visible, nearest first (workers pop from the end).
+        let mut wanted: Vec<PathBuf> = Vec::new();
+        let reach_thumbs = if style == mandara_config::PickerStyle::Carousel { reach + 4 } else { -1 };
+        for d in (0..=reach_thumbs).rev() {
+            for i in [self.selected as isize + d, self.selected as isize - d] {
+                if i >= 0 && (i as usize) < self.shown.len() {
+                    wanted.push(self.all[self.shown[i as usize]].clone());
+                }
+            }
+        }
+        self.thumbs.update(cx, |t, cx| t.request(wanted, cx));
+
+        let current = cfg.wallpaper.path.clone();
+        let thumbs = self.thumbs.read(cx);
+        let mut cards = Vec::new();
+        if style == mandara_config::PickerStyle::Slices && !self.shown.is_empty() {
+            // Slanted variants at device-pixel sizes (quantized so the cache
+            // keys stay stable), the preview one a bit under full resolution.
+            let scale = window.scale_factor();
+            let q8 = |v: f32| ((v * scale / 8.0).round() * 8.0).max(8.0) as u32;
+            let (sjw, sjh) = (q8(slices.slice.0), q8(slices.slice.1));
+            let (bjw, bjh) = (q8(slices.expanded.0 * 0.8), q8(slices.expanded.1 * 0.8));
+            let lo = (self.selected as isize - reach).max(0) as usize;
+            let hi = ((self.selected as isize + reach) as usize).min(self.shown.len() - 1);
+            let mut jobs: Vec<Job> = Vec::new();
+            for slot in (lo..=hi).rev() {
+                jobs.push((self.all[self.shown[slot]].clone(), sjw, sjh));
+            }
+            for d in [1isize, -1, 0] {
+                let i = self.selected as isize + d;
+                if i >= 0 && (i as usize) < self.shown.len() {
+                    jobs.push((self.all[self.shown[i as usize]].clone(), bjw, bjh));
+                }
+            }
+            self.thumbs.update(cx, |t, cx| t.request_jobs(jobs, cx));
+            let thumbs = self.thumbs.read(cx);
+            // Far slices first so nearer ones overlap them.
+            let mut order: Vec<usize> = (lo..=hi).collect();
+            order.sort_by(|a, b| (*b as f32 - offset).abs().total_cmp(&(*a as f32 - offset).abs()));
+            for slot in order {
+                let path = &self.all[self.shown[slot]];
+                let rel = slot as f32 - offset;
+                let (x, y, w, h) = slices.lerp(rel);
+                let y = y + (1.0 - shown_alpha) * 40.0;
+                let lean = SHEAR * h;
+                let (left, width) = (x - lean / 2.0, w + lean);
+                if left + width < 0.0 || left > sw {
+                    continue;
+                }
+                let e = (1.0 - rel.abs()).clamp(0.0, 1.0);
+                let is_video = mandara_media::is_video(path);
+                let is_generated = self.generated.contains(path);
+                let slice_img = thumbs.get_job(&(path.clone(), sjw, sjh)).cloned();
+                let big_img = thumbs.get_job(&(path.clone(), bjw, bjh)).cloned();
+                self.painted.extend(slice_img.iter().chain(big_img.iter().filter(|_| e > 0.0)).cloned());
+                let ready = slice_img.is_some() || big_img.is_some();
+                // An unreadable file (corrupt, or not an image despite its
+                // name) says so instead of looking forever like it loads.
+                let unreadable = !ready && thumbs.failed_job(&(path.clone(), sjw, sjh));
+                let placeholder = palette.surface_container_high.with_alpha(0.7);
+                cards.push(
+                    div()
+                        .id(("slice", slot))
+                        .absolute()
+                        .left(px(left))
+                        .top(px(y))
+                        .w(px(width))
+                        .h(px(h))
+                        .cursor_pointer()
+                        .opacity(shown_alpha)
+                        .when_some(slice_img, |el, p| el.child(img(p).absolute().inset_0().size_full().object_fit(ObjectFit::Fill).opacity(if big_img.is_some() { 1.0 - e } else { 1.0 })))
+                        .when_some(big_img.filter(|_| e > 0.0), |el, p| el.child(img(p).absolute().inset_0().size_full().object_fit(ObjectFit::Fill).opacity(e)))
+                        // Frame: dim when unfocused, light rim brightening with focus.
+                        .child(
+                            gpui::canvas(
+                                |_, _, _| {},
+                                move |b, _, window, _| {
+                                    let (bx, by) = (f32::from(b.origin.x), f32::from(b.origin.y));
+                                    let (bw, bh) = (f32::from(b.size.width), f32::from(b.size.height));
+                                    let l = SHEAR * bh;
+                                    let pts = [(bx + l, by), (bx + bw, by), (bx + bw - l, by + bh), (bx, by + bh)];
+                                    let shape = |mut pb: gpui::PathBuilder| {
+                                        for (i, (px_, py_)) in pts.iter().enumerate() {
+                                            let pt = point(px(*px_), px(*py_));
+                                            if i == 0 { pb.move_to(pt) } else { pb.line_to(pt) }
+                                        }
+                                        pb.close();
+                                        pb.build().ok()
+                                    };
+                                    if !ready {
+                                        if let Some(path) = shape(gpui::PathBuilder::fill()) {
+                                            window.paint_path(path, placeholder.hsla());
+                                        }
+                                    } else if e < 1.0
+                                        && let Some(path) = shape(gpui::PathBuilder::fill()) {
+                                            window.paint_path(path, gpui::black().opacity(0.16 * (1.0 - e)));
+                                        }
+                                    if let Some(path) = shape(gpui::PathBuilder::stroke(px(1.0 + e))) {
+                                        window.paint_path(path, gpui::Rgba { r: 1.0, g: 0.97, b: 0.93, a: 0.28 + 0.72 * e });
+                                    }
+                                },
+                            )
+                            .absolute()
+                            .inset_0(),
+                        )
+                        .when(unreadable, |el| el.child(div().absolute().inset_0().flex().items_center().justify_center().child(icon("close", UNREADABLE_GLYPH, palette.on_surface_variant.with_alpha(UNREADABLE_ALPHA)))))
+                        // Inside the slant: the top edge starts one lean in.
+                        .when(is_video, |el| el.child(video_badge(&palette, false).left(px(lean + BADGE_INSET))))
+                        .when(is_generated, |el| el.child(generated_badge(&palette, false)))
+                        .keep_inside()
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if this.selected == slot {
+                                this.apply_selected(cx);
+                            } else {
+                                this.selected = slot;
+                                this.online_upkeep(cx);
+                            }
+                            cx.notify();
+                        })),
+                );
+            }
+        } else if !self.shown.is_empty() {
+            let lo = (self.selected as isize - reach).max(0) as usize;
+            let hi = ((self.selected as isize + reach) as usize).min(self.shown.len() - 1);
+            for slot in lo..=hi {
+                let path = &self.all[self.shown[slot]];
+                let rel = slot as f32 - offset;
+                let w = slot_width(rel, big, small);
+                let h = w / 1.6;
+                // Entrance: cards rise and fan out from the centre.
+                let x = cx0 + slot_center(rel, big, small, gap) * (0.85 + 0.15 * shown_alpha) - w / 2.0;
+                let y = cy0 - h / 2.0 + (1.0 - shown_alpha) * 50.0;
+                if x + w < 0.0 || x > sw {
+                    continue;
+                }
+                let focus = (1.0 - rel.abs()).clamp(0.0, 1.0);
+                let alpha = (1.0 - (rel.abs() - 1.0).max(0.0) * 0.16).clamp(0.25, 1.0) * shown_alpha;
+                let radius = 14.0 + 8.0 * focus;
+                let is_current = current.as_deref() == Some(path.as_path());
+                let is_video = mandara_media::is_video(path);
+                let is_generated = self.generated.contains(path);
+                let thumb = thumbs.get(path).cloned();
+                self.painted.extend(thumb.iter().cloned());
+                let failed = thumbs.failed(path);
+                cards.push(
+                    div()
+                        .id(("wall", slot))
+                        .absolute()
+                        .left(px(x))
+                        .top(px(y))
+                        .w(px(w))
+                        .h(px(h))
+                        .rounded(px(crate::style::radius(radius)))
+                        .clip_rounded()
+                        .cursor_pointer()
+                        .opacity(alpha)
+                        .bg(palette.surface_container_high.with_alpha(0.6).hsla())
+                        .shadow(vec![BoxShadow {
+                            color: gpui::black().opacity(0.22 + 0.2 * focus),
+                            offset: point(px(0.0), px(8.0 + 10.0 * focus)),
+                            blur_radius: px(18.0 + 22.0 * focus),
+                            spread_radius: px(0.0),
+                            inset: false,
+                        }])
+                        .when(focus > 0.6, |el| el.border_2().border_color(gpui::white().opacity(0.85)))
+                        .child(match thumb {
+                            Some(t) => img(t).size_full().rounded(px(crate::style::radius(radius))).object_fit(ObjectFit::Cover).into_any_element(),
+                            None => div()
+                                .size_full()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .child(icon(if failed { "close" } else { "image" }, UNREADABLE_GLYPH, palette.on_surface_variant.with_alpha(UNREADABLE_ALPHA)))
+                                .into_any_element(),
+                        })
+                        .when(is_video, |el| el.child(video_badge(&palette, true).left(px(BADGE_INSET))))
+                        .when(is_generated, |el| el.child(generated_badge(&palette, true)))
+                        .when(is_current, |el| {
+                            el.child(
+                                div()
+                                    .absolute()
+                                    .top(px(10.0))
+                                    .right(px(10.0))
+                                    .size(px(24.0))
+                                    .rounded_full()
+                                    .bg(palette.primary.hsla())
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .child(icon("check", 14.0, palette.on_primary)),
+                            )
+                        })
+                        .keep_inside()
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if this.selected == slot {
+                                this.apply_selected(cx);
+                            } else {
+                                this.selected = slot;
+                                this.online_upkeep(cx);
+                            }
+                            cx.notify();
+                        })),
+                );
+            }
+        }
+
+        // The light controls: one floating pill under the focused card.
+        let online = self.source == Source::Wallhaven;
+        let name = if online {
+            match (&self.online.applying, &self.online.error, self.online.loading && self.all.is_empty()) {
+                (Some(_), _, _) => t("Downloading…").to_string(),
+                (_, Some(e), _) => e.clone(),
+                (_, _, true) => t("Searching Wallhaven…").to_string(),
+                _ => self.shown.get(self.selected).and_then(|&i| self.online.walls.get(i)).map(|w| tf("Wallhaven · {resolution}", &[("resolution", &w.resolution)])).unwrap_or_default(),
+            }
+        } else {
+            self.shown.get(self.selected).and_then(|&i| self.all[i].file_stem()).map(|s| s.to_string_lossy().replace(['-', '_'], " ")).unwrap_or_default()
+        };
+        // The wallpaper generator's controls (local folder, plugin on).
+        let generator = self.source == Source::Local && crate::plugins::wallpaper_generator::enabled(cx);
+        let generating = self.gen_job.and(crate::plugins::wallpaper_generator::existing(cx)).and_then(|g| g.read(cx).progress()).map(|(p, _)| p);
+        let remix = self.focused_generated().cloned();
+        let name = match (&self.gen_error, generating) {
+            (Some(e), None) if generator => e.clone(),
+            _ => name,
+        };
+        let match_colors = cfg.wallpaper.match_colors;
+        let glass = frame_color(&palette).with_alpha(0.92);
+        let pill_btn = |id: &'static str, icon_name: &'static str, label: Option<gpui::SharedString>, on: bool| {
+            div()
+                .id(id)
+                .h(px(30.0))
+                .px(px(if label.is_some() { 12.0 } else { 8.0 }))
+                .rounded_full()
+                .flex()
+                .items_center()
+                .gap(px(6.0))
+                .cursor_pointer()
+                .text_size(px(text::BODY_S))
+                .font_weight(FontWeight::MEDIUM)
+                .bg(if on { palette.primary.hsla() } else { gpui::transparent_black() })
+                .text_color(if on { palette.on_primary.hsla() } else { palette.on_surface.hsla() })
+                .when(on, |el| el.hover(|s| s.opacity(0.9)))
+                .when(!on, |el| el.hover(|s| s.bg(palette.on_surface.with_alpha(0.08).hsla())))
+                .child(icon(icon_name, 14.0, if on { palette.on_primary } else { palette.on_surface_variant }))
+                .when_some(label, |el, l| el.child(l))
+        };
+        let searching = !self.query.is_empty();
+        let controls = div()
+            .id("picker-controls")
+            .flex()
+            .items_center()
+            .gap(px(4.0))
+            .h(px(42.0))
+            .px(px(6.0))
+            .rounded_full()
+            .bg(glass.hsla())
+            .shadow(vec![BoxShadow { color: gpui::black().opacity(0.2), offset: point(px(0.0), px(6.0)), blur_radius: px(18.0), spread_radius: px(0.0), inset: false }])
+            .keep_inside()
+            .child(
+                div()
+                    .px(px(10.0))
+                    .flex()
+                    .items_center()
+                    .gap(px(6.0))
+                    .child(icon("search", 13.0, palette.on_surface_variant))
+                    .child(
+                        div()
+                            .min_w(px(90.0))
+                            .text_size(px(text::BODY_S))
+                            .text_color(if searching { palette.on_surface.hsla() } else { palette.on_surface_variant.with_alpha(0.75).hsla() })
+                            .child(if searching { format!("{}▏", self.query) } else if online { t("Search Wallhaven").to_string() } else { t("Type to filter").to_string() }),
+                    ),
+            )
+            .child(div().w(px(1.0)).h(px(18.0)).bg(palette.on_surface.with_alpha(0.12).hsla()))
+            .child(
+                div()
+                    .px(px(12.0))
+                    .max_w(px(260.0))
+                    .truncate()
+                    .text_size(px(text::BODY_S))
+                    .font_weight(FontWeight::MEDIUM)
+                    .child(if online { name } else if self.all.is_empty() { tf("No images in {directory}", &[("directory", &cfg.wallpaper.directory)]) } else if cfg.wallpaper.picker_names { name } else { String::new() }),
+            )
+            .child(div().text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla()).font_features(crate::fonts::tabular_nums()).child(format!("{} / {}", (self.selected + 1).min(self.shown.len()), self.shown.len())))
+            .child(div().w(px(1.0)).h(px(18.0)).mx(px(6.0)).bg(palette.on_surface.with_alpha(0.12).hsla()))
+            .when(cfg.wallhaven_enabled(), |el| {
+                el.child(pill_btn("wall-source", if online { "cloud" } else { "image" }, Some(if online { "Wallhaven" } else { t("Local") }.into()), online).on_click(cx.listener(|this, _, _, cx| {
+                    let next = if this.source == Source::Local { Source::Wallhaven } else { Source::Local };
+                    this.set_source(next, cx);
+                })))
+            })
+            .child(pill_btn("wall-match", "sun", Some(t("Match colors").into()), match_colors).on_click(|_, _, cx| update_config(cx, |c| c.wallpaper.match_colors = !c.wallpaper.match_colors)))
+            // Wallpaper generator: Remix the focused generated one in
+            // Studio, or Generate a new one (a second press cancels).
+            .when(generator && remix.is_some(), |el| {
+                el.child(pill_btn("wall-remix", "sliders", Some(t("Remix").into()), false).on_click(cx.listener(move |this, _, _, cx| {
+                    let Some(path) = this.focused_generated().cloned() else { return };
+                    match crate::plugins::wallpaper_generator::remix_in_studio(&path, cx) {
+                        Ok(()) => this.close(cx),
+                        Err(e) => this.gen_error = Some(e),
+                    }
+                    cx.notify();
+                })))
+            })
+            .when(generator, |el| {
+                let label: gpui::SharedString = match generating {
+                    Some(Some(p)) => tf("Generating… {percent}%", &[("percent", &((p * PERCENT).round() as u32))]).into(),
+                    Some(None) => t("Generating…").into(),
+                    None => t("Generate").into(),
+                };
+                el.child(
+                    pill_btn("wall-generate", if generating.is_some() { "close" } else { "brush" }, Some(label), generating.is_some())
+                        .font_features(crate::fonts::tabular_nums())
+                        .on_click(cx.listener(|this, _, _, cx| this.generate(cx))),
+                )
+            })
+            .child(pill_btn("wall-random", "refresh", None, false).on_click(cx.listener(|this, _, _, cx| {
+                if !this.shown.is_empty() {
+                    let n = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.subsec_nanos() as usize).unwrap_or(0);
+                    this.selected = n % this.shown.len();
+                    this.apply_selected(cx);
+                }
+                cx.notify();
+            })))
+            .child(pill_btn("wall-close", "close", None, false).on_click(cx.listener(|this, _, _, cx| this.close(cx))));
+        let half_h = match style {
+            mandara_config::PickerStyle::Carousel => big / 1.6 / 2.0,
+            mandara_config::PickerStyle::Slices => slices.expanded.1 / 2.0,
+        };
+        let controls_top = cy0 + half_h + 30.0 + (1.0 - shown_alpha) * 30.0;
+
+        div()
+            .id("picker-root")
+            .size_full()
+            .relative()
+            .track_focus(&self.focus)
+            .font_family(f.ui.clone())
+            .text_color(palette.on_surface.hsla())
+            .text_size(px(13.0 * cfg.typography.scale))
+            // A light veil so the floating cards read against any desktop.
+            .bg(gpui::black().opacity(0.32 * shown_alpha))
+            .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| this.on_key(e, cx)))
+            .on_scroll(cx.listener(|this, e: &ScrollEvent, _, cx| {
+                let d = e.delta.pixel_delta(px(40.0));
+                this.scroll_accum += f32::from(d.y) + f32::from(d.x);
+                while this.scroll_accum.abs() >= 40.0 {
+                    this.step(if this.scroll_accum > 0.0 { -1 } else { 1 });
+                    this.scroll_accum -= 40.0 * this.scroll_accum.signum();
+                }
+                this.online_upkeep(cx);
+                cx.notify();
+            }))
+            // Cards and controls stop propagation, so any press reaching the
+            // root is outside them: dismiss.
+            .on_mouse_down(MouseButton::Left, cx.listener(|this, _, _, cx| this.close(cx)))
+            .on_mouse_down(MouseButton::Right, cx.listener(|this, _, _, cx| this.close(cx)))
+            .children(cards)
+            .child(div().absolute().left_0().right_0().top(px(controls_top)).flex().justify_center().opacity(shown_alpha).child(controls))
+            .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Large shrinks box-average without a cropped copy; small ones still
+    /// resample. Both land exactly on the asked size and keep the colours.
+    #[test]
+    fn fallback_clocks_follow_widget_visibility_and_display_placement() {
+        use mandara_config::desktop_widgets::{DesktopWidget, WidgetKind, ClockWidget};
+        let mut cfg = mandara_config::ShellConfig::default();
+        cfg.wallpaper.enabled = true;
+        cfg.wallpaper.desktop_clock = true;
+        let mut clock = DesktopWidget { kind: WidgetKind::Clock(ClockWidget::with_face(mandara_config::desktop_widgets::ClockFace::Stacked)), ..Default::default() };
+        clock.place.displays = vec!["DP-1".into()];
+        cfg.desktop.widgets.items = vec![clock];
+        assert!(clock_visible(&cfg, Some("dp-1"), false, true));
+        assert!(!clock_visible(&cfg, Some("DP-2"), false, true));
+        assert!(!clock_visible(&cfg, Some("DP-1"), false, false));
+        cfg.desktop.widgets.hidden = true;
+        assert!(!clock_visible(&cfg, Some("DP-1"), false, true));
+        assert!(clock_visible(&cfg, Some("DP-1"), true, true));
+    }
+
+    #[test]
+    fn shrinking_is_exact_and_keeps_the_picture() {
+        // Left half red, right half blue.
+        let src = image::RgbImage::from_fn(800, 400, |x, _| if x < 400 { image::Rgb([220, 30, 30]) } else { image::Rgb([30, 30, 220]) });
+        let img = image::DynamicImage::ImageRgb8(src);
+        let big = shrink(&img, 200, 100);
+        assert_eq!((big.width(), big.height()), (200, 100));
+        let px = big.to_rgb8();
+        assert!(px.get_pixel(20, 50)[0] > 200 && px.get_pixel(180, 50)[2] > 200, "colours stay where they were");
+        let small = shrink(&img, 700, 350);
+        assert_eq!((small.width(), small.height()), (700, 350), "a small shrink resamples to the exact size");
+        // A square cover of the wide picture is its middle: half red, half blue.
+        let square = cover(&img, 100, 100).to_rgb8();
+        assert_eq!(square.dimensions(), (100, 100));
+        assert!(square.get_pixel(10, 50)[0] > 200 && square.get_pixel(90, 50)[2] > 200);
+        let fitted = fit_within(&img, 300, 300);
+        assert_eq!((fitted.width(), fitted.height()), (300, 150), "fit keeps the shape");
+    }
+
+    #[test]
+    fn match_colors_switches_and_restores_theme() {
+        let mut c = mandara_config::ShellConfig::default();
+        c.theme.source = ThemeSource::Preset { preset: "rose-pine".into() };
+        c.wallpaper.path = Some(PathBuf::from("/w/a.jpg"));
+        c.wallpaper.match_colors = true;
+        assert!(reconcile_theme(&mut c));
+        assert_eq!(c.theme.source, ThemeSource::Wallpaper { path: "/w/a.jpg".into(), variant: SchemeVariant::default(), seed: 0 });
+        assert!(!reconcile_theme(&mut c), "stable once applied");
+        c.wallpaper.path = Some(PathBuf::from("/w/b.jpg"));
+        assert!(reconcile_theme(&mut c));
+        assert!(matches!(&c.theme.source, ThemeSource::Wallpaper { path, .. } if path.ends_with("b.jpg")));
+        // A light / dark variant on screen drives the colours.
+        let dark = c.theme.mode.is_dark();
+        let variant = Some(PathBuf::from("/w/variant.jpg"));
+        if dark { c.wallpaper.variants.dark = variant } else { c.wallpaper.variants.light = variant }
+        assert!(reconcile_theme(&mut c));
+        assert!(matches!(&c.theme.source, ThemeSource::Wallpaper { path, .. } if path.ends_with("variant.jpg")));
+        c.wallpaper.match_colors = false;
+        assert!(reconcile_theme(&mut c));
+        assert_eq!(c.theme.source, ThemeSource::Preset { preset: "rose-pine".into() });
+    }
+
+    #[test]
+    fn cover_crops_to_aspect() {
+        let img = image::DynamicImage::new_rgb8(1000, 400);
+        let out = cover(&img, 480, 300);
+        assert_eq!((out.width(), out.height()), (480, 300));
+        let tall = image::DynamicImage::new_rgb8(300, 900);
+        assert_eq!(cover(&tall, 480, 300).dimensions_tuple(), (480, 300));
+    }
+
+    trait Dims {
+        fn dimensions_tuple(&self) -> (u32, u32);
+    }
+    impl Dims for image::DynamicImage {
+        fn dimensions_tuple(&self) -> (u32, u32) {
+            (self.width(), self.height())
+        }
+    }
+
+    #[test]
+    fn lists_images_sorted_and_skips_others() {
+        let dir = std::env::temp_dir().join(format!("mandara-wall-test-{}", std::process::id()));
+        let sub = dir.join("nested");
+        std::fs::create_dir_all(&sub).unwrap();
+        for name in ["b.jpg", "A.PNG", "notes.txt"] {
+            std::fs::write(dir.join(name), b"x").unwrap();
+        }
+        std::fs::write(sub.join("c.webp"), b"x").unwrap();
+        let names: Vec<String> = list(&dir).iter().map(|p| p.file_name().unwrap().to_string_lossy().into_owned()).collect();
+        assert_eq!(names, ["A.PNG", "b.jpg", "c.webp"]);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_stale_same_path_load_is_rejected() {
+        let a = PathBuf::from("/w/a.jpg");
+        let b = PathBuf::from("/w/b.jpg");
+        // Newer gen wins even when the path matches (fill change, reverse finish).
+        assert!(load_still_current(2, 2, Some(a.as_path()), &a));
+        assert!(!load_still_current(2, 1, Some(a.as_path()), &a));
+        assert!(!load_still_current(2, 2, Some(b.as_path()), &a));
+        assert!(!load_still_current(2, 2, None, &a));
+    }
+}

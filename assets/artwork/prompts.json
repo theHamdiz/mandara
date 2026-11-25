@@ -1,0 +1,211 @@
+{
+  "tool": "Built-in image_gen.imagegen; three independent generations; no reference images.",
+  "processing": "Original generated artwork cropped proportionally to 1600x900 and stored as RGB PNG. Covers add hand-authored SVG motifs, vector icon renders and unmodified panel interiors, then use NeuQuant 256-color optimization with Floyd–Steinberg dithering.",
+  "plugin_art": {
+    "method": "Hand-authored SVG glyphs in the existing 512-unit glass tile system. Reuses the three original generated backgrounds; no additional image generation. Icons and covers are rendered by cargo xtask art --compose.",
+    "privacy": {
+      "glyph": "Cream eye contour with a gold pupil; system green tile, shared light, rim and shoreline.",
+      "palette": "obsidian",
+      "motif": "watch",
+      "panel": null
+    },
+    "tray": {
+      "glyph": "Three status lozenges within a shallow enclosure; navigation blue tile.",
+      "palette": "corniche",
+      "motif": "peers",
+      "panel": null
+    },
+    "dock": {
+      "glyph": "Three app tiles with a raised center tile and a gold shelf; navigation blue tile.",
+      "palette": "corniche",
+      "motif": "shelf",
+      "panel": "docs/screenshots/dock.png; full 763x96 transparent capture, source corners preserved, no desktop content"
+    },
+    "app-installer": {
+      "glyph": "Open carton receiving a downward arrow; maintenance teal tile, distinct from the closed Containers cube.",
+      "palette": "obsidian",
+      "motif": "package",
+      "panel": null
+    },
+    "screen-time": {
+      "glyph": "Hourglass with gold sand; productivity rose tile, distinct from the round Clock and Pomodoro faces.",
+      "palette": "twilight",
+      "motif": "hourglass",
+      "panel": null
+    },
+    "mini-stats": {
+      "glyph": "Three compact vertical gauges; system green tile, distinct from the Resources chip.",
+      "palette": "obsidian",
+      "motif": "bars",
+      "panel": null,
+      "store": "Listed under More when uncategorized; included in Discover's first shelf."
+    },
+    "wallpaper-generator": {
+      "glyph": "Cream paintbrush with a gold ferrule and paint drop; sea-glass teal tile from #40C8BD to #185D54. The diagonal brush silhouette has no wave or picture frame, distinguishing it from Soundscapes, Wallpaper and Media at small sizes.",
+      "palette": "corniche",
+      "motif": "aurora",
+      "panel": null,
+      "store": "Artwork prepared ahead of plugin registration. Represents procedural still and looping wallpaper generation without depicting an unavailable panel."
+    },
+    "icon-themes": {
+      "glyph": "A spacious 2-by-2 icon set: a cream rounded square, circle and rounded diamond, plus a small folder with a warm gold inset in the fourth cell. Equal cell widths keep the folder separate from the three app shapes. Shared 28-unit cream strokes with round caps and joins stay readable at 32 px; amber-to-umber tile from #B3813E to #674126 with the shared light, rim and shoreline. Original geometry without project logos, lettering or borrowed theme icons.",
+      "palette": "corniche",
+      "motif": "tiles",
+      "panel": null
+    },
+    "ports": {
+      "glyph": "Cream network socket with three gold contacts and a short cable; maintenance teal tile with the shared light, rim and shoreline.",
+      "palette": "obsidian",
+      "motif": "signal",
+      "panel": null
+    },
+    "git-repos": {
+      "glyph": "Cream branch fork with two local nodes and a gold remote tip; maintenance teal tile. Generic branching linework without a project logo.",
+      "palette": "obsidian",
+      "motif": "circuit",
+      "panel": null
+    },
+    "ci": {
+      "glyph": "Cream play triangle inside an open run ring with a gold completion check; Corniche blue tile. No service logo.",
+      "palette": "corniche",
+      "motif": "orbits",
+      "panel": null
+    },
+    "crashes": {
+      "glyph": "Cream app window split by a gold zigzag crack; maintenance teal tile.",
+      "palette": "obsidian",
+      "motif": "frame",
+      "panel": null
+    },
+    "tailscale": {
+      "glyph": "Irregular mesh of four linked cream nodes with one gold peer; connection teal tile. No nine-dot grid or borrowed brand mark.",
+      "palette": "corniche",
+      "motif": "peers",
+      "panel": null
+    },
+    "uptime": {
+      "glyph": "Cream monitor frame with a gold heartbeat; connection teal tile.",
+      "palette": "corniche",
+      "motif": "waves",
+      "panel": null
+    },
+    "local-ai": {
+      "glyph": "Cream chip with a gold four-point sparkle; Twilight violet tile. A generic processor without a model or vendor mascot.",
+      "palette": "twilight",
+      "motif": "circuit",
+      "panel": null
+    },
+    "share": {
+      "glyph": "Cream QR-like corner squares beside a phone with a gold accent; Twilight violet tile. Decorative transfer symbol, not a scannable code.",
+      "palette": "twilight",
+      "motif": "capture",
+      "panel": null
+    },
+    "keybinds": {
+      "glyph": "Two cream keycaps above a wide space key, with a chevron and gold plus; navigation blue tile.",
+      "palette": "corniche",
+      "motif": "keys",
+      "panel": null
+    },
+    "progress": {
+      "glyph": "Cream partial progress ring with a gold current-point dot and short inner bar; system emerald tile.",
+      "palette": "obsidian",
+      "motif": "timer",
+      "panel": null
+    },
+    "breaks": {
+      "glyph": "Cream eye with a gold leaf for a pupil; Twilight indigo tile, distinct from Privacy's round pupil. The leaf sits clear of the eyelid.",
+      "palette": "twilight",
+      "motif": "watch",
+      "panel": null
+    },
+    "presentation": {
+      "glyph": "Cream presentation screen on a stand with a gold focus dot; Twilight indigo tile.",
+      "palette": "twilight",
+      "motif": "frame",
+      "panel": null
+    },
+    "jannah": {
+      "glyph": "Cream pointed arch doorway with a gold eight-pointed star, a soft interior glow and a gold threshold; Twilight indigo tile with the shared light, rim and shoreline. Suggests a gate opening onto light. No living beings, figures, text, calligraphy or symbols beyond the arch and star.",
+      "palette": "twilight",
+      "motif": "dawn",
+      "panel": null
+    },
+    "quran": {
+      "glyph": "Cream open book on a gold X-shaped rahle with a small gold eight-pointed star above the pages; Twilight indigo tile with the shared light, rim and shoreline, matching Jannah and Prayer times. Broad page contours and a central gutter stay readable at 32 px. No text, calligraphy or figures.",
+      "palette": "twilight",
+      "motif": "paper",
+      "panel": null
+    },
+    "hadith": {
+      "glyph": "Cream closed bound manuscript with a separate spine, gold page edge and gold eight-pointed cover medallion; Corniche blue tile with the shared light, rim and shoreline. A simple upright volume distinguishes the collection library from Qur'an's open book. No text, calligraphy or figures.",
+      "palette": "corniche",
+      "motif": "tiles",
+      "panel": null
+    },
+    "excluded": "Compositor is hidden infrastructure and registers commands only; no marketplace art.",
+    "translator": {
+      "glyph": "Overlapping cream and sand language cards on a rose tile.",
+      "palette": "twilight",
+      "motif": "paper",
+      "panel": null
+    },
+    "phone-connect": {
+      "glyph": "A cream phone and desktop joined by sand wireless arcs on a sea-glass tile.",
+      "palette": "corniche",
+      "motif": "peers",
+      "panel": null
+    },
+    "feeds": {
+      "glyph": "A cream news page with sand RSS waves on an emerald tile.",
+      "palette": "obsidian",
+      "motif": "signal",
+      "panel": null
+    },
+    "home-assistant": {
+      "glyph": "A cream house with three sand sensor nodes on a sea-glass tile.",
+      "palette": "corniche",
+      "motif": "circuit",
+      "panel": null
+    },
+    "reddit": {
+      "glyph": "Two overlapping cream speech bubbles with an indented gold reply elbow and a gold upvote arrow; Corniche sea-glass tile with the shared light, rim and shoreline. Original hand-authored SVG for community discussion and comment threads; no generated image, trademarked marks, mascot or lettering.",
+      "palette": "corniche",
+      "motif": "peers",
+      "panel": null
+    },
+    "radio": {
+      "glyph": "Cream tabletop radio with a round speaker, slanted aerial and sand tuning marks; a violet-to-indigo tile from #7867B0 to #382B67 with the shared light, rim and shoreline. Four broad shapes keep the receiver readable at small sizes.",
+      "palette": "twilight",
+      "motif": "signal",
+      "panel": null
+    },
+    "sound-themes": {
+      "glyph": "Cream tuning fork beside three sand tone dots; Media violet tile from #8666AA to #40316F with the shared light, rim and shoreline. The open fork and three separate dots suggest a coordinated set of short chimes, with four broad shapes that stay clear at 32 px. Original linework, distinct from Audio's speaker, Radio's receiver and Soundscapes' waves; no lettering or borrowed sound-theme marks.",
+      "palette": "twilight",
+      "motif": "sound",
+      "panel": null
+    },
+    "sudoku": {
+      "glyph": "Cream three-by-three puzzle lattice with a path-drawn 9 and a gold selected cell; deep emerald-to-onyx tile with the shared light, rim and shoreline. Broad grid lines remain clear at 32 px, distinct from the To-do check and Notes page.",
+      "palette": "obsidian",
+      "motif": "lattice",
+      "panel": null
+    },
+    "2048": {
+      "glyph": "Four rounded tiles in a two-by-two arrangement, with a gold slide arrow and a larger gold merged tile bearing a path-drawn indigo 8; dusk violet-to-indigo tile with a quiet coral inset, shared light, rim and shoreline. Original tile arrangement, distinct from the Pomodoro dial and Jannah doorway.",
+      "palette": "twilight",
+      "motif": "slide",
+      "panel": null
+    },
+    "stash": {
+      "glyph": "Cream floating tray seen from above holding a document and a mountain-and-sun picture, with a tilted card dropping along a short gold motion arc; Corniche sea-glass tile with the shared light, rim and shoreline. Original hand-authored SVG for temporary desktop shelves; no generated image, trademarked marks, mascot or lettering.",
+      "palette": "corniche",
+      "motif": "shelf",
+      "panel": null
+    }
+  },
+  "corniche": "Use case: stylized-concept. Asset type: reusable art background for Mandara Shell plugin marketplace covers, horizontal 16:9. Create one original premium abstract Mediterranean chromatic-glass artwork: wide ribbons of translucent turquoise sea glass flow in a slow S-curve through deep midnight Mediterranean blue, a sliver of warm limestone gold refracted light near the lower-right edge. Evoke water at Alexandria's Corniche without buildings. Perspective almost flat, sculptural frosted glass, soft specular edges, gentle luminous caustics, exquisitely restrained, broad simple shapes and generous dark negative space on the left half for future typesetting. Most visual movement in the right half and bottom edge. Palette deep navy #103C63, sea-glass #40C8BD, limestone #FFE4AB. No text, no logos, no icons, no UI, no devices, no objects other than abstract flowing glass. Avoid generic neon cyberpunk, tiny details, grain and noise. Output single landscape background.",
+  "twilight": "Use case: stylized-concept. Asset type: reusable art background for Mandara Shell marketplace covers, single horizontal 16:9 image. Original abstract 'Montaza Twilight' composition, a broad crescent-like curl of softly frosted indigo and dusk-violet glass suspended against deep royal indigo, with one quiet coral-amber glow at the far right horizon like distant Pharos lighthouse light. Fine subtle specular rim follows the giant arc; luminous lavender translucency; the sense of evening above the Mediterranean. Broad simple forms, minimal, richly colored but restrained premium editorial art direction. Keep the left half mostly calm dark negative space for later typography. Visual weight on the right half and lower edge, no central object. Palette #211C46 #30265E #7063B5 #EE9182 #FFD58A. No text, no logos, no icons, no UI, no planets, no buildings, no grain, no noise, no tiny decorative objects. Single full-bleed landscape background.",
+  "obsidian": "Use case: stylized-concept. Asset type: reusable art background for Mandara Shell marketplace covers, single horizontal 16:9 image. Original abstract 'Mandara Obsidian' study: two very broad rounded sheets of translucent emerald optical glass sweep diagonally upward on the right, over warm near-black onyx. A fine soft gold caustic traces the curved edge like a beam of a coastal lighthouse reflecting through sea glass. Restrained sculptural luxury, clean geometry with rounded corners, shallow depth, subtly luminous edges, polished but not glossy chrome. Left half calm and dark for later typography, right half and bottom edge carry visual form. Palette onyx #101C23 emerald #185D54 #41A18D warm gold #D9B774. Broad soft forms, no fine texture or film grain. No text, no logos, no icons, no UI, no devices or other objects. Single full-bleed landscape image."
+}
