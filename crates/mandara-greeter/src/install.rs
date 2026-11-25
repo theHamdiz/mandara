@@ -803,25 +803,30 @@ mod tests {
         );
     }
 
-    /// Hyprland's own checker accepts the greeter configs, when Hyprland is installed.
+    /// Hyprland's own checker accepts the greeter config dialect it reads, when Hyprland is installed.
     #[test]
     fn hyprland_validates_the_greeter_config() {
         if !std::process::Command::new("Hyprland").arg("--version").output().is_ok_and(|o| o.status.success()) {
             return;
         }
         let dir = tempfile::tempdir().unwrap();
-        for lua in [false, true] {
-            let (name, text) = hyprland_greeter_config(lua);
-            let file = dir.path().join(Path::new(name).file_name().unwrap());
-            std::fs::write(&file, &text).unwrap();
-            let out = std::process::Command::new("Hyprland").arg("--config").arg(&file).arg("--verify-config").output().unwrap();
-            assert!(
-                out.status.success(),
-                "{name}: {}{}",
-                String::from_utf8_lossy(&out.stdout),
-                String::from_utf8_lossy(&out.stderr)
-            );
-        }
+        // Only the dialect the installed Hyprland parses: 0.57+ rejects hyprlang.
+        let (name, text) = hyprland_greeter_config(hyprland_lua());
+        let file = dir.path().join(Path::new(name).file_name().unwrap());
+        std::fs::write(&file, &text).unwrap();
+        let out = std::process::Command::new("Hyprland")
+            .arg("--config")
+            .arg(&file)
+            .arg("--verify-config")
+            .env("XDG_RUNTIME_DIR", dir.path())
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{name}: {}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
     }
 
     /// Niri's own parser accepts the greeter config, when niri is installed.
