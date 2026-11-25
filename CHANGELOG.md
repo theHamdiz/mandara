@@ -6,6 +6,9 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Brightness on amdgpu tracks the real panel level again, and Mandara Login no
+longer shows Hyprland's start-hyprland watchdog toast at the greeter.
+
 ### Fixed
 
 - **amdgpu brightness steps and percentage.** Mandara reads the panel level
