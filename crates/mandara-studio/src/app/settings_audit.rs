@@ -560,6 +560,11 @@ fn every_compositor_setting_reaches_its_drop_ins() {
         if s.path == "/compositor/manage" || s.path == "/compositor/doctor_notify" {
             continue;
         }
+        // Mandara dispatch choice for Overview (hot corner / command); the
+        // workspace-overview *visuals* below are what the drop-in carries.
+        if s.path == "/compositor/mango_overview/style" {
+            continue;
+        }
         let Some(value) = changed_value(s, &registry::get(&base, s)) else { continue };
         let next = registry::set(&base, s, value.clone()).unwrap_or_else(|e| panic!("{}: {e}", s.path));
         let after = emitted(&next);
