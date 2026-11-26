@@ -344,8 +344,7 @@ fn node(view: &Rc<View>, i: u32, depth: u32, p: &MandaraPalette, frame: &Frame, 
         }
         Kind::Meter => styled(div().id(id), &n.style)
             .h(px(METER_H_PX))
-            .when(meter_fills_parent(n.style.width), |el| el.w_full())
-            .min_w(px(METER_MIN_W_PX))
+            .when(meter_fills_parent(n.style.width), |el| el.w_full().min_w(px(METER_MIN_W_PX)))
             .rounded_full()
             .bg(p.on_surface.with_alpha(TRACK_ALPHA).hsla())
             .child(div().h_full().rounded_full().w(relative(fraction(n.value))).bg(color.hsla()))
@@ -710,7 +709,7 @@ const PLACEHOLDER_FILL: f32 = 0.6;
 
 /// Whether a plugin meter should span its parent's width.
 fn meter_fills_parent(style_width: f32) -> bool {
-    style_width <= 0.0
+    !style_width.is_finite() || style_width <= 0.0
 }
 
 #[cfg(test)]
@@ -746,6 +745,9 @@ mod tests {
     fn meter_fills_parent_only_without_explicit_width() {
         assert!(meter_fills_parent(0.0));
         assert!(meter_fills_parent(-1.0));
+        assert!(meter_fills_parent(f32::NAN));
+        assert!(meter_fills_parent(f32::INFINITY));
         assert!(!meter_fills_parent(80.0));
+        assert!(!meter_fills_parent(20.0));
     }
 }

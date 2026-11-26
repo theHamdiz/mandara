@@ -6,12 +6,22 @@ About → What's new shows it too.
 
 ## Unreleased
 
-- Third-party plugin meters honour a set width instead of always stretching
-  full width. (#248)
-- Plugin `refresh-ms` can go down to 33 ms with full motion; reduce motion
-  still floors at 250 ms. (#249)
-- Task progress can show a quiet idle ring in the bar when nothing is
-  running (`show_when_idle` under `[plugins.settings.progress]`). (#250)
+Third-party plugin views size meters correctly, animated plugins may refresh
+faster with full motion, and the task progress bar can show a quiet ring while
+idle.
+
+### Fixed
+
+- **Plugin meter width.** Third-party plugin meters honour a set width instead
+  of always stretching full width, including widths below the former
+  40-pixel minimum. (#248)
+
+### Changed
+
+- **Plugin refresh interval.** `refresh-ms` can go down to 33 ms with full
+  motion; reduce motion still floors at 250 ms. (#249)
+- **Task progress idle ring.** When nothing is running, the bar can draw a
+  quiet ring (`show_when_idle` under `[plugins.settings.progress]`). (#250)
 
 ## 0.38.8 — 2026-11-26
 
