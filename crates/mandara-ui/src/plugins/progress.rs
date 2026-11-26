@@ -87,17 +87,28 @@ const BAR_MORE_PX: f32 = 10.5;
 const RING_TRACK_ALPHA: f32 = 0.16;
 /// Idle ring in the bar when `show_when_idle` is on and nothing is running.
 const IDLE_RING_ALPHA: f32 = 0.45;
-/// The running light: eight cells that breathe in place, with a small phase
-/// offset so the brightness moves like a ripple without any cell sliding.
+/// The running light has eight cells. The count is part of the indicator's
+/// identity, not a dimension someone would tune; the bar chip is laid out for
+/// exactly eight, so it stays fixed while the cell size is a setting.
 const LIGHT_CELLS: usize = 8;
-const LIGHT_W_PX: f32 = 3.0;
-const LIGHT_H_PX: f32 = 8.0;
-const LIGHT_GAP_PX: f32 = 2.0;
-const LIGHT_PERIOD_S: f32 = 1.6;
-const LIGHT_PHASE_STEP: f32 = 0.18;
-const LIGHT_MIN_ALPHA: f32 = 0.3;
-const LIGHT_MAX_ALPHA: f32 = 1.0;
-const LIGHT_IDLE_ALPHA: f32 = 0.55;
+
+/// Defaults and bounded ranges for the user-facing light settings. The
+/// defaults are the values the indicator shipped with. The ranges keep the
+/// row inside a bar pill and the pulse readable without becoming a strobe.
+const LIGHT_W_DEFAULT: f64 = 3.0;
+const LIGHT_W_RANGE: (f64, f64) = (2.0, 6.0);
+const LIGHT_H_DEFAULT: f64 = 8.0;
+const LIGHT_H_RANGE: (f64, f64) = (4.0, 16.0);
+const LIGHT_GAP_DEFAULT: f64 = 2.0;
+const LIGHT_GAP_RANGE: (f64, f64) = (0.0, 6.0);
+const LIGHT_PERIOD_DEFAULT: f64 = 1.6;
+const LIGHT_PERIOD_RANGE: (f64, f64) = (0.5, 5.0);
+const LIGHT_PHASE_DEFAULT: f64 = 0.18;
+const LIGHT_PHASE_RANGE: (f64, f64) = (0.0, 0.8);
+const LIGHT_MIN_ALPHA_DEFAULT: f64 = 0.3;
+const LIGHT_ALPHA_RANGE: (f64, f64) = (0.0, 1.0);
+const LIGHT_MAX_ALPHA_DEFAULT: f64 = 1.0;
+const LIGHT_IDLE_ALPHA_DEFAULT: f64 = 0.55;
 /// Shimmer: segment width (share of the track) and passes per second.
 const SHIMMER_W: f32 = 0.32;
 const SHIMMER_PER_S: f32 = 0.7;
@@ -373,6 +384,35 @@ impl PanelView {
     }
 }
 
+/// The user-tunable look of the running light, read once per bar render.
+struct LightLook {
+    width: f32,
+    height: f32,
+    gap: f32,
+    period: f32,
+    phase: f32,
+    min_alpha: f32,
+    max_alpha: f32,
+    idle_alpha: f32,
+}
+
+fn light_look(cx: &App) -> LightLook {
+    let p = &crate::state::config(cx).read(cx).get().plugins;
+    let num = |key: &str, default: f64, range: (f64, f64)| -> f32 {
+        p.setting(ID, key, default).clamp(range.0, range.1) as f32
+    };
+    LightLook {
+        width: num("light_width", LIGHT_W_DEFAULT, LIGHT_W_RANGE),
+        height: num("light_height", LIGHT_H_DEFAULT, LIGHT_H_RANGE),
+        gap: num("light_gap", LIGHT_GAP_DEFAULT, LIGHT_GAP_RANGE),
+        period: num("light_period", LIGHT_PERIOD_DEFAULT, LIGHT_PERIOD_RANGE),
+        phase: num("light_phase", LIGHT_PHASE_DEFAULT, LIGHT_PHASE_RANGE),
+        min_alpha: num("light_min_alpha", LIGHT_MIN_ALPHA_DEFAULT, LIGHT_ALPHA_RANGE),
+        max_alpha: num("light_max_alpha", LIGHT_MAX_ALPHA_DEFAULT, LIGHT_ALPHA_RANGE),
+        idle_alpha: num("light_idle_alpha", LIGHT_IDLE_ALPHA_DEFAULT, LIGHT_ALPHA_RANGE),
+    }
+}
+
 /// How the eight-cell light is drawn.
 enum LightMode {
     /// Quiet, dim row while no task is showing.
@@ -385,26 +425,26 @@ enum LightMode {
 
 /// The eight-cell running light: cells stay in place and breathe in
 /// brightness while a task is active, or hold steady for idle / done / failed.
-fn running_light(color: Color, mode: LightMode) -> AnyElement {
+fn running_light(color: Color, mode: LightMode, look: &LightLook) -> AnyElement {
     // Monotonic seconds: Unix seconds in f32 lose the fractional part at
     // this magnitude, so the pulse would appear frozen for minutes.
     let seconds = clock_s();
-    let mut row = div().flex().items_center().gap(px(LIGHT_GAP_PX));
+    let mut row = div().flex().items_center().gap(px(look.gap));
     for i in 0..LIGHT_CELLS {
         let alpha = match mode {
-            LightMode::Idle => LIGHT_IDLE_ALPHA,
-            LightMode::Solid => LIGHT_MAX_ALPHA,
+            LightMode::Idle => look.idle_alpha,
+            LightMode::Solid => look.max_alpha,
             LightMode::Pulse => {
                 // A small phase offset gives a soft ripple without any cell
                 // travelling left or right.
-                let phase = seconds / LIGHT_PERIOD_S * TAU - i as f32 * LIGHT_PHASE_STEP;
-                LIGHT_MIN_ALPHA + (LIGHT_MAX_ALPHA - LIGHT_MIN_ALPHA) * (0.5 + 0.5 * phase.cos())
+                let phase = seconds / look.period * TAU - i as f32 * look.phase;
+                look.min_alpha + (look.max_alpha - look.min_alpha) * (0.5 + 0.5 * phase.cos())
             }
         };
         row = row.child(
             div()
-                .w(px(LIGHT_W_PX))
-                .h(px(LIGHT_H_PX))
+                .w(px(look.width))
+                .h(px(look.height))
                 .rounded_full()
                 .bg(color.with_alpha(alpha).hsla()),
         );
@@ -413,8 +453,9 @@ fn running_light(color: Color, mode: LightMode) -> AnyElement {
 }
 
 /// The bar chip: an animated running light for an indeterminate task (a ring
-/// once it has a value), `+N` for the others, a ✓ / ! for 30 s after the last
-/// one finished, and a quiet dim light while idle so it stays resident.
+/// once it has a value), `+N` for the others, a solid green / red light for
+/// 30 s after the last task finished, and a quiet dim light while idle so it
+/// stays resident.
 fn bar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyElement {
     /// What the chip shows.
     enum Show {
@@ -423,6 +464,7 @@ fn bar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyE
         Nothing,
     }
     let now = now_ms();
+    let look = light_look(cx);
     let m = model(cx);
     let (show, next) = {
         let b = &m.read(cx).board;
@@ -446,7 +488,7 @@ fn bar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyE
                 Some(f) => ring(f as f32, d, BAR_RING_STROKE_PX, color, track).into_any_element(),
                 None => {
                     redraw_in(ANIMATION_FRAME, window, cx);
-                    running_light(color, LightMode::Pulse)
+                    running_light(color, LightMode::Pulse, &look)
                 }
             };
             chip.child(ring_el)
@@ -458,7 +500,7 @@ fn bar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyE
             // Keep the same light vocabulary: solid green for done, red for
             // failed, instead of a one-off check / alert icon.
             let color = readable(if ok { palette.success_emerald } else { palette.urgent_coral }, palette);
-            chip.child(running_light(color, LightMode::Solid)).into_any_element()
+            chip.child(running_light(color, LightMode::Solid, &look)).into_any_element()
         }
         Show::Nothing => {
             // Always resident: the dim light row is the default; the existing
@@ -468,7 +510,7 @@ fn bar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyE
                 let d = crate::style::bar_icon(BAR_RING_PX);
                 chip.child(ring(0.0, d, BAR_RING_STROKE_PX, ink, ink)).into_any_element()
             } else {
-                chip.child(running_light(readable(palette.on_surface, palette), LightMode::Idle)).into_any_element()
+                chip.child(running_light(readable(palette.on_surface, palette), LightMode::Idle, &look)).into_any_element()
             }
         }
     }
