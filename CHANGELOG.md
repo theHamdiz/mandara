@@ -6,6 +6,14 @@ About → What's new shows it too.
 
 ## Unreleased
 
+The task progress light redraws with less work each frame.
+
+### Improved
+
+- **Task progress redraws do less work.** The animated bar light reuses its
+  size and brightness settings and its gradient fills between frames instead
+  of reading and rebuilding them on every frame.
+
 ## 0.40.0 — 2026-11-26
 
 The task progress chip keeps a quiet light in the bar between tasks.

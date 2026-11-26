@@ -29,12 +29,14 @@
 use std::cell::{Cell, RefCell};
 use std::f32::consts::TAU;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use gpui::{
-    AnyElement, App, AppContext as _, Entity, FontWeight, Global, IntoElement, ParentElement, SharedString, Styled, Window, div,
+    AnyElement, App, AppContext as _, Background, Entity, FontWeight, Global, IntoElement, ParentElement, SharedString, Styled, Window, div,
     prelude::FluentBuilder as _, px, relative, size,
 };
+use mandara_config::ShellConfig;
 use mandara_core::{ToGpui, oklab_gradient};
 use mandara_i18n::{Lang, t, tf, tk};
 use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry, Zone};
@@ -167,9 +169,10 @@ fn announce(task: &Task, cx: &mut App) {
 }
 
 fn task_json(task: &Task, now: i64) -> serde_json::Value {
+    let fraction = task.fraction();
     let mut v = json(task);
-    v["fraction"] = json!(task.fraction());
-    v["percent"] = json!(task.fraction().map(|f| (f * 100.0).round()));
+    v["fraction"] = json!(fraction);
+    v["percent"] = json!(fraction.map(|f| (f * 100.0).round()));
     v["elapsed_s"] = json!(task.elapsed_ms(now) / MS_PER_S);
     v["eta_s"] = json!(task.eta_ms().map(|e| e / MS_PER_S));
     v["stalled"] = json!(task.stalled(now));
@@ -191,11 +194,34 @@ fn clock_s() -> f32 {
     EPOCH.with(|e| e.elapsed().as_secs_f32())
 }
 
+/// The gradient stops depend only on the row's resolved colour (one of a few
+/// palette roles), so keep the handful built so far instead of rebuilding a
+/// fill for every visible row on every render.
+fn cached_gradient(color: Color) -> Background {
+    thread_local! {
+        static GRADIENTS: RefCell<Vec<(Color, Background)>> = const { RefCell::new(Vec::new()) };
+    }
+    GRADIENTS.with(|cell| {
+        let mut cache = cell.borrow_mut();
+        if let Some((_, fill)) = cache.iter().find(|(c, _)| *c == color) {
+            return *fill;
+        }
+        let fill = oklab_gradient(ANGLE_RIGHT_DEG, color, partner(color).with_lightness(color.lightness()));
+        // At most the four task-state colours plus a little slack for a
+        // palette change; drop the oldest rather than grow without bound.
+        if cache.len() >= 8 {
+            cache.remove(0);
+        }
+        cache.push((color, fill));
+        fill
+    })
+}
+
 /// The panel's progress bar: an OKLCH gradient fill, or a shimmer sweeping
 /// the track while the amount is unknown.
 fn progress_bar(fraction: Option<f64>, color: Color, palette: &MandaraPalette) -> AnyElement {
     let track = div().relative().w_full().h(px(BAR_TRACK_H)).rounded_full().overflow_hidden().bg(wash(WASH_TRACK, palette).hsla());
-    let fill = oklab_gradient(ANGLE_RIGHT_DEG, color, partner(color).with_lightness(color.lightness()));
+    let fill = cached_gradient(color);
     match fraction {
         Some(f) => {
             let f = f.clamp(0.0, 1.0) as f32;
@@ -332,7 +358,11 @@ impl PanelView {
             let more = b.tasks.len().saturating_sub(MAX_ROWS);
             let rows = self.cache.borrow_mut().get(b, pr.rev, now);
             let running = b.running().count();
-            (rows, more, running, b.tasks.len() - running, ordered_tasks(&b.tasks).take(MAX_ROWS).any(|task| task.status == Status::Running && task.amount.is_none()), b.next_change(now))
+            // A cached row with no fraction is an indeterminate (shimmering)
+            // task. The rows are already the ordered, visible ones, so this
+            // avoids a second scan over the whole board every render.
+            let any_unknown = rows.iter().any(|r| r.fraction.is_none());
+            (rows, more, running, b.tasks.len() - running, any_unknown, b.next_change(now))
         };
         if self.p.progress() > 0.0 {
             if any_unknown {
@@ -382,7 +412,9 @@ impl PanelView {
     }
 }
 
-/// The user-tunable look of the running light, read once per bar render.
+/// The user-tunable look of the running light, read once per config snapshot
+/// rather than nine times per animated frame.
+#[derive(Clone, Copy)]
 struct LightLook {
     width: f32,
     height: f32,
@@ -399,24 +431,58 @@ fn ordered_brightness(min: f32, max: f32) -> (f32, f32) {
     (min.min(max), max)
 }
 
-fn light_look(cx: &App) -> LightLook {
-    let p = &crate::state::config(cx).read(cx).get().plugins;
+/// Read the look (and the idle-ring toggle) from one config snapshot. Kept
+/// pure so the bounded settings are covered by a unit test.
+fn light_look_from(config: &ShellConfig) -> (LightLook, bool) {
+    let p = &config.plugins;
     let num = |key: &str, default: f64, range: (f64, f64)| -> f32 {
         p.setting(ID, key, default).clamp(range.0, range.1) as f32
     };
     let max_alpha = num("light_max_alpha", LIGHT_MAX_ALPHA_DEFAULT, LIGHT_ALPHA_RANGE);
     let min_alpha = num("light_min_alpha", LIGHT_MIN_ALPHA_DEFAULT, LIGHT_ALPHA_RANGE);
     let (min_alpha, max_alpha) = ordered_brightness(min_alpha, max_alpha);
-    LightLook {
-        width: num("light_width", LIGHT_W_DEFAULT, LIGHT_W_RANGE),
-        height: num("light_height", LIGHT_H_DEFAULT, LIGHT_H_RANGE),
-        gap: num("light_gap", LIGHT_GAP_DEFAULT, LIGHT_GAP_RANGE),
-        period: num("light_period", LIGHT_PERIOD_DEFAULT, LIGHT_PERIOD_RANGE),
-        phase: num("light_phase", LIGHT_PHASE_DEFAULT, LIGHT_PHASE_RANGE),
-        min_alpha,
-        max_alpha,
-        idle_alpha: num("light_idle_alpha", LIGHT_IDLE_ALPHA_DEFAULT, LIGHT_ALPHA_RANGE),
+    (
+        LightLook {
+            width: num("light_width", LIGHT_W_DEFAULT, LIGHT_W_RANGE),
+            height: num("light_height", LIGHT_H_DEFAULT, LIGHT_H_RANGE),
+            gap: num("light_gap", LIGHT_GAP_DEFAULT, LIGHT_GAP_RANGE),
+            period: num("light_period", LIGHT_PERIOD_DEFAULT, LIGHT_PERIOD_RANGE),
+            phase: num("light_phase", LIGHT_PHASE_DEFAULT, LIGHT_PHASE_RANGE),
+            min_alpha,
+            max_alpha,
+            idle_alpha: num("light_idle_alpha", LIGHT_IDLE_ALPHA_DEFAULT, LIGHT_ALPHA_RANGE),
+        },
+        p.setting(ID, "show_when_idle", false),
+    )
+}
+
+#[derive(Default)]
+struct LightLookCache {
+    config: Option<Arc<ShellConfig>>,
+    look: Option<LightLook>,
+    show_when_idle: bool,
+}
+
+fn light_look(cx: &App) -> (LightLook, bool) {
+    thread_local! {
+        static CACHE: RefCell<LightLookCache> = RefCell::default();
     }
+    // `ConfigStore::update` replaces its `Arc` on every real change, so
+    // pointer identity invalidates the cache exactly when a setting changes.
+    let config = crate::state::config(cx).read(cx).snapshot();
+    CACHE.with(|cell| {
+        let mut cache = cell.borrow_mut();
+        if let (Some(previous), Some(look)) = (&cache.config, cache.look)
+            && Arc::ptr_eq(previous, &config)
+        {
+            return (look, cache.show_when_idle);
+        }
+        let (look, show_when_idle) = light_look_from(&config);
+        cache.config = Some(config);
+        cache.look = Some(look);
+        cache.show_when_idle = show_when_idle;
+        (look, show_when_idle)
+    })
 }
 
 /// How the eight-cell light is drawn.
@@ -470,7 +536,7 @@ fn bar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyE
         Nothing,
     }
     let now = now_ms();
-    let look = light_look(cx);
+    let (look, show_when_idle) = light_look(cx);
     let m = model(cx);
     let (show, next) = {
         let b = &m.read(cx).board;
@@ -512,7 +578,7 @@ fn bar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyE
             // Default off: leave the pill empty so existing installs don't
             // suddenly get a permanent chip. When on, the dim light row keeps
             // the same vocabulary as running / done / failed.
-            if crate::state::config(cx).read(cx).get().plugins.setting(ID, "show_when_idle", false) {
+            if show_when_idle {
                 chip.child(running_light(readable(palette.on_surface, palette), LightMode::Idle, &look)).into_any_element()
             } else {
                 chip.into_any_element()
@@ -672,5 +738,39 @@ mod tests {
     fn show_when_idle_defaults_off() {
         let cfg = mandara_config::ShellConfig::default();
         assert!(!cfg.plugins.setting(ID, "show_when_idle", false));
+    }
+
+    /// The cached look must carry every setting, including the idle toggle,
+    /// so the bar does not re-read the config eight times per frame.
+    #[test]
+    fn light_look_snapshot_carries_all_settings() {
+        let cfg = ShellConfig::default();
+        let (look, show_when_idle) = light_look_from(&cfg);
+        assert_eq!(look.width, LIGHT_W_DEFAULT as f32);
+        assert_eq!(look.height, LIGHT_H_DEFAULT as f32);
+        assert_eq!(look.gap, LIGHT_GAP_DEFAULT as f32);
+        assert_eq!(look.period, LIGHT_PERIOD_DEFAULT as f32);
+        assert_eq!(look.phase, LIGHT_PHASE_DEFAULT as f32);
+        assert_eq!(look.min_alpha, LIGHT_MIN_ALPHA_DEFAULT as f32);
+        assert_eq!(look.max_alpha, LIGHT_MAX_ALPHA_DEFAULT as f32);
+        assert_eq!(look.idle_alpha, LIGHT_IDLE_ALPHA_DEFAULT as f32);
+        assert!(!show_when_idle);
+    }
+
+    /// Indeterminate rows are exactly the cached rows with no fraction; this
+    /// replaces a second scan of the whole board on every panel render.
+    #[test]
+    fn cached_rows_report_indeterminate_work() {
+        let row = |fraction| RowText {
+            id: "build".into(),
+            label: "Build".into(),
+            amount: None,
+            detail: "".into(),
+            fraction,
+            state: TaskState::Done,
+            finished: false,
+        };
+        assert!(row(None).fraction.is_none());
+        assert!(!row(Some(0.0)).fraction.is_none());
     }
 }
