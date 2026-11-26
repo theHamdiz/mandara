@@ -62,7 +62,6 @@ use std::time::{Duration, Instant};
 
 use gpui::{App, Global};
 use image::RgbImage;
-use image::imageops::FilterType;
 use mandara_config::desktop::{WallpaperFill, WallpaperTransition, effective_wallpaper};
 use mandara_config::outputs::{DisplaysConfig, SurfaceKind, assignment_any};
 use mandara_config::desktop_widgets::Insets;
@@ -82,15 +81,11 @@ pub fn software_enabled() -> bool {
     std::env::var(RENDERER_ENV).map(|v| !v.trim().eq_ignore_ascii_case("gpui")).unwrap_or(true)
 }
 
-/// Linux input codes of the left and right mouse buttons (`BTN_LEFT`,
-/// `BTN_RIGHT`).
 /// How long a wallpaper that failed to load (a missing or unreadable file)
 /// rests before it's tried again.
 const LOAD_RETRY: Duration = Duration::from_secs(30);
-/// Longest edge of the small wallpaper copy kept on the layer surface's
-/// root. Compositors that mirror only the root (Umbriel's overview) show it;
-/// the desktop itself still gets full-resolution pixels on a child plane.
-const OVERVIEW_ROOT_EDGE: u32 = 640;
+/// Linux input codes of the left and right mouse buttons (`BTN_LEFT`,
+/// `BTN_RIGHT`).
 const BTN_LEFT: u32 = 0x110;
 const BTN_RIGHT: u32 = 0x111;
 
@@ -1948,37 +1943,6 @@ fn text_painter<'a>(text: &'a mut Option<TextPainter>, arabic_font: &mut Option<
     text
 }
 
-/// Buffer size for the root's wallpaper copy. Downscale only when a
-/// viewporter can stretch it back over the output; without one the root
-/// must carry an output-sized buffer.
-fn overview_root_size(geom: Geom, viewport: bool) -> (u32, u32) {
-    if !viewport {
-        return geom.physical;
-    }
-    let (w, h) = geom.physical;
-    let long = w.max(h).max(1);
-    if long <= OVERVIEW_ROOT_EDGE {
-        return geom.physical;
-    }
-    (
-        (w * OVERVIEW_ROOT_EDGE / long).max(1),
-        (h * OVERVIEW_ROOT_EDGE / long).max(1),
-    )
-}
-
-/// A wallpaper copy for compositors that mirror only the root surface,
-/// e.g. Umbriel's workspace overview.
-fn overview_root_pixels(pixmap: &tiny_skia::Pixmap, size: (u32, u32)) -> Option<Vec<u8>> {
-    // Borrow the wallpaper buffer: cloning it only to build a ≤640px root
-    // copy would allocate ~32 MiB at 4K (and ~127 MiB at 8K) for nothing.
-    let src = image::ImageBuffer::<image::Rgba<u8>, _>::from_raw(
-        pixmap.width(),
-        pixmap.height(),
-        pixmap.data(),
-    )?;
-    Some(image::imageops::resize(&src, size.0, size.1, FilterType::Lanczos3).into_raw())
-}
-
 fn write_root_pixels(dst: &mut [u8], src: &[u8], abgr: bool) {
     for (d, s) in dst.as_chunks_mut::<4>().0.iter_mut().zip(src.as_chunks::<4>().0.iter()) {
         if abgr {
@@ -1989,20 +1953,14 @@ fn write_root_pixels(dst: &mut [u8], src: &[u8], abgr: bool) {
     }
 }
 
-fn paint_overview_root(host: &mut Host, id: u32, pixmap: &tiny_skia::Pixmap, geom: Option<Geom>, fallback: Option<[u8; 4]>) {
-    // commit() uses root_rgba when the pixel root cannot be reused, so keep
-    // the fallback recorded even when the pixel root installs successfully.
+/// Paints the wallpaper on the root for compositors that mirror only that
+/// buffer (Umbriel's overview). It needs full resolution: a smaller copy is
+/// stretched back up by the compositor and looks blurry. The fallback is
+/// recorded too, for when `commit` cannot reuse the pixel root.
+fn paint_overview_root(host: &mut Host, id: u32, pixmap: &tiny_skia::Pixmap, fallback: Option<[u8; 4]>) {
     host.set_base(id, fallback);
-    let Some(geom) = geom else {
-        return;
-    };
-    let size = overview_root_size(geom, host.supports_viewport());
-    let Some(pixels) = overview_root_pixels(pixmap, size) else {
-        return;
-    };
-    if let Err(err) =
-        host.set_base_pixels(id, size, |dst, abgr| write_root_pixels(dst, &pixels, abgr))
-    {
+    let size = (pixmap.width(), pixmap.height());
+    if let Err(err) = host.set_base_pixels(id, size, |dst, abgr| write_root_pixels(dst, pixmap.data(), abgr)) {
         tracing::warn!("wallpaper overview root: {err:#}");
     }
 }
@@ -2076,14 +2034,14 @@ fn show(host: &mut Host, out: &mut Out, want: Want, bg: paint::Background, cut: 
     let slot = Slot { want: want.clone(), tone: bg.tone, cut, cut_key, cut_fade: CutFade::Shown, cut_loading: None, cut_refresh: false };
     let pixmap = bg.pixmap;
     // Live scenes sit on Background under a transparent canvas; an opaque
-    // root would cover them. Otherwise the root holds a wallpaper copy,
-    // downscaled when a viewporter can stretch it: Umbriel's overview
-    // mirrors only the root. Hyprland's fallback is opaque black so the
-    // wallpaper planes still composite when no copy can be painted.
+    // root would cover them. Otherwise the root carries the wallpaper for
+    // Umbriel's overview, which mirrors only that buffer. Hyprland's fallback
+    // is opaque black so the wallpaper planes still composite when no copy
+    // can be painted.
     if want.live {
         host.set_base(id, None);
     } else {
-        paint_overview_root(host, id, &pixmap, out.geom, hyprland_opaque_root());
+        paint_overview_root(host, id, &pixmap, hyprland_opaque_root());
     }
     // A transition shows the whole incoming desktop on the incoming plane
     // (module docs); the wallpaper's own pixels wait for its end.
@@ -2774,14 +2732,6 @@ mod tests {
     }
 
     #[test]
-    fn overview_root_size_tracks_viewport() {
-        assert_eq!(overview_root_size(geom(), true), (640, 360));
-        assert_eq!(overview_root_size(geom(), false), geom().physical);
-        let small = Geom { physical: (480, 270), ..geom() };
-        assert_eq!(overview_root_size(small, true), small.physical);
-    }
-
-    #[test]
     fn overview_root_copy_follows_the_shm_byte_order() {
         let src = [10, 20, 30, 40];
         let mut abgr = [0; 4];
@@ -2790,13 +2740,6 @@ mod tests {
         let mut argb = [0; 4];
         write_root_pixels(&mut argb, &src, false);
         assert_eq!(argb, [30, 20, 10, 40]);
-    }
-
-    #[test]
-    fn overview_root_pixels_resizes_without_owning_the_source() {
-        let pixmap = tiny_skia::Pixmap::new(8, 4).expect("pixmap");
-        let out = overview_root_pixels(&pixmap, (4, 2)).expect("root copy");
-        assert_eq!(out.len(), 4 * 2 * 4);
     }
 
     #[test]

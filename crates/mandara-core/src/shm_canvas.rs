@@ -8,8 +8,8 @@
 //! proved — and gives every output one `zwlr_layer_surface_v1` *canvas*:
 //!
 //! * the root surface is a shared-memory buffer, a 1 × 1 fill pixel or a
-//!   wallpaper copy (downscaled when `wp_viewporter` can stretch it) that
-//!   compositors mirroring only the root (Umbriel's overview) can show;
+//!   full-resolution wallpaper copy that compositors mirroring only the root
+//!   (Umbriel's overview) can show;
 //! * each *plane* is a synchronized `wl_subsurface` with its own shm buffer,
 //!   its own position and size (only the pixels it covers), an optional
 //!   `wp_alpha_modifier_v1` multiplier (crossfades done by the compositor at
@@ -407,8 +407,8 @@ struct Canvas {
     root: Option<ShmBuffer>,
     root_rgba: Option<[u8; 4]>,
     /// The root holds pixels supplied by [`Host::set_base_pixels`], not a
-    /// solid fill colour. It's downscaled only when a viewporter can stretch
-    /// it back over the output; the wallpaper itself is on a child plane.
+    /// solid fill colour. It's output-sized so a compositor mirroring only
+    /// the root shows a crisp wallpaper; the same wallpaper is on a plane.
     root_pixels: bool,
     root_dirty: bool,
     planes: Vec<Plane>,
@@ -914,9 +914,8 @@ impl Host {
     }
 
     /// Attaches caller-painted pixels as the root buffer. `size` must be
-    /// output-sized without a viewporter; with one it can be a smaller copy
-    /// that the compositor scales. The callback gets the buffer and whether
-    /// its channels are ABGR.
+    /// output-sized: compositors that mirror only the root use it directly.
+    /// The callback gets the buffer and whether its channels are ABGR.
     pub fn set_base_pixels(
         &mut self,
         id: u32,
@@ -1228,9 +1227,9 @@ impl Host {
             p.dirty = false;
         }
         if c.root_dirty || c.root.is_none() {
-            // Without a viewporter the root buffer must match the output. A
-            // retained copy can only be reused when it still fits; otherwise
-            // fall back to a colour root until show() repaints the wallpaper.
+            // Without a viewporter the root buffer must match the output;
+            // with one, a retained copy can be stretched. Otherwise fall back
+            // to a colour root until show() repaints the wallpaper.
             let reuse_pixels = c.root_pixels
                 && c.root
                     .as_ref()
@@ -1241,7 +1240,6 @@ impl Host {
                 c.surface.damage_buffer(0, 0, buf.width as i32, buf.height as i32);
             } else {
                 let rgba = c.root_rgba.unwrap_or([0; 4]);
-                // Without a viewport the root buffer must cover the output.
                 let (w, h) = if has_vp { (1, 1) } else { c.physical() };
                 let mut buf = new_buffer(&shm, &qh, w, h, abgr)?;
                 let px = if abgr { rgba } else { [rgba[2], rgba[1], rgba[0], rgba[3]] };
