@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.40.0 — 2026-11-26
+
 The task progress chip keeps a quiet light in the bar between tasks.
 
 ### Improved
