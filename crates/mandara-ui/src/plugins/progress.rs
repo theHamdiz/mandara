@@ -85,8 +85,6 @@ const BAR_RING_STROKE_PX: f32 = 2.2;
 const BAR_GAP_PX: f32 = 5.0;
 const BAR_MORE_PX: f32 = 10.5;
 const RING_TRACK_ALPHA: f32 = 0.16;
-/// Idle ring in the bar when `show_when_idle` is on and nothing is running.
-const IDLE_RING_ALPHA: f32 = 0.45;
 /// The running light has eight cells. The count is part of the indicator's
 /// identity, not a dimension someone would tune; the bar chip is laid out for
 /// exactly eight, so it stays fixed while the cell size is a setting.
@@ -462,8 +460,8 @@ fn running_light(color: Color, mode: LightMode, look: &LightLook) -> AnyElement 
 
 /// The bar chip: an animated running light for an indeterminate task (a ring
 /// once it has a value), `+N` for the others, a solid green / red light for
-/// 30 s after the last task finished, and a quiet dim light while idle so it
-/// stays resident.
+/// 30 s after the last task finished, and — when `show_when_idle` is on — a
+/// quiet dim light while nothing is running.
 fn bar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyElement {
     /// What the chip shows.
     enum Show {
@@ -511,14 +509,13 @@ fn bar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyE
             chip.child(running_light(color, LightMode::Solid, &look)).into_any_element()
         }
         Show::Nothing => {
-            // Always resident: the dim light row is the default; the existing
-            // `show_when_idle` setting still draws the quiet ring if enabled.
+            // Default off: leave the pill empty so existing installs don't
+            // suddenly get a permanent chip. When on, the dim light row keeps
+            // the same vocabulary as running / done / failed.
             if crate::state::config(cx).read(cx).get().plugins.setting(ID, "show_when_idle", false) {
-                let ink = palette.on_surface.with_alpha(IDLE_RING_ALPHA);
-                let d = crate::style::bar_icon(BAR_RING_PX);
-                chip.child(ring(0.0, d, BAR_RING_STROKE_PX, ink, ink)).into_any_element()
-            } else {
                 chip.child(running_light(readable(palette.on_surface, palette), LightMode::Idle, &look)).into_any_element()
+            } else {
+                chip.into_any_element()
             }
         }
     }

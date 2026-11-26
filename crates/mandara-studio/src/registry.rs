@@ -1186,7 +1186,7 @@ fn build() -> Vec<Setting> {
         sd(Plugins, tk("Share to phone"), "/plugins/settings/share/minutes", tk("Stop sharing after"), tk("The link stops working after this long"), slider(1.0, 120.0, 1.0, " min"), Value::from(10)),
         sd(Plugins, tk("Share to phone"), "/plugins/settings/share/once", tk("Stop after the first download"), tk("The link stops working once your phone has downloaded the item"), Toggle, Value::from(true)),
         sd(Plugins, tk("Task progress"), "/plugins/settings/progress/notify", tk("Notify when tasks finish"), tk("Post a notification when a task is done or fails"), Toggle, Value::from(true)),
-        sd(Plugins, tk("Task progress"), "/plugins/settings/progress/show_when_idle", tk("Show idle ring in the bar"), tk("When no task is running, draw a quiet ring instead of leaving the pill empty"), Toggle, Value::from(false)),
+        sd(Plugins, tk("Task progress"), "/plugins/settings/progress/show_when_idle", tk("Show idle light in the bar"), tk("When no task is running, draw a quiet dim light instead of leaving the pill empty"), Toggle, Value::from(false)),
         sd(Plugins, tk("Task progress"), "/plugins/settings/progress/light_width", tk("Light cell width"), tk("Width of each cell in the bar's task light"), slider(2.0, 6.0, 0.5, " px"), Value::from(3)),
         sd(Plugins, tk("Task progress"), "/plugins/settings/progress/light_height", tk("Light cell height"), tk("Height of each cell in the bar's task light"), slider(4.0, 16.0, 1.0, " px"), Value::from(8)),
         sd(Plugins, tk("Task progress"), "/plugins/settings/progress/light_gap", tk("Light cell spacing"), tk("Gap between the cells of the task light"), slider(0.0, 6.0, 0.5, " px"), Value::from(2)),

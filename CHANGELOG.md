@@ -16,6 +16,18 @@ The task progress chip keeps a quiet light in the bar between tasks.
   tasks. Cell size, spacing, breath period and brightness are settings in
   Studio → Plugins → Task progress.
 
+## 0.39.0 — 2026-11-26
+
+On MangoWM, Overview can open the new workspace overview from 0.19.
+
+### Improved
+
+- **MangoWM workspace overview.** Studio → Compositor chooses whether Overview
+  (hot corner, bar middle-click, `compositor overview toggle`) opens the classic
+  packed-card overview or MangoWM 0.19+'s draggable workspace overview
+  (`all` / `occupied` / scrolling). Optional gap, scroll direction and dim
+  opacities go into the generated drop-in when set.
+
 ## 0.38.9 — 2026-11-26
 
 Third-party plugin views size meters correctly, animated plugins may refresh

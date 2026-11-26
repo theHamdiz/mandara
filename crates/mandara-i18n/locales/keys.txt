@@ -7156,7 +7156,7 @@ Show for
 Show formats, ramp and contrast for the new color
 Show hidden & helper entries
 Show idle items
-Show idle ring in the bar
+Show idle light in the bar
 Show in Applications
 Show in Files
 Show in folder
@@ -9339,7 +9339,7 @@ When in doubt, tell the truth.
 When it overflows
 When it's on
 When nearly empty
-When no task is running, draw a quiet ring instead of leaving the pill empty
+When no task is running, draw a quiet dim light instead of leaving the pill empty
 When pointed at
 When the Trash is emptied
 When the app you copied from quits, its last copy can still be pasted
