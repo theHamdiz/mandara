@@ -6,6 +6,16 @@ About → What's new shows it too.
 
 ## Unreleased
 
+The task progress chip keeps a quiet light in the bar between tasks.
+
+### Improved
+
+- **Task progress light.** The built-in progress chip uses one visual language:
+  a soft breathing light while a task runs, a dim row when idle (when
+  `show_when_idle` is on), and solid green or red cells for finished and failed
+  tasks. Cell size, spacing, breath period and brightness are settings in
+  Studio → Plugins → Task progress.
+
 ## 0.39.0 — 2026-11-26
 
 On MangoWM, Overview can open the new workspace overview from 0.19.

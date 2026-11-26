@@ -1066,15 +1066,19 @@ Box
 Box shape
 Break every
 Break's over
+Breath period
 Breathes, blinks, sleeps at night, bobs to music, purrs when clicked
 BreezeX cursors recolored in the Rosé Pine palette
 Brevity is the sister of talent.
 Bright and polished, with long login and logout cues
+Bright brightness
 Bright spice colours: one island of big squircle tiles at the bottom and a clock of boxes.
+Brightest brightness while the task light breathes, from 0 to 1
 Brightness
 Brightness changes
 Brightness down
 Brightness keys change every screen
+Brightness of the light row when nothing is running, from 0 to 1
 Brightness over DDC/CI through /dev/i2c-* (needs the i2c group and DDC/CI on in the monitor's menu)
 Brightness up
 Bring back a bar put away with bar hide
@@ -2120,12 +2124,14 @@ Digits that clash with their row, column or box turn red
 Diligence is the mother of good fortune.
 Dim
 Dim behind panels
+Dim brightness
 Dim strength
 Dim the keyboard
 Dim the screen
 Dim unfocused windows
 Dim while selecting
 Dimmed screen
+Dimmest brightness while the task light breathes, from 0 to 1
 Dip
 Direct access to files in your home folder
 Direct rendering and GPU access
@@ -3019,6 +3025,7 @@ Gap between neighbouring bar items
 Gap between neighbouring items
 Gap between sidebar cards
 Gap between the buttons
+Gap between the cells of the task light
 Gap between the dock and the screen edge
 Gap between workspace preview cards (MangoWM 0.19+; unset keeps MangoWM's value)
 Gap to the bar
@@ -3206,6 +3213,7 @@ Heavy
 Heavy and unhurried: surfaces glide in on a slant, content trailing like a sail
 Height
 Height in the center
+Height of each cell in the bar's task light
 Height on the screen
 Height when attached
 Helen Keller
@@ -3481,6 +3489,7 @@ Icons swell as the pointer passes (spring-animated)
 Identity or bus name, e.g. firefox or kdeconnect; the media panel and lock screen never follow them.
 Idle
 Idle & sleep
+Idle brightness
 Idle detection ✓
 Idle for {time}
 Idle handling is off
@@ -4029,6 +4038,9 @@ Light & dark
 Light / dark
 Light angle
 Light appearance
+Light cell height
+Light cell spacing
+Light cell width
 Light from
 Light gathered inside the liquid glass and its lens highlight
 Light intensity
@@ -5750,6 +5762,7 @@ PgUp
 Pharos
 Pharos Beam
 Pharos Night
+Phase offset between neighbouring cells; spread of the ripple
 Phone
 Phone Connect
 Phonebook access
@@ -6577,6 +6590,7 @@ Ring, ping or change pairing for a device
 Rings and numbers
 Rings, one icon, labelled numbers or a small live graph beside each number; a click opens the panel either way
 Ripple
+Ripple offset
 Ripple: a wave spreads from the pointer or the centre
 Rise from below
 Rising
@@ -6915,6 +6929,7 @@ Seconds (empty: default)
 Seconds after login before the first update check
 Seconds as
 Seconds before recording starts (Esc cancels)
+Seconds for one full breath of the task light
 Seconds in the bar clock
 Seconds must be a number
 Seconds on screen; 0 keeps it until you close it
@@ -7141,7 +7156,7 @@ Show for
 Show formats, ramp and contrast for the new color
 Show hidden & helper entries
 Show idle items
-Show idle ring in the bar
+Show idle light in the bar
 Show in Applications
 Show in Files
 Show in folder
@@ -9324,7 +9339,7 @@ When in doubt, tell the truth.
 When it overflows
 When it's on
 When nearly empty
-When no task is running, draw a quiet ring instead of leaving the pill empty
+When no task is running, draw a quiet dim light instead of leaving the pill empty
 When pointed at
 When the Trash is emptied
 When the app you copied from quits, its last copy can still be pasted
@@ -9391,6 +9406,7 @@ Widgets, cards, visualizers and the right-click menu
 Width
 Width in the center
 Width of a left or right bar
+Width of each cell in the bar's task light
 Width of each preview
 Width of the Beacon search bar (its mode buttons sit beside it)
 Width of the administrator-password and keyring-unlock dialogs
