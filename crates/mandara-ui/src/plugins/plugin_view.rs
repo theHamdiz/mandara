@@ -345,6 +345,9 @@ fn node(view: &Rc<View>, i: u32, depth: u32, p: &MandaraPalette, frame: &Frame, 
         Kind::Meter => styled(div().id(id), &n.style)
             .h(px(METER_H_PX))
             .when(meter_fills_parent(n.style.width), |el| el.w_full().min_w(px(METER_MIN_W_PX)))
+            // `styled` may set `grow` after an explicit width's `flex_none`;
+            // restore the fixed size so the meter does not stretch in a row.
+            .when(!meter_fills_parent(n.style.width), |el| el.flex_none())
             .rounded_full()
             .bg(p.on_surface.with_alpha(TRACK_ALPHA).hsla())
             .child(div().h_full().rounded_full().w(relative(fraction(n.value))).bg(color.hsla()))
