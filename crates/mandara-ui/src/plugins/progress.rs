@@ -33,7 +33,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use gpui::{
-    AnyElement, App, AppContext as _, Background, Entity, FontWeight, Global, IntoElement, ParentElement, SharedString, Styled, Window, div,
+    AnyElement, App, AppContext as _, Background, Bounds, Entity, FontWeight, Global, IntoElement, ParentElement, SharedString, Styled, Window, canvas, div, fill, point,
     prelude::FluentBuilder as _, px, relative, size,
 };
 use mandara_config::ShellConfig;
@@ -486,6 +486,7 @@ fn light_look(cx: &App) -> (LightLook, bool) {
 }
 
 /// How the eight-cell light is drawn.
+#[derive(Clone, Copy)]
 enum LightMode {
     /// Quiet, dim row while no task is showing.
     Idle,
@@ -497,31 +498,40 @@ enum LightMode {
 
 /// The eight-cell running light: cells stay in place and breathe in
 /// brightness while a task is active, or hold steady for idle / done / failed.
+/// Painted as one canvas so a 33 ms frame rebuilds one element, not eight
+/// layout nodes with eight colour conversions.
 fn running_light(color: Color, mode: LightMode, look: &LightLook) -> AnyElement {
-    // Monotonic seconds: Unix seconds in f32 lose the fractional part at
-    // this magnitude, so the pulse would appear frozen for minutes.
-    let seconds = clock_s();
-    let mut row = div().flex().items_center().gap(px(look.gap));
-    for i in 0..LIGHT_CELLS {
-        let alpha = match mode {
-            LightMode::Idle => look.idle_alpha,
-            LightMode::Solid => look.max_alpha,
-            LightMode::Pulse => {
-                // A small phase offset gives a soft ripple without any cell
-                // travelling left or right.
-                let phase = seconds / look.period * TAU - i as f32 * look.phase;
-                look.min_alpha + (look.max_alpha - look.min_alpha) * (0.5 + 0.5 * phase.cos())
+    let (width, height, gap) = (look.width, look.height, look.gap);
+    let (period, phase) = (look.period, look.phase);
+    let (min_alpha, max_alpha, idle_alpha) = (look.min_alpha, look.max_alpha, look.idle_alpha);
+    let total = width * LIGHT_CELLS as f32 + gap * (LIGHT_CELLS as f32 - 1.0);
+    let radius = px(width.min(height) * 0.5);
+    canvas(
+        |_, _, _| (),
+        move |bounds, _, window, _| {
+            // Monotonic seconds: Unix seconds in f32 lose the fractional part
+            // at this magnitude, so the pulse would appear frozen for minutes.
+            let seconds = clock_s();
+            for i in 0..LIGHT_CELLS {
+                let alpha = match mode {
+                    LightMode::Idle => idle_alpha,
+                    LightMode::Solid => max_alpha,
+                    LightMode::Pulse => {
+                        // A small phase offset gives a soft ripple without any
+                        // cell travelling left or right.
+                        let p = seconds / period * TAU - i as f32 * phase;
+                        min_alpha + (max_alpha - min_alpha) * (0.5 + 0.5 * p.cos())
+                    }
+                };
+                let x = px(i as f32 * (width + gap));
+                let rect = Bounds::new(bounds.origin + point(x, px(0.0)), size(px(width), px(height)));
+                window.paint_subpixel_quad(fill(rect, color.with_alpha(alpha).hsla()).corner_radii(radius));
             }
-        };
-        row = row.child(
-            div()
-                .w(px(look.width))
-                .h(px(look.height))
-                .rounded_full()
-                .bg(color.with_alpha(alpha).hsla()),
-        );
-    }
-    row.into_any_element()
+        },
+    )
+    .w(px(total))
+    .h(px(height))
+    .into_any_element()
 }
 
 /// The bar chip: an animated running light for an indeterminate task (a ring
