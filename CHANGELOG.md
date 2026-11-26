@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.39.0 — 2026-11-26
+
 On MangoWM, Overview can open the new workspace overview from 0.19.
 
 ### Improved
