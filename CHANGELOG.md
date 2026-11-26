@@ -16,7 +16,7 @@ idle.
   of always stretching full width, including widths below the former
   40-pixel minimum. (#248)
 
-### Changed
+### Improved
 
 - **Plugin refresh interval.** `refresh-ms` can go down to 33 ms with full
   motion; reduce motion still floors at 250 ms. (#249)
