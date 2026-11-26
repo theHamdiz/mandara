@@ -6964,6 +6964,8 @@
 "No tasks yet" = "Bado hakuna kazi"
 "Nothing running" = "Hakuna kinachoendelea"
 "Notify when tasks finish" = "Arifu kazi zikimaliza"
+"Show idle ring in the bar" = "Onyesha pete ya kutofanya kazi kwenye upau"
+"When no task is running, draw a quiet ring instead of leaving the pill empty" = "Hakuna kazi inayoendesha: chora pete tulivu badala ya kuacha kidonge tupu"
 "percent (40, 40%) or count (3/10)" = "asilimia (40, 40%) au hesabu (3/10)"
 "Post a notification when a task is done or fails" = "Tuma arifa kazi ikimaliza au kushindwa"
 "Remove a task from the bar and the panel" = "Ondoa kazi kutoka upau na paneli"

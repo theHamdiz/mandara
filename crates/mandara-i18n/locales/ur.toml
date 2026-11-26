@@ -3458,6 +3458,8 @@
 "Notify when done" = "مکمل ہونے پر اطلاع دیں"
 "Notify when runs finish" = "رنز مکمل ہونے پر اطلاع دیں"
 "Notify when tasks finish" = "کام مکمل ہونے پر اطلاع دیں"
+"Show idle ring in the bar" = "بار میں بیکار رنگ دکھائیں"
+"When no task is running, draw a quiet ring instead of leaving the pill empty" = "جب کوئی کام نہیں چل رہا، پِل خالی چھوڑنے کے بجائے پرسکون رنگ بنائیں"
 "Now" = "ابھی"
 "Now playing" = "ابھی چل رہا ہے"
 "Now playing card" = "ابھی چل رہا ہے کارڈ"

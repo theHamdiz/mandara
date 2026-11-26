@@ -1186,6 +1186,7 @@ fn build() -> Vec<Setting> {
         sd(Plugins, tk("Share to phone"), "/plugins/settings/share/minutes", tk("Stop sharing after"), tk("The link stops working after this long"), slider(1.0, 120.0, 1.0, " min"), Value::from(10)),
         sd(Plugins, tk("Share to phone"), "/plugins/settings/share/once", tk("Stop after the first download"), tk("The link stops working once your phone has downloaded the item"), Toggle, Value::from(true)),
         sd(Plugins, tk("Task progress"), "/plugins/settings/progress/notify", tk("Notify when tasks finish"), tk("Post a notification when a task is done or fails"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Task progress"), "/plugins/settings/progress/show_when_idle", tk("Show idle ring in the bar"), tk("When no task is running, draw a quiet ring instead of leaving the pill empty"), Toggle, Value::from(false)),
         sd(Plugins, tk("Eye breaks"), "/plugins/settings/breaks/every_min", tk("Break every"), tk("Minutes of active work between short breaks; time away from the keyboard doesn't count"), slider(5.0, 120.0, 5.0, " min"), Value::from(20)),
         sd(Plugins, tk("Eye breaks"), "/plugins/settings/breaks/short_s", tk("Short break length"), tk("How long to look at something 6 metres away"), slider(10.0, 120.0, 5.0, " s"), Value::from(20)),
         sd(Plugins, tk("Eye breaks"), "/plugins/settings/breaks/long_every_min", tk("Long break every"), tk("Minutes of active work between longer breaks (0 = no long breaks)"), slider(0.0, 240.0, 15.0, " min"), Value::from(60)),

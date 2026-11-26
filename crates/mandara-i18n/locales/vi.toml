@@ -6964,6 +6964,8 @@
 "No tasks yet" = "Chưa có việc"
 "Nothing running" = "Không có gì đang chạy"
 "Notify when tasks finish" = "Báo khi việc xong"
+"Show idle ring in the bar" = "Hiện vòng chờ trên thanh"
+"When no task is running, draw a quiet ring instead of leaving the pill empty" = "Khi không có tác vụ nào đang chạy, vẽ một vòng nhẹ thay vì để viên trống"
 "percent (40, 40%) or count (3/10)" = "phần trăm (40, 40%) hoặc số đếm (3/10)"
 "Post a notification when a task is done or fails" = "Gửi thông báo khi việc xong hoặc thất bại"
 "Remove a task from the bar and the panel" = "Gỡ một việc khỏi thanh và bảng"

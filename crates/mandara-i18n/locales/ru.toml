@@ -7063,6 +7063,8 @@
 "No tasks yet" = "Задач пока нет"
 "Nothing running" = "Ничего не выполняется"
 "Notify when tasks finish" = "Уведомлять о завершении задач"
+"Show idle ring in the bar" = "Показывать кольцо ожидания в панели"
+"When no task is running, draw a quiet ring instead of leaving the pill empty" = "Когда нет активных задач, рисуйте тихое кольцо вместо пустой пилюли"
 "percent (40, 40%) or count (3/10)" = "процент (40, 40%) или счёт (3/10)"
 "Post a notification when a task is done or fails" = "Отправлять уведомление, когда задача завершена или провалена"
 "Remove a task from the bar and the panel" = "Убрать задачу с панели и из всплывающего окна"

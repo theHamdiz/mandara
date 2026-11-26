@@ -17,7 +17,9 @@
 //! finished task to leave the bar.
 //!
 //! Settings (`[plugins.settings.progress]`): `notify` (post a desktop
-//! notification when a task finishes or fails, default on).
+//! notification when a task finishes or fails, default on), and
+//! `show_when_idle` (draw a quiet ring in the bar when no task is active,
+//! default off).
 //!
 //! Commands: `progress start <id> [label…]`, `progress set <id> <value>
 //! [label…]` (`40`, `40%` or `3/10`), `progress done <id> [message…]`,
@@ -84,6 +86,8 @@ const BAR_GAP_PX: f32 = 5.0;
 const BAR_ICON_PX: f32 = 14.0;
 const BAR_MORE_PX: f32 = 10.5;
 const RING_TRACK_ALPHA: f32 = 0.16;
+/// Idle ring in the bar when `show_when_idle` is on and nothing is running.
+const IDLE_RING_ALPHA: f32 = 0.45;
 /// Indeterminate spinner: lit share of the circle and turns per second.
 const SPIN_SWEEP: f32 = 0.28;
 const SPIN_TURNS_PER_S: f32 = 0.9;
@@ -420,7 +424,15 @@ fn bar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyE
             let color = readable(if ok { palette.success_emerald } else { palette.urgent_coral }, palette);
             chip.child(icon(if ok { "check" } else { "alert" }, crate::style::bar_icon(BAR_ICON_PX), color)).into_any_element()
         }
-        Show::Nothing => div().into_any_element(),
+        Show::Nothing => {
+            if crate::state::config(cx).read(cx).get().plugins.setting(ID, "show_when_idle", false) {
+                let ink = palette.on_surface.with_alpha(IDLE_RING_ALPHA);
+                let d = crate::style::bar_icon(BAR_RING_PX);
+                chip.child(ring(0.0, d, BAR_RING_STROKE_PX, ink, ink)).into_any_element()
+            } else {
+                div().into_any_element()
+            }
+        }
     }
 }
 
@@ -560,5 +572,11 @@ mod tests {
         assert_eq!(panel_height(0, false), PAD * 2.0 + HEADER_H + GAP + EMPTY_H);
         assert_eq!(panel_height(2, false), PAD * 2.0 + HEADER_H + GAP + ROW_H * 2.0 + ROW_GAP);
         assert!(panel_height(MAX_ROWS, true) > panel_height(MAX_ROWS, false));
+    }
+
+    #[test]
+    fn show_when_idle_defaults_off() {
+        let cfg = mandara_config::ShellConfig::default();
+        assert!(!cfg.plugins.setting(ID, "show_when_idle", false));
     }
 }

@@ -7064,6 +7064,8 @@
 "No tasks yet" = "अभी कोई कार्य नहीं"
 "Nothing running" = "कुछ नहीं चल रहा"
 "Notify when tasks finish" = "कार्य पूरे होने पर सूचित करें"
+"Show idle ring in the bar" = "बार में निष्क्रिय रिंग दिखाएँ"
+"When no task is running, draw a quiet ring instead of leaving the pill empty" = "जब कोई कार्य न चले, खाली छोड़ने के बजाय एक शांत रिंग बनाएँ"
 "percent (40, 40%) or count (3/10)" = "प्रतिशत (40, 40%) या गिनती (3/10)"
 "Post a notification when a task is done or fails" = "कार्य पूरा या विफल होने पर सूचना भेजें"
 "Remove a task from the bar and the panel" = "किसी कार्य को बार और पैनल से हटाएँ"

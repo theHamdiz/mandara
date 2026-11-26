@@ -37,8 +37,31 @@ pub use brokers::relay::{ShellRelay, command as relay_live_wallpaper};
 
 pub(crate) type Shared = Rc<RefCell<Option<WasmPlugin>>>;
 
-/// Shortest refresh interval a plugin may ask for.
+/// Recommended default and shortest refresh while reduce motion is on.
 const MIN_REFRESH_MS: u64 = 250;
+/// Shortest refresh at full motion (~one animation frame, like the progress pill).
+const REFRESH_MIN_MOTION_MS: u64 = 33;
+
+/// Shortest `refresh-ms` the host enforces for one motion setting.
+fn plugin_refresh_floor(reduced_motion: bool) -> u64 {
+    if reduced_motion { MIN_REFRESH_MS } else { REFRESH_MIN_MOTION_MS }
+}
+
+/// Clamps a plugin's `refresh-ms` (`0` = event-driven only).
+fn clamp_plugin_refresh_ms(refresh_ms: u32, reduced_motion: bool) -> Option<u64> {
+    if refresh_ms == 0 {
+        return None;
+    }
+    Some(u64::from(refresh_ms).max(plugin_refresh_floor(reduced_motion)))
+}
+
+/// Clamps a plugin's `refresh-ms` for the next redraw while its surface is
+/// visible. Evaluated each frame so reduce motion applies live.
+fn plugin_refresh_interval(refresh_ms: u32, cx: &App) -> Option<Duration> {
+    let reduced = cx.reduce_motion() || config(cx).read(cx).get().motion.reduced(mandara_core::spring::system_reduced_motion());
+    clamp_plugin_refresh_ms(refresh_ms, reduced).map(Duration::from_millis)
+}
+
 /// Padding inside third-party panels (their size is plugin.toml's `[panel]`).
 const PANEL_PAD_PX: f32 = tokens::LG;
 /// The panel's "whose is this" line is quieter than muted text.
@@ -594,11 +617,6 @@ pub(crate) fn draw_extension(d: &Discovered, plugin: &Shared, context: RenderCon
 }
 
 fn surface_view(d: &Discovered, which: Surface, views: ViewSet, window: &mut gpui::Window, cx: &mut App) -> gpui::AnyView {
-    let plugin = instance(d, cx);
-    let refresh = plugin.borrow_mut().as_mut().map(|p| p.refresh_ms()).unwrap_or(0);
-    // The plugin's refresh interval runs only while this surface renders
-    // (redraw_in from render), never as a free-running timer.
-    let tick = (refresh > 0).then(|| Duration::from_millis(u64::from(refresh).max(MIN_REFRESH_MS)));
     let id = d.id.clone();
     let declared = d.clone();
     let plugin_views = views_of(&d.id);
@@ -611,7 +629,8 @@ fn surface_view(d: &Discovered, which: Surface, views: ViewSet, window: &mut gpu
             // bar item, panel or card draws the fresh instance at once
             // instead of the one it was created with.
             let plugin = instance(&declared, cx);
-            if let Some(every) = tick {
+            let refresh = plugin.borrow_mut().as_mut().map(|p| p.refresh_ms()).unwrap_or(0);
+            if let Some(every) = plugin_refresh_interval(refresh, cx) {
                 redraw_in(every, window, cx);
             }
             follow_config(&declared, &plugin, cx);
@@ -750,18 +769,17 @@ pub fn desktop_card_view(card: &str, placed: String, size: (f32, f32), window: &
     let d = DISCOVERED.with(|m| m.borrow().get(plugin_id).cloned())?;
     let widget = widget.to_string();
     let views = ViewSet::default();
-    let refresh = instance(&d, cx).borrow_mut().as_mut().map(|p| p.refresh_ms()).unwrap_or(0);
-    let tick = (refresh > 0).then(|| Duration::from_millis(u64::from(refresh).max(MIN_REFRESH_MS)));
     let plugin_views = views_of(&d.id);
     Some(fn_view(
         None,
         move |palette, window, cx| {
             views.track(window);
             plugin_views.track(window);
-            if let Some(every) = tick {
+            let plugin = instance(&d, cx);
+            let refresh = plugin.borrow_mut().as_mut().map(|p| p.refresh_ms()).unwrap_or(0);
+            if let Some(every) = plugin_refresh_interval(refresh, cx) {
                 redraw_in(every, window, cx);
             }
-            let plugin = instance(&d, cx);
             follow_config(&d, &plugin, cx);
             // The person's choices for the widget's digits, dates and language.
             let opts: dc::PluginCardOptions = config(cx).read(cx).get().desktop.widgets.get(&placed).and_then(dc::as_card).map(dc::options).unwrap_or_default();
@@ -1115,6 +1133,16 @@ pub fn watch(cx: &mut App) {
 #[cfg(test)]
 mod tests {
     use mandara_plugins::wasm::{PLUGIN_COMMANDS, plugin_may_run};
+
+    #[test]
+    fn plugin_refresh_respects_motion_floor() {
+        assert_eq!(super::clamp_plugin_refresh_ms(0, false), None);
+        assert_eq!(super::clamp_plugin_refresh_ms(100, true), Some(super::MIN_REFRESH_MS));
+        assert_eq!(super::clamp_plugin_refresh_ms(100, false), Some(100));
+        assert_eq!(super::clamp_plugin_refresh_ms(10, false), Some(super::REFRESH_MIN_MOTION_MS));
+        assert_eq!(super::plugin_refresh_floor(true), super::MIN_REFRESH_MS);
+        assert_eq!(super::plugin_refresh_floor(false), super::REFRESH_MIN_MOTION_MS);
+    }
 
     /// `[plugins.settings]` edits are what wake desktop widgets: grants and
     /// enablement alone already had a path; settings must too (#234).
