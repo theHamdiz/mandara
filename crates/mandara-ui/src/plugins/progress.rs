@@ -396,19 +396,27 @@ struct LightLook {
     idle_alpha: f32,
 }
 
+/// Keep the pulse range ordered: a min above max must not invert the fade.
+fn ordered_brightness(min: f32, max: f32) -> (f32, f32) {
+    (min.min(max), max)
+}
+
 fn light_look(cx: &App) -> LightLook {
     let p = &crate::state::config(cx).read(cx).get().plugins;
     let num = |key: &str, default: f64, range: (f64, f64)| -> f32 {
         p.setting(ID, key, default).clamp(range.0, range.1) as f32
     };
+    let max_alpha = num("light_max_alpha", LIGHT_MAX_ALPHA_DEFAULT, LIGHT_ALPHA_RANGE);
+    let min_alpha = num("light_min_alpha", LIGHT_MIN_ALPHA_DEFAULT, LIGHT_ALPHA_RANGE);
+    let (min_alpha, max_alpha) = ordered_brightness(min_alpha, max_alpha);
     LightLook {
         width: num("light_width", LIGHT_W_DEFAULT, LIGHT_W_RANGE),
         height: num("light_height", LIGHT_H_DEFAULT, LIGHT_H_RANGE),
         gap: num("light_gap", LIGHT_GAP_DEFAULT, LIGHT_GAP_RANGE),
         period: num("light_period", LIGHT_PERIOD_DEFAULT, LIGHT_PERIOD_RANGE),
         phase: num("light_phase", LIGHT_PHASE_DEFAULT, LIGHT_PHASE_RANGE),
-        min_alpha: num("light_min_alpha", LIGHT_MIN_ALPHA_DEFAULT, LIGHT_ALPHA_RANGE),
-        max_alpha: num("light_max_alpha", LIGHT_MAX_ALPHA_DEFAULT, LIGHT_ALPHA_RANGE),
+        min_alpha,
+        max_alpha,
         idle_alpha: num("light_idle_alpha", LIGHT_IDLE_ALPHA_DEFAULT, LIGHT_ALPHA_RANGE),
     }
 }
@@ -615,6 +623,15 @@ pub fn register(r: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn brightness_range_stays_ordered() {
+        // The defaults and other valid pairs are untouched.
+        assert_eq!(ordered_brightness(0.3, 1.0), (0.3, 1.0));
+        assert_eq!(ordered_brightness(0.4, 0.8), (0.4, 0.8));
+        // A reversed pair collapses to a steady light at the maximum.
+        assert_eq!(ordered_brightness(0.9, 0.2), (0.2, 0.2));
+    }
 
     /// A locale change rebuilds text; a theme frame reuses it with live semantic colours.
     #[test]
