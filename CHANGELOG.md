@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.38.9 — 2026-11-26
+
 Third-party plugin views size meters correctly, animated plugins may refresh
 faster with full motion, and the task progress bar can show a quiet ring while
 idle.
