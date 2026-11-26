@@ -6,6 +6,14 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.38.8 — 2026-11-26
+
+The changes in this release, taken from its commit history.
+
+### Changes
+
+- Keep the overview wallpaper at full resolution (#247).
+
 ## 0.38.7 — 2026-11-25
 
 Desktop right-click works again on Niri when an older rule still put the
