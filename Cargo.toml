@@ -295,3 +295,10 @@ lto = "thin"
 codegen-units = 16
 debug = "line-tables-only"
 strip = "none"
+
+# `cargo fast`: optimized code for local iteration without paying for the
+# shipped build's fat LTO and single codegen unit. Not a distribution build.
+[profile.fast]
+inherits = "release"
+lto = "thin"
+codegen-units = 8
