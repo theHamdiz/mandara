@@ -94,7 +94,9 @@ The rest of what's built in.
   not over fullscreen apps unless you ask; closing the launcher it opened
   with the pointer still there doesn't reopen it. While they're on, the
   compositor's own hot corner (MangoWM's hot area, Niri's overview corner)
-  is switched off in the drop-in so the two never fight.
+  is switched off in the drop-in so the two never fight. On MangoWM, Studio
+  → Compositor can point Overview at the classic packed-card overview or at
+  MangoWM 0.19+'s workspace overview (all / occupied / scrolling).
 - **Calendar**: the clock panel pairs the time and a page-a-day tile with a
   month you can page through: the arrows, **Today**, the scroll wheel, a
   click on any day, or the keyboard (arrows by day and week, Page Up / Down

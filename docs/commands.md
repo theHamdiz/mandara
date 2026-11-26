@@ -401,6 +401,8 @@ mandara msg --json compositor check  # Config doctor: the compositor's own check
 mandara msg compositor fix 1a2b3c4d comment   # comment | remove (your files) | regenerate (Mandara's drop-in); backed up, re-checked, rolled back if worse
 mandara msg compositor snooze        # no reminders about the current problems until the config or the compositor changes
 mandara msg compositor reload        # clients, monitors, dispatch <command> [args]
+mandara msg compositor overview toggle [classic|all|occupied|scroll_all|scroll_occupied]
+                                     # MangoWM: Studio style, or an explicit mode (0.19+ workspace overview)
 ```
 
 Without a running shell (a session that won't start, a TTY), the same check

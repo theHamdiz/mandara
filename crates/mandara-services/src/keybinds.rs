@@ -396,7 +396,14 @@ pub fn describe(action: &str) -> Option<String> {
         "togglefullscreen" | "fullscreen" | "fullscreen_window" | "togglefakefullscreen" | "toggle_fullscreen" => t("Toggle fullscreen").to_string(),
         "togglemaximizescreen" | "maximize_column" | "maximize" | "maximize_window_to_edges" => t("Maximize").to_string(),
         "minimized" | "minimize" | "toggle_minimize" => t("Minimize").to_string(),
-        "toggleoverview" | "toggle_overview" | "overview" => t("Overview").to_string(),
+        "toggleoverview" | "toggle_overview" | "overview" | "enteroverview" | "leaveoverview" => t("Overview").to_string(),
+        "toggleworkspaceoverview" | "enterworkspaceoverview" => match arg.as_str() {
+            "occupied" => t("Workspace overview (occupied)").to_string(),
+            "scroll_all" => t("Workspace overview (scroll all)").to_string(),
+            "scroll_occupied" => t("Workspace overview (scroll occupied)").to_string(),
+            _ => t("Workspace overview").to_string(),
+        },
+        "leaveworkspaceoverview" => t("Leave workspace overview").to_string(),
         "focusdir" | "movefocus" | "focus" if dir().is_some() => tf("Focus {direction}", &[("direction", &dir()?)]),
         "exchange_client" | "swapwindow" | "movewindow" | "move" if sway_move.is_none() && dir().is_some() => tf("Move window {direction}", &[("direction", &dir()?)]),
         "move" if sway_move.is_some() && !ws_name.is_empty() => tf("Move window to {place} {n}", &[("place", &t("workspace")), ("n", &ws_name)]),
@@ -618,6 +625,10 @@ mod tests {
         assert_eq!(describe("view 2").as_deref(), Some("Go to tag 2"));
         assert_eq!(describe("workspace 4").as_deref(), Some("Go to workspace 4"));
         assert_eq!(describe("movetoworkspace 4").as_deref(), Some("Move window to workspace 4"));
+        assert_eq!(describe("toggleoverview").as_deref(), Some("Overview"));
+        assert_eq!(describe("toggleworkspaceoverview all").as_deref(), Some("Workspace overview"));
+        assert_eq!(describe("toggleworkspaceoverview occupied").as_deref(), Some("Workspace overview (occupied)"));
+        assert_eq!(describe("leaveworkspaceoverview").as_deref(), Some("Leave workspace overview"));
         assert_eq!(describe("something-custom"), None);
     }
 

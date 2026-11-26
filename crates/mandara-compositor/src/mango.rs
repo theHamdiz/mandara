@@ -17,6 +17,46 @@ use serde::Deserialize;
 
 use crate::model::{ClientInfo, CompositorEvent, MonitorInfo, NavigationModel, TagStatus};
 
+/// Scope and layout for MangoWM's workspace overview (0.19+).
+///
+/// IPC spellings match the upstream dispatchers
+/// (`toggleworkspaceoverview` / `enterworkspaceoverview`): `all`,
+/// `occupied`, `scroll_all`, `scroll_occupied`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WorkspaceOverviewMode {
+    /// One preview for every tag up to `tag_num`, including empty ones.
+    All,
+    /// Only tags that contain windows.
+    Occupied,
+    /// All tags as a scrolling strip.
+    ScrollAll,
+    /// Occupied tags as a scrolling strip.
+    ScrollOccupied,
+}
+
+impl WorkspaceOverviewMode {
+    /// Exact argument MangoWM expects after the dispatcher.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::All => "all",
+            Self::Occupied => "occupied",
+            Self::ScrollAll => "scroll_all",
+            Self::ScrollOccupied => "scroll_occupied",
+        }
+    }
+
+    /// Parse a mode from a config / command token (`all`, `scroll-all`, …).
+    pub fn parse(raw: &str) -> Option<Self> {
+        match raw.trim() {
+            "all" | "workspace-all" => Some(Self::All),
+            "occupied" | "workspace-occupied" => Some(Self::Occupied),
+            "scroll_all" | "scroll-all" | "workspace-scroll-all" => Some(Self::ScrollAll),
+            "scroll_occupied" | "scroll-occupied" | "workspace-scroll-occupied" => Some(Self::ScrollOccupied),
+            _ => None,
+        }
+    }
+}
+
 /// Raw JSON shapes from mango.
 #[derive(Deserialize)]
 struct RawTag {
@@ -273,6 +313,26 @@ impl MangoDriver {
         self.dispatch("switch_layout", &[])
     }
 
+    /// Toggle the classic packed-card overview (`toggleoverview`).
+    pub fn toggle_overview(&self) -> Result<()> {
+        self.dispatch("toggleoverview", &[])
+    }
+
+    /// Toggle the draggable workspace overview (MangoWM 0.19+).
+    pub fn toggle_workspace_overview(&self, mode: WorkspaceOverviewMode) -> Result<()> {
+        self.dispatch("toggleworkspaceoverview", &[mode.as_str()])
+    }
+
+    /// Enter the workspace overview with the given scope/layout.
+    pub fn enter_workspace_overview(&self, mode: WorkspaceOverviewMode) -> Result<()> {
+        self.dispatch("enterworkspaceoverview", &[mode.as_str()])
+    }
+
+    /// Leave the workspace overview without selecting a workspace.
+    pub fn leave_workspace_overview(&self) -> Result<()> {
+        self.dispatch("leaveworkspaceoverview", &[])
+    }
+
     /// Starts the persistent watch streams (one thread, `poll(2)` over
     /// every socket); every update is sent on the returned channel. Streams
     /// reconnect with backoff if mango restarts.
@@ -503,6 +563,44 @@ mod tests {
     #[test]
     fn parses_keyboard_layout() {
         assert_eq!(parse_keyboard_layout(r#"{"layout":"English (US)"}"#).unwrap(), "English (US)");
+    }
+
+    #[test]
+    fn workspace_overview_mode_ipc_spellings_match_upstream() {
+        assert_eq!(WorkspaceOverviewMode::All.as_str(), "all");
+        assert_eq!(WorkspaceOverviewMode::Occupied.as_str(), "occupied");
+        assert_eq!(WorkspaceOverviewMode::ScrollAll.as_str(), "scroll_all");
+        assert_eq!(WorkspaceOverviewMode::ScrollOccupied.as_str(), "scroll_occupied");
+    }
+
+    #[test]
+    fn workspace_overview_mode_parses_config_and_command_tokens() {
+        assert_eq!(WorkspaceOverviewMode::parse("all"), Some(WorkspaceOverviewMode::All));
+        assert_eq!(WorkspaceOverviewMode::parse("workspace-occupied"), Some(WorkspaceOverviewMode::Occupied));
+        assert_eq!(WorkspaceOverviewMode::parse("scroll-all"), Some(WorkspaceOverviewMode::ScrollAll));
+        assert_eq!(WorkspaceOverviewMode::parse("scroll_occupied"), Some(WorkspaceOverviewMode::ScrollOccupied));
+        assert_eq!(WorkspaceOverviewMode::parse("classic"), None);
+        assert_eq!(WorkspaceOverviewMode::parse(""), None);
+    }
+
+    #[test]
+    fn workspace_overview_dispatch_lines_use_wiki_spellings() {
+        // Mirrors `MangoDriver::dispatch` formatting without a live socket.
+        let line = |func: &str, args: &[&str]| {
+            let mut cmd = format!("dispatch {func}");
+            for a in args {
+                cmd.push(',');
+                cmd.push_str(a);
+            }
+            cmd
+        };
+        assert_eq!(line("toggleoverview", &[]), "dispatch toggleoverview");
+        assert_eq!(line("toggleworkspaceoverview", &[WorkspaceOverviewMode::All.as_str()]), "dispatch toggleworkspaceoverview,all");
+        assert_eq!(
+            line("enterworkspaceoverview", &[WorkspaceOverviewMode::ScrollOccupied.as_str()]),
+            "dispatch enterworkspaceoverview,scroll_occupied"
+        );
+        assert_eq!(line("leaveworkspaceoverview", &[]), "dispatch leaveworkspaceoverview");
     }
 
     #[test]

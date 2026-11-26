@@ -433,6 +433,36 @@ pub fn register(r: &mut PluginRegistry) {
         .arg(ArgSpec::required("command", ArgKind::String, mandara_i18n::tk("function / dispatcher / action name, then its arguments")))
         .example("compositor dispatch togglefloating"),
     );
+    r.command(
+        ID,
+        CommandSpec::new(
+            "compositor overview toggle",
+            mandara_i18n::tk("Toggle the compositor overview (on MangoWM respects compositor.mango_overview.style, or an explicit mode)"),
+            |a, cx| {
+                let backend = backend(cx)?;
+                let configured = config(cx).read(cx).snapshot().compositor.mango_overview.style;
+                let style = match a.0.first().map(String::as_str) {
+                    None | Some("") => configured,
+                    Some(raw) => mandara_config::compositor::MangoOverviewStyle::parse(raw)
+                        .ok_or_else(|| format!("unknown overview mode {raw:?} (classic, all, occupied, scroll_all, scroll_occupied)"))?,
+                };
+                // Explicit mode only changes MangoWM; other backends keep their own overview.
+                let mango_style = if backend.kind() == mandara_compositor::CompositorKind::MangoWM { style } else { configured };
+                let Some((cmd, args)) = crate::corners::overview_dispatch(backend.kind(), mango_style) else {
+                    return Err(format!("overview is unavailable through the {:?} backend", backend.kind()));
+                };
+                backend.dispatch_raw(cmd, args).map_err(|e| format!("{e:#}"))?;
+                Ok(json!({ "dispatched": cmd, "args": args, "style": format!("{style:?}") }))
+            },
+        )
+        .arg(ArgSpec::optional(
+            "mode",
+            ArgKind::Enum,
+            mandara_i18n::tk("MangoWM only: classic, all, occupied, scroll_all, scroll_occupied (default: the Studio setting)"),
+        ).choices(&["classic", "all", "occupied", "scroll_all", "scroll_occupied"]))
+        .example("compositor overview toggle")
+        .example("compositor overview toggle scroll_occupied"),
+    );
 }
 
 #[cfg(test)]
