@@ -28,7 +28,7 @@ pub use aqueous::AqueousDriver;
 pub use backend::CompositorBackend;
 pub use ext_workspace::ExtWorkspaceDriver;
 pub use hyprland::HyprlandDriver;
-pub use mango::MangoDriver;
+pub use mango::{MangoDriver, WorkspaceOverviewMode};
 pub use kwin::KWinDriver;
 pub use model::*;
 pub use niri::NiriDriver;

@@ -315,6 +315,33 @@ pub fn fire(corner: ScreenCorner, action: CornerAction, command: &str, monitor: 
     }
 }
 
+/// Compositor dispatcher for the Overview action.
+///
+/// On MangoWM the style comes from `compositor.mango_overview.style`
+/// (`classic` keeps `toggleoverview`; workspace styles use
+/// `toggleworkspaceoverview`). Other backends ignore `mango_style`.
+/// Returns `None` when the backend has no overview.
+pub fn overview_dispatch(
+    kind: mandara_compositor::CompositorKind,
+    mango_style: mandara_config::compositor::MangoOverviewStyle,
+) -> Option<(&'static str, &'static [&'static str])> {
+    use mandara_compositor::CompositorKind;
+    Some(match kind {
+        CompositorKind::Niri => ("ToggleOverview", &[]),
+        CompositorKind::MangoWM => mango_style.toggle_dispatch(),
+        // Hyprland ships no overview; hyprexpo is the common plugin.
+        CompositorKind::Hyprland => ("hyprexpo:expo", &["toggle"]),
+        CompositorKind::Umbriel => ("overview-toggle", &[]),
+        // On the selected output (the driver fills it in).
+        CompositorKind::Aqueous => ("overview.toggle", &[]),
+        CompositorKind::Sway
+        | CompositorKind::River
+        | CompositorKind::KWin
+        | CompositorKind::Labwc
+        | CompositorKind::Cosmic => return None,
+    })
+}
+
 /// Runs one of the hot-corner actions (also a middle click on empty bar
 /// space, `bar.middle_click`).
 pub fn run(action: CornerAction, command: &str, cx: &mut App) {
@@ -332,26 +359,13 @@ pub fn run(action: CornerAction, command: &str, cx: &mut App) {
         CornerAction::Lock => request_lock(crate::lock::lock_now),
         CornerAction::Overview => {
             let Some(backend) = crate::hub::hub(cx).read(cx).compositor.clone() else { return };
-            let (cmd, args): (&str, &[&str]) = match backend.kind() {
-                mandara_compositor::CompositorKind::Niri => ("ToggleOverview", &[]),
-                mandara_compositor::CompositorKind::MangoWM => ("toggleoverview", &[]),
-                // Hyprland ships no overview; hyprexpo is the common plugin.
-                mandara_compositor::CompositorKind::Hyprland => ("hyprexpo:expo", &["toggle"]),
-                mandara_compositor::CompositorKind::Umbriel => ("overview-toggle", &[]),
-                // On the selected output (the driver fills it in).
-                mandara_compositor::CompositorKind::Aqueous => ("overview.toggle", &[]),
-                // No overview: Studio leaves the choice out there.
-                mandara_compositor::CompositorKind::Sway
-                | mandara_compositor::CompositorKind::River
-                | mandara_compositor::CompositorKind::KWin
-                | mandara_compositor::CompositorKind::Labwc
-                | mandara_compositor::CompositorKind::Cosmic => {
-                    tracing::info!("overview is unavailable through the {:?} backend", backend.kind());
-                    return;
+            let mango_style = crate::state::config(cx).read(cx).snapshot().compositor.mango_overview.style;
+            if let Some((cmd, args)) = overview_dispatch(backend.kind(), mango_style) {
+                if let Err(err) = backend.dispatch_raw(cmd, args) {
+                    tracing::warn!("overview: {err:#}");
                 }
-            };
-            if let Err(err) = backend.dispatch_raw(cmd, args) {
-                tracing::warn!("overview: {err:#}");
+            } else {
+                tracing::info!("overview is unavailable through the {:?} backend", backend.kind());
             }
         }
         CornerAction::Command => {
@@ -766,6 +780,23 @@ mod tests {
         g.leave(TL, false, ms(t0, 10));
         assert!(!g.due(TL, a, DELAY, ms(t0, 200)));
         assert!(g.due(BR, b, DELAY, ms(t0, 200)));
+    }
+
+    #[test]
+    fn mango_overview_style_picks_the_dispatcher() {
+        use mandara_compositor::CompositorKind;
+        use mandara_config::compositor::MangoOverviewStyle;
+        assert_eq!(overview_dispatch(CompositorKind::MangoWM, MangoOverviewStyle::Classic), Some(("toggleoverview", &[] as &[&str])));
+        assert_eq!(
+            overview_dispatch(CompositorKind::MangoWM, MangoOverviewStyle::WorkspaceOccupied),
+            Some(("toggleworkspaceoverview", &["occupied"] as &[&str]))
+        );
+        assert_eq!(
+            overview_dispatch(CompositorKind::MangoWM, MangoOverviewStyle::WorkspaceScrollAll),
+            Some(("toggleworkspaceoverview", &["scroll_all"] as &[&str]))
+        );
+        assert_eq!(overview_dispatch(CompositorKind::Niri, MangoOverviewStyle::WorkspaceAll), Some(("ToggleOverview", &[] as &[&str])));
+        assert!(overview_dispatch(CompositorKind::Sway, MangoOverviewStyle::Classic).is_none());
     }
 
     #[test]

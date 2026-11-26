@@ -993,6 +993,8 @@ Bind Alt+Tab
 Bitrate
 Bits · Mb/s
 Black
+Black overlay on the selected workspace preview (MangoWM 0.19+)
+Black overlay on unselected workspace previews (MangoWM 0.19+)
 Black rounded corners drawn over the desktop
 Blade
 Blaise Pascal
@@ -1432,6 +1434,7 @@ Cities, comma separated (empty: your World clock cities)
 City or place name
 Clarice Lispector
 Classic
+Classic (window cards)
 Classic analog
 Classic glass
 Classic glass, or liquid glass: a translucent body with a bright top edge, light gathered inside its edges and a soft lens across the top
@@ -2821,6 +2824,7 @@ Focused tile size
 Focused window
 Focused window opacity
 Focused window title
+Focused workspace dim
 Fog
 Fog out there. Take it slow.
 Fold repeats
@@ -3016,6 +3020,7 @@ Gap between neighbouring items
 Gap between sidebar cards
 Gap between the buttons
 Gap between the dock and the screen edge
+Gap between workspace preview cards (MangoWM 0.19+; unset keeps MangoWM's value)
 Gap to the bar
 Gap to windows
 Gaps between windows
@@ -3961,6 +3966,7 @@ Leave it
 Leave snipping and keep the toolbar · Esc
 Leave the edge free
 Leave undone whatever you hesitate to do.
+Leave workspace overview
 Left
 Left (vertical)
 Left / top
@@ -4390,6 +4396,7 @@ Mandara's shortcuts changed while saving. Refresh the list and try again.
 MangoWM
 MangoWM and Niri only
 MangoWM could not validate the configuration. Nothing was changed.
+MangoWM only: classic, all, occupied, scroll_all, scroll_occupied (default: the Studio setting)
 MangoWM rejected the configuration change. Previous settings were kept.
 MangoWM uses a custom config at {path}. Automatic setup requires its default config location. Your compositor files were left unchanged.
 MangoWM's configuration is not valid TOML.
@@ -5569,6 +5576,7 @@ Other
 Other Wi-Fi networks listed in the panel
 Other apps
 Other settings
+Other workspaces dim
 Other xkb options
 Our Mutual Friend
 Our doubts are traitors, and make us lose the good we oft might win, by fearing to attempt.
@@ -6827,6 +6835,7 @@ Scroller
 Scroller column width
 Scrolling
 Scrolling between and around the bar's items switches workspace or changes the volume
+Scrolling strip direction for scroll_all / scroll_occupied (MangoWM 0.19+)
 Scrolling title
 Scrub checks data and metadata. Redundant good copies can repair damaged copies; it does not free disk space.
 Sea glass
@@ -8647,6 +8656,7 @@ Toggle output mute
 Toggle playback
 Toggle sidebar
 Toggle tag into the composite view (MangoWM `toggleview`)
+Toggle the compositor overview (on MangoWM respects compositor.mango_overview.style, or an explicit mode)
 Toggle the focused window onto a tag (`toggletag`)
 Toggles
 Toggles Wi-Fi, Bluetooth, power profiles and do-not-disturb
@@ -9285,6 +9295,7 @@ What one unit of your currency buys (fetched twice a day once you switch it on)
 What opens when you right-click the bar between and around its items
 What plays: station, title, format, buffer, volume
 What scripts can show
+What the Overview hot corner and compositor overview toggle open. Workspace modes need MangoWM 0.19+
 What the Sketch transition draws its lines in
 What the bar item shows
 What the bar item shows while a station plays
@@ -9446,6 +9457,16 @@ Working…
 Works and Days
 Works in the background
 Workspace not found
+Workspace overview
+Workspace overview (occupied)
+Workspace overview (scroll all)
+Workspace overview (scroll occupied)
+Workspace overview gap
+Workspace overview scroll
+Workspace overview · all tags
+Workspace overview · occupied
+Workspace overview · scroll all
+Workspace overview · scroll occupied
 Workspaces
 World
 World clock

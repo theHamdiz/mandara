@@ -501,6 +501,117 @@ pub struct MangoFx {
     pub shadows_blur: Option<u32>,
 }
 
+/// Which MangoWM overview Mandara's Overview action opens.
+///
+/// Classic is the packed-card overview (`toggleoverview`). The `workspace-*`
+/// variants use MangoWM 0.19+'s draggable workspace overview
+/// (`toggleworkspaceoverview`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum MangoOverviewStyle {
+    /// Packed window cards (`toggleoverview`). Default so existing installs
+    /// keep the behaviour they already have.
+    #[default]
+    Classic,
+    /// Every tag, including empty ones (`all`).
+    WorkspaceAll,
+    /// Only tags that contain windows (`occupied`).
+    WorkspaceOccupied,
+    /// All tags as a scrolling strip (`scroll_all`).
+    WorkspaceScrollAll,
+    /// Occupied tags as a scrolling strip (`scroll_occupied`).
+    WorkspaceScrollOccupied,
+}
+
+impl MangoOverviewStyle {
+    /// IPC argument for `toggleworkspaceoverview` / `enterworkspaceoverview`,
+    /// or `None` when the classic overview should be used instead.
+    pub const fn workspace_mode(self) -> Option<&'static str> {
+        match self {
+            Self::Classic => None,
+            Self::WorkspaceAll => Some("all"),
+            Self::WorkspaceOccupied => Some("occupied"),
+            Self::WorkspaceScrollAll => Some("scroll_all"),
+            Self::WorkspaceScrollOccupied => Some("scroll_occupied"),
+        }
+    }
+
+    /// `(dispatcher, args)` for Mandara's Overview action on MangoWM.
+    pub const fn toggle_dispatch(self) -> (&'static str, &'static [&'static str]) {
+        match self {
+            Self::Classic => ("toggleoverview", &[]),
+            Self::WorkspaceAll => ("toggleworkspaceoverview", &["all"]),
+            Self::WorkspaceOccupied => ("toggleworkspaceoverview", &["occupied"]),
+            Self::WorkspaceScrollAll => ("toggleworkspaceoverview", &["scroll_all"]),
+            Self::WorkspaceScrollOccupied => ("toggleworkspaceoverview", &["scroll_occupied"]),
+        }
+    }
+
+    /// Parse a Studio / command token (`classic`, `all`, `workspace-all`, …).
+    pub fn parse(raw: &str) -> Option<Self> {
+        match raw.trim() {
+            "classic" => Some(Self::Classic),
+            "all" | "workspace-all" => Some(Self::WorkspaceAll),
+            "occupied" | "workspace-occupied" => Some(Self::WorkspaceOccupied),
+            "scroll_all" | "scroll-all" | "workspace-scroll-all" => Some(Self::WorkspaceScrollAll),
+            "scroll_occupied" | "scroll-occupied" | "workspace-scroll-occupied" => Some(Self::WorkspaceScrollOccupied),
+            _ => None,
+        }
+    }
+}
+
+/// Scroll direction for MangoWM's scrolling workspace-overview modes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum MangoOverviewScrollDirection {
+    Horizontal,
+    Vertical,
+}
+
+impl MangoOverviewScrollDirection {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Horizontal => "horizontal",
+            Self::Vertical => "vertical",
+        }
+    }
+}
+
+/// MangoWM overview preference and optional workspace-overview visuals
+/// (Studio → Compositor → MangoWM). Every visual field is optional: `None`
+/// leaves MangoWM's own default alone. Workspace styles need MangoWM 0.19+.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct MangoOverview {
+    /// Which overview the shell's Overview action (hot corner / bar middle
+    /// click / `compositor overview toggle`) opens.
+    pub style: MangoOverviewStyle,
+    /// `workspace_overview_gap` (0–1000).
+    pub gap: Option<u32>,
+    /// `workspace_overview_scroll_direction`.
+    pub scroll_direction: Option<MangoOverviewScrollDirection>,
+    /// `workspace_overview_focused_dim_opacity` (0–1).
+    pub focused_dim_opacity: Option<f32>,
+    /// `workspace_overview_unfocused_dim_opacity` (0–1).
+    pub unfocused_dim_opacity: Option<f32>,
+}
+
+impl MangoOverview {
+    /// True when no workspace-overview visual knobs are set (style alone
+    /// does not count: it only affects the dispatch, not the drop-in).
+    pub fn visuals_empty(&self) -> bool {
+        self.gap.is_none()
+            && self.scroll_direction.is_none()
+            && self.focused_dim_opacity.is_none()
+            && self.unfocused_dim_opacity.is_none()
+    }
+
+    /// Entirely at defaults — omit from `config.toml` until the user sets it.
+    fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
 /// One Niri output (`output "NAME" { scale …; position x=… y=…; }`).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -835,6 +946,9 @@ pub struct CompositorConfig {
     pub mango_sync_obj: bool,
     /// MangoWM blur / shadow parameters.
     pub mango_fx: MangoFx,
+    /// MangoWM overview style and optional workspace-overview visuals.
+    #[serde(skip_serializing_if = "MangoOverview::is_default")]
+    pub mango_overview: MangoOverview,
     /// Niri-only layout and output options.
     pub niri: NiriOptions,
     /// Hyprland-only decoration options.
@@ -874,6 +988,7 @@ impl Default for CompositorConfig {
             mango_blur_optimized: true,
             mango_sync_obj: true,
             mango_fx: MangoFx::default(),
+            mango_overview: MangoOverview::default(),
             niri: NiriOptions::default(),
             hyprland: HyprlandOptions::default(),
             autostart: false,
@@ -1150,6 +1265,26 @@ pub fn emit_mango(cfg: &ManagedConfig) -> Emitted {
         }
     }
     let _ = writeln!(s);
+    // Workspace-overview visuals (MangoWM 0.19+). The Overview *style* is a
+    // Mandara dispatch choice and is not written here; Config doctor drops
+    // keys an older mango rejects onto its unsupported list.
+    let ov = &c.mango_overview;
+    if !ov.visuals_empty() {
+        let _ = writeln!(s, "# Workspace overview (MangoWM 0.19+)");
+        if let Some(g) = ov.gap {
+            let _ = writeln!(s, "workspace_overview_gap={}", g.min(1000));
+        }
+        if let Some(dir) = ov.scroll_direction {
+            let _ = writeln!(s, "workspace_overview_scroll_direction={}", dir.as_str());
+        }
+        if let Some(o) = ov.focused_dim_opacity {
+            let _ = writeln!(s, "workspace_overview_focused_dim_opacity={:.2}", o.clamp(0.0, 1.0));
+        }
+        if let Some(o) = ov.unfocused_dim_opacity {
+            let _ = writeln!(s, "workspace_overview_unfocused_dim_opacity={:.2}", o.clamp(0.0, 1.0));
+        }
+        let _ = writeln!(s);
+    }
     if c.disable_builtin_hot_corners {
         let _ = writeln!(s, "# Mandara's hot corners replace MangoWM's hot area (both would toggle the overview)\nenable_hotarea=0\n");
     }
@@ -3480,6 +3615,42 @@ mod look_tests {
         assert_eq!(emit_hyprland(&managed(&on)).text, emit_hyprland(&managed(&off)).text);
         // The flag is derived, never written to config.toml when off.
         assert!(!toml::to_string(&off).unwrap().contains("disable_builtin_hot_corners"));
+    }
+
+    #[test]
+    fn mango_overview_defaults_emit_no_workspace_overview_keys() {
+        let text = emit_mango(&managed(&CompositorConfig::default())).text;
+        assert!(!text.contains("workspace_overview_"), "{text}");
+        assert!(!toml::to_string(&CompositorConfig::default()).unwrap().contains("mango_overview"));
+    }
+
+    #[test]
+    fn mango_overview_visuals_reach_the_drop_in() {
+        let c = CompositorConfig {
+            mango_overview: MangoOverview {
+                style: MangoOverviewStyle::WorkspaceScrollAll,
+                gap: Some(8),
+                scroll_direction: Some(MangoOverviewScrollDirection::Horizontal),
+                focused_dim_opacity: Some(0.0),
+                unfocused_dim_opacity: Some(0.25),
+            },
+            ..CompositorConfig::default()
+        };
+        let text = emit_mango(&managed(&c)).text;
+        for line in [
+            "workspace_overview_gap=8",
+            "workspace_overview_scroll_direction=horizontal",
+            "workspace_overview_focused_dim_opacity=0.00",
+            "workspace_overview_unfocused_dim_opacity=0.25",
+        ] {
+            assert!(text.contains(line), "missing {line}\n{text}");
+        }
+        // Style is a Mandara dispatch choice, not a mango.conf key; never emit
+        // a competing workspace-overview bind (Mandara's own keybinds stay).
+        assert!(!text.contains("toggleworkspaceoverview"), "{text}");
+        assert!(!text.contains("enterworkspaceoverview"), "{text}");
+        assert_eq!(c.mango_overview.style.workspace_mode(), Some("scroll_all"));
+        assert_eq!(MangoOverviewStyle::Classic.workspace_mode(), None);
     }
 
     fn full_look() -> CompositorConfig {
