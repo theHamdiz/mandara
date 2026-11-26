@@ -3458,6 +3458,8 @@
 "Notify when done" = "완료 시 알림"
 "Notify when runs finish" = "실행이 끝나면 알림"
 "Notify when tasks finish" = "작업이 끝나면 알림"
+"Show idle ring in the bar" = "바에 대기 링 표시"
+"When no task is running, draw a quiet ring instead of leaving the pill empty" = "실행 중인 작업이 없을 때 빈 필 대신 은은한 링을 그립니다"
 "Now" = "지금"
 "Now playing" = "지금 재생 중"
 "Now playing card" = "지금 재생 중 카드"

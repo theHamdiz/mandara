@@ -381,6 +381,8 @@ mod tests {
             assert!(guide.contains(&phrase), "PLUGINS.md must say {phrase:?}");
         }
         assert!(guide.contains(&format!("{} ms launcher budget", crate::extension::LAUNCHER_BUDGET.as_millis())));
+        assert!(guide.contains("at least 250 ms"));
+        assert!(guide.contains("33 ms"));
         assert!(guide.contains(&format!("API level {}", crate::extension::API_LEVEL)));
         for f in crate::extension::FEATURES {
             assert!(guide.contains(&format!("`{f}`")), "PLUGINS.md lists feature {f}");

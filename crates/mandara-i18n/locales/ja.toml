@@ -7064,6 +7064,8 @@
 "No tasks yet" = "まだタスクはありません"
 "Nothing running" = "実行中のものなし"
 "Notify when tasks finish" = "タスク完了時に通知"
+"Show idle ring in the bar" = "バーに待機リングを表示"
+"When no task is running, draw a quiet ring instead of leaving the pill empty" = "実行中のタスクがないとき、ピルが空になるのを避け、控えめなリングを表示します"
 "percent (40, 40%) or count (3/10)" = "パーセント（40、40%）または件数（3/10）"
 "Post a notification when a task is done or fails" = "タスクが完了または失敗したら通知を送る"
 "Remove a task from the bar and the panel" = "タスクをバーとパネルから削除"

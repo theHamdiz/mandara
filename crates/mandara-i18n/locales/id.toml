@@ -3457,6 +3457,8 @@
 "Notify when done" = "Beri tahu saat selesai"
 "Notify when runs finish" = "Beri tahu saat proses selesai"
 "Notify when tasks finish" = "Beri tahu saat tugas selesai"
+"Show idle ring in the bar" = "Tampilkan cincin menganggur di bar"
+"When no task is running, draw a quiet ring instead of leaving the pill empty" = "Saat tidak ada tugas berjalan, gambar cincin tenang alih-alih membiarkan pil kosong"
 "Now" = "Sekarang"
 "Now playing" = "Sedang diputar"
 "Now playing card" = "Kartu sedang diputar"

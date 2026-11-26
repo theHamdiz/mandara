@@ -3458,6 +3458,8 @@
 "Notify when done" = "آگاه‌سازی پس از پایان"
 "Notify when runs finish" = "آگاه‌سازی هنگام پایان اجراها"
 "Notify when tasks finish" = "آگاه‌سازی هنگام پایان کارها"
+"Show idle ring in the bar" = "نمایش حلقهٔ بیکار در نوار"
+"When no task is running, draw a quiet ring instead of leaving the pill empty" = "وقتی هیچ کاری در جریان نیست، به‌جای خالی گذاشتن قرص، یک حلقهٔ آرام بکشید"
 "Now" = "اکنون"
 "Now playing" = "در حال پخش"
 "Now playing card" = "کارت در حال پخش"

@@ -344,8 +344,10 @@ fn node(view: &Rc<View>, i: u32, depth: u32, p: &MandaraPalette, frame: &Frame, 
         }
         Kind::Meter => styled(div().id(id), &n.style)
             .h(px(METER_H_PX))
-            .w_full()
-            .min_w(px(METER_MIN_W_PX))
+            .when(meter_fills_parent(n.style.width), |el| el.w_full().min_w(px(METER_MIN_W_PX)))
+            // `styled` may set `grow` after an explicit width's `flex_none`;
+            // restore the fixed size so the meter does not stretch in a row.
+            .when(!meter_fills_parent(n.style.width), |el| el.flex_none())
             .rounded_full()
             .bg(p.on_surface.with_alpha(TRACK_ALPHA).hsla())
             .child(div().h_full().rounded_full().w(relative(fraction(n.value))).bg(color.hsla()))
@@ -708,6 +710,11 @@ fn range_request(range: &Range<usize>, start: usize, sent: usize, probe: usize, 
 /// How much of a placeholder row's height its bar fills.
 const PLACEHOLDER_FILL: f32 = 0.6;
 
+/// Whether a plugin meter should span its parent's width.
+fn meter_fills_parent(style_width: f32) -> bool {
+    !style_width.is_finite() || style_width <= 0.0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -734,5 +741,16 @@ mod tests {
         assert_eq!(range_request(&(10..11), 0, 8, 0, 1), Some((10, 1)));
         assert_eq!(range_request(&(0..1), 0, 0, 0, 1), Some((0, 1)));
         assert_eq!(range_request(&(3..4), 0, 8, 0, 4), None, "covered rows ask nothing");
+    }
+
+    /// Issue #248: explicit meter width must not be overridden by `w_full()`.
+    #[test]
+    fn meter_fills_parent_only_without_explicit_width() {
+        assert!(meter_fills_parent(0.0));
+        assert!(meter_fills_parent(-1.0));
+        assert!(meter_fills_parent(f32::NAN));
+        assert!(meter_fills_parent(f32::INFINITY));
+        assert!(!meter_fills_parent(80.0));
+        assert!(!meter_fills_parent(20.0));
     }
 }

@@ -211,7 +211,7 @@ export!(MyPlugin);
 | `init()` | Runs once after `negotiate`. Return `Err` to refuse to load. |
 | `render(theme, context)` | The view for a surface (`bar`, `panel`, `sidebar`, `desktop`, `studio`) and outlet (`""` for your bar item, panel and sidebar card; a `[[widgets]]` id; a `[[studio-tabs]]` id), or none for nothing there. |
 | `on-event(event)` | Input (a click, typed text, Enter, a switch, a slider, a choice, a key, a list's visible rows), a launcher choice, a command, and broker replies. Afterwards every surface of the plugin renders again. |
-| `refresh-ms()` | How often to render again while a surface is on screen, in milliseconds (0 = only after events; anything else at least 250). It runs only while a surface is drawn: a closed panel or a hidden sidebar costs nothing. |
+| `refresh-ms()` | How often to render again while a surface is on screen, in milliseconds (`0` = only after events). While reduce motion is on, anything else is at least 250 ms (the recommended default); with full motion, down to 33 ms (~one animation frame). It runs only while a surface is drawn: a closed panel or a hidden sidebar costs nothing. |
 | `launcher-query(provider, query, limit)` | Results for one of your `[[launcher]]` providers, under a 30 ms launcher budget (past it the plugin stops). At most 24 results. |
 | `on-call(caller, operation, payload)` | Another plugin calls an operation you list in `serves`. JSON in, JSON out. |
 

@@ -7064,6 +7064,8 @@
 "No tasks yet" = "Pas encore de tâches"
 "Nothing running" = "Rien en cours"
 "Notify when tasks finish" = "Notifier à la fin des tâches"
+"Show idle ring in the bar" = "Afficher un anneau d'inactivité dans la barre"
+"When no task is running, draw a quiet ring instead of leaving the pill empty" = "Quand aucune tâche n'est en cours, dessinez un anneau discret plutôt que de laisser la pilule vide"
 "percent (40, 40%) or count (3/10)" = "pourcentage (40, 40%) ou compte (3/10)"
 "Post a notification when a task is done or fails" = "Envoyer une notification quand une tâche se termine ou échoue"
 "Remove a task from the bar and the panel" = "Retirer une tâche de la barre et du panneau"

@@ -3458,6 +3458,8 @@
 "Notify when done" = "সম্পন্ন হলে জানান"
 "Notify when runs finish" = "রান শেষ হলে জানান"
 "Notify when tasks finish" = "কাজ শেষ হলে জানান"
+"Show idle ring in the bar" = "বারে নিষ্ক্রিয় রিং দেখান"
+"When no task is running, draw a quiet ring instead of leaving the pill empty" = "কোনো কাজ চলছে না এমন সময় শান্ত রিং আঁকুন, পিল খালি রাখবেন না"
 "Now" = "এখন"
 "Now playing" = "এখন চলছে"
 "Now playing card" = "এখন চলছে কার্ড"
