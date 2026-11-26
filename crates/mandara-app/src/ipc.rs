@@ -255,7 +255,9 @@ fn refuse(mut stream: UnixStream, reason: &str) {
 /// ends the line.
 pub fn read_line_bounded(stream: &UnixStream, max: usize, budget: Duration) -> Result<String> {
     let deadline = Instant::now() + budget;
-    let mut reader = BufReader::with_capacity(8 * 1024, stream);
+    // Requests are a few words; `fill_buf` re-fills for longer lines, so a
+    // small buffer avoids an 8 KiB allocation on every connection.
+    let mut reader = BufReader::with_capacity(1024, stream);
     let mut line = Vec::new();
     loop {
         let left = deadline.checked_duration_since(Instant::now()).filter(|left| !left.is_zero()).context("timed out waiting for the request")?;

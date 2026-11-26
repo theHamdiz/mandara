@@ -217,27 +217,6 @@ fn cached_gradient(color: Color) -> Background {
     })
 }
 
-/// `readable` gamut-maps on light surfaces; the handful of palette roles used
-/// by task states are the same across rows and frames, so keep the results.
-fn cached_readable(c: Color, palette: &MandaraPalette) -> Color {
-    thread_local! {
-        static CACHE: RefCell<Vec<((Color, bool), Color)>> = const { RefCell::new(Vec::new()) };
-    }
-    let key = (c, palette.is_dark);
-    CACHE.with(|cell| {
-        let mut cache = cell.borrow_mut();
-        if let Some((_, out)) = cache.iter().find(|(k, _)| *k == key) {
-            return *out;
-        }
-        let out = readable(c, palette);
-        if cache.len() >= 16 {
-            cache.remove(0);
-        }
-        cache.push((key, out));
-        out
-    })
-}
-
 /// The panel's progress bar: an OKLCH gradient fill, or a shimmer sweeping
 /// the track while the amount is unknown.
 fn progress_bar(fraction: Option<f64>, color: Color, palette: &MandaraPalette) -> AnyElement {
@@ -292,7 +271,7 @@ fn row_text(task: &Task, now: i64) -> RowText {
 
 fn row(i: usize, r: &RowText, now: i64, palette: &MandaraPalette, mono: &SharedString) -> AnyElement {
     let base = r.state.color(now, palette);
-    let tint = cached_readable(base, palette);
+    let tint = readable(base, palette);
     let id = r.id.to_string();
     let pill = div()
         .h(px(PILL_H_PX))
@@ -396,7 +375,7 @@ impl PanelView {
             }
         }
         self.size_cell.set(size(px(PANEL_W), px(panel_height(rows.len(), more > 0))));
-        let accent = cached_readable(palette.primary, palette);
+        let accent = readable(palette.primary, palette);
         let subtitle = match (running, finished) {
             (0, 0) => t("Nothing running").to_string(),
             (r, 0) => tf("{n} running", &[("n", &r)]),
@@ -584,7 +563,7 @@ fn bar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyE
     let chip = div().flex().items_center().gap(px(BAR_GAP_PX)).font_features(tabular_nums());
     match show {
         Show::Running { fraction, tint, others } => {
-            let color = cached_readable(tint, palette);
+            let color = readable(tint, palette);
             let track = palette.on_surface.with_alpha(RING_TRACK_ALPHA);
             let d = crate::style::bar_icon(BAR_RING_PX);
             let ring_el = match fraction {
@@ -602,7 +581,7 @@ fn bar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyE
         Show::Finished(ok) => {
             // Keep the same light vocabulary: solid green for done, red for
             // failed, instead of a one-off check / alert icon.
-            let color = cached_readable(if ok { palette.success_emerald } else { palette.urgent_coral }, palette);
+            let color = readable(if ok { palette.success_emerald } else { palette.urgent_coral }, palette);
             chip.child(running_light(color, LightMode::Solid, &look)).into_any_element()
         }
         Show::Nothing => {
@@ -610,7 +589,7 @@ fn bar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyE
             // suddenly get a permanent chip. When on, the dim light row keeps
             // the same vocabulary as running / done / failed.
             if show_when_idle {
-                chip.child(running_light(cached_readable(palette.on_surface, palette), LightMode::Idle, &look)).into_any_element()
+                chip.child(running_light(readable(palette.on_surface, palette), LightMode::Idle, &look)).into_any_element()
             } else {
                 chip.into_any_element()
             }
