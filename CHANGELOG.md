@@ -6,17 +6,15 @@ About → What's new shows it too.
 
 ## Unreleased
 
-## 0.39.0 — 2026-11-26
-
-On MangoWM, Overview can open the new workspace overview from 0.19.
+The task progress chip keeps a quiet light in the bar between tasks.
 
 ### Improved
 
-- **MangoWM workspace overview.** Studio → Compositor chooses whether Overview
-  (hot corner, bar middle-click, `compositor overview toggle`) opens the classic
-  packed-card overview or MangoWM 0.19+'s draggable workspace overview
-  (`all` / `occupied` / scrolling). Optional gap, scroll direction and dim
-  opacities go into the generated drop-in when set.
+- **Task progress light.** The built-in progress chip uses one visual language:
+  a soft breathing light while a task runs, a dim row when idle (when
+  `show_when_idle` is on), and solid green or red cells for finished and failed
+  tasks. Cell size, spacing, breath period and brightness are settings in
+  Studio → Plugins → Task progress.
 
 ## 0.38.9 — 2026-11-26
 

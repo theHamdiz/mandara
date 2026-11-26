@@ -4,14 +4,14 @@
 //!
 //! Tasks live in one shared in-memory board
 //! ([`mandara_services::progress::Board`]); nothing is polled. The bar chip
-//! shows a ring with the percent of the most recent running task (a spinner
-//! while it has no value yet) and `+N` for the others; finished tasks stay
+//! shows a ring with the percent of the most recent running task (an animated
+//! running light while it has no value yet) and `+N` for the others; finished tasks stay
 //! in the bar for 30 s and in the panel until cleared. A task with no update
 //! for 10 minutes shows as stalled. The panel lists every task with an OKLCH
 //! gradient bar (a shimmer when the amount is unknown), elapsed time, an ETA
 //! from the rate so far and a status pill.
 //!
-//! Timers: the only animation (spinner / shimmer) ticks while an
+//! Timers: the only animation (running light / shimmer) ticks while an
 //! indeterminate task is on screen; elapsed times tick once a second while
 //! the panel is open; otherwise one timer waits for the next stall or for a
 //! finished task to leave the bar.
@@ -32,7 +32,7 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use gpui::{
-    AnyElement, App, AppContext as _, Entity, FontWeight, Global, IntoElement, ParentElement, SharedString, Styled, Window, canvas, div,
+    AnyElement, App, AppContext as _, Entity, FontWeight, Global, IntoElement, ParentElement, SharedString, Styled, Window, div,
     prelude::FluentBuilder as _, px, relative, size,
 };
 use mandara_core::{ToGpui, oklab_gradient};
@@ -47,7 +47,7 @@ use super::extras::caption;
 use super::panel_fx::{ANGLE_RIGHT_DEG, EXPIRY_MARGIN, HEADER_H, duration_short, empty_state, glass_card, header, partner, percent_text, pill_button, readable, redraw_in, wash, WASH_TRACK};
 use super::{fn_view, follow, json};
 use crate::fonts::{fonts, tabular_nums};
-use crate::icons::{icon, ring, stroke_arc};
+use crate::icons::ring;
 use crate::kit::{icon_button, reveal, text};
 
 pub const ID: &str = "progress";
@@ -83,19 +83,26 @@ const MORE_H: f32 = 18.0;
 const BAR_RING_PX: f32 = 15.0;
 const BAR_RING_STROKE_PX: f32 = 2.2;
 const BAR_GAP_PX: f32 = 5.0;
-const BAR_ICON_PX: f32 = 14.0;
 const BAR_MORE_PX: f32 = 10.5;
 const RING_TRACK_ALPHA: f32 = 0.16;
 /// Idle ring in the bar when `show_when_idle` is on and nothing is running.
 const IDLE_RING_ALPHA: f32 = 0.45;
-/// Indeterminate spinner: lit share of the circle and turns per second.
-const SPIN_SWEEP: f32 = 0.28;
-const SPIN_TURNS_PER_S: f32 = 0.9;
+/// The running light: eight cells that breathe in place, with a small phase
+/// offset so the brightness moves like a ripple without any cell sliding.
+const LIGHT_CELLS: usize = 8;
+const LIGHT_W_PX: f32 = 3.0;
+const LIGHT_H_PX: f32 = 8.0;
+const LIGHT_GAP_PX: f32 = 2.0;
+const LIGHT_PERIOD_S: f32 = 1.6;
+const LIGHT_PHASE_STEP: f32 = 0.18;
+const LIGHT_MIN_ALPHA: f32 = 0.3;
+const LIGHT_MAX_ALPHA: f32 = 1.0;
+const LIGHT_IDLE_ALPHA: f32 = 0.55;
 /// Shimmer: segment width (share of the track) and passes per second.
 const SHIMMER_W: f32 = 0.32;
 const SHIMMER_PER_S: f32 = 0.7;
-/// The spinner and shimmer redraw at this pace (smooth, but not the full
-/// display rate for a pill in the bar).
+/// The running light and shimmer redraw at this pace (smooth, but not the
+/// full display rate for a pill in the bar).
 const ANIMATION_FRAME: Duration = Duration::from_millis(33);
 /// Elapsed times in the panel tick once a second.
 const SECOND: Duration = Duration::from_secs(1);
@@ -146,7 +153,8 @@ fn announce(task: &Task, cx: &mut App) {
     let summary = if ok { tf("{task} finished", &[("task", &task.label)]) } else { tf("{task} failed", &[("task", &task.label)]) };
     let took = tf("Took {time}", &[("time", &duration_short(task.elapsed_ms(now_ms()) / MS_PER_S))]);
     let body = task.message.as_ref().map(|m| format!("{m}\n{took}")).unwrap_or(took);
-    crate::plugins::notifications::send(cx, NotificationCommand::Post { app: t("Task progress").into(), icon: if ok { "check" } else { "alert" }.into(), summary, body });
+    // Keep the same light vocabulary everywhere: no check / alert glyphs.
+    crate::plugins::notifications::send(cx, NotificationCommand::Post { app: t("Task progress").into(), icon: "gauge".into(), summary, body });
 }
 
 fn task_json(task: &Task, now: i64) -> serde_json::Value {
@@ -172,20 +180,6 @@ fn clock_s() -> f32 {
         static EPOCH: Instant = Instant::now();
     }
     EPOCH.with(|e| e.elapsed().as_secs_f32())
-}
-
-/// An indeterminate spinner: a faint track and a turning arc.
-fn spinner(d: f32, stroke: f32, color: Color, track: Color) -> impl IntoElement {
-    let phase = (clock_s() * SPIN_TURNS_PER_S).fract() * TAU;
-    canvas(
-        |_, _, _| {},
-        move |bounds, _, window, _| {
-            stroke_arc(window, bounds, stroke, 0.0, TAU, track);
-            stroke_arc(window, bounds, stroke, phase, TAU * SPIN_SWEEP, color);
-        },
-    )
-    .size(px(d))
-    .flex_none()
 }
 
 /// The panel's progress bar: an OKLCH gradient fill, or a shimmer sweeping
@@ -379,8 +373,48 @@ impl PanelView {
     }
 }
 
-/// The bar chip: a ring for the newest running task, `+N` for the others,
-/// a ✓ / ! for 30 s after the last one finished, nothing when idle.
+/// How the eight-cell light is drawn.
+enum LightMode {
+    /// Quiet, dim row while no task is showing.
+    Idle,
+    /// Soft brightness ripple while a task is active.
+    Pulse,
+    /// All cells bright and steady: done (green) or failed (red).
+    Solid,
+}
+
+/// The eight-cell running light: cells stay in place and breathe in
+/// brightness while a task is active, or hold steady for idle / done / failed.
+fn running_light(color: Color, mode: LightMode) -> AnyElement {
+    // Monotonic seconds: Unix seconds in f32 lose the fractional part at
+    // this magnitude, so the pulse would appear frozen for minutes.
+    let seconds = clock_s();
+    let mut row = div().flex().items_center().gap(px(LIGHT_GAP_PX));
+    for i in 0..LIGHT_CELLS {
+        let alpha = match mode {
+            LightMode::Idle => LIGHT_IDLE_ALPHA,
+            LightMode::Solid => LIGHT_MAX_ALPHA,
+            LightMode::Pulse => {
+                // A small phase offset gives a soft ripple without any cell
+                // travelling left or right.
+                let phase = seconds / LIGHT_PERIOD_S * TAU - i as f32 * LIGHT_PHASE_STEP;
+                LIGHT_MIN_ALPHA + (LIGHT_MAX_ALPHA - LIGHT_MIN_ALPHA) * (0.5 + 0.5 * phase.cos())
+            }
+        };
+        row = row.child(
+            div()
+                .w(px(LIGHT_W_PX))
+                .h(px(LIGHT_H_PX))
+                .rounded_full()
+                .bg(color.with_alpha(alpha).hsla()),
+        );
+    }
+    row.into_any_element()
+}
+
+/// The bar chip: an animated running light for an indeterminate task (a ring
+/// once it has a value), `+N` for the others, a ✓ / ! for 30 s after the last
+/// one finished, and a quiet dim light while idle so it stays resident.
 fn bar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyElement {
     /// What the chip shows.
     enum Show {
@@ -412,7 +446,7 @@ fn bar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyE
                 Some(f) => ring(f as f32, d, BAR_RING_STROKE_PX, color, track).into_any_element(),
                 None => {
                     redraw_in(ANIMATION_FRAME, window, cx);
-                    spinner(d, BAR_RING_STROKE_PX, color, track).into_any_element()
+                    running_light(color, LightMode::Pulse)
                 }
             };
             chip.child(ring_el)
@@ -421,16 +455,20 @@ fn bar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyE
                 .into_any_element()
         }
         Show::Finished(ok) => {
+            // Keep the same light vocabulary: solid green for done, red for
+            // failed, instead of a one-off check / alert icon.
             let color = readable(if ok { palette.success_emerald } else { palette.urgent_coral }, palette);
-            chip.child(icon(if ok { "check" } else { "alert" }, crate::style::bar_icon(BAR_ICON_PX), color)).into_any_element()
+            chip.child(running_light(color, LightMode::Solid)).into_any_element()
         }
         Show::Nothing => {
+            // Always resident: the dim light row is the default; the existing
+            // `show_when_idle` setting still draws the quiet ring if enabled.
             if crate::state::config(cx).read(cx).get().plugins.setting(ID, "show_when_idle", false) {
                 let ink = palette.on_surface.with_alpha(IDLE_RING_ALPHA);
                 let d = crate::style::bar_icon(BAR_RING_PX);
                 chip.child(ring(0.0, d, BAR_RING_STROKE_PX, ink, ink)).into_any_element()
             } else {
-                div().into_any_element()
+                chip.child(running_light(readable(palette.on_surface, palette), LightMode::Idle)).into_any_element()
             }
         }
     }
