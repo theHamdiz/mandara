@@ -2,6 +2,7 @@
 # Modern Persian (فارسی), concise UI style; polite «شما» form, ZWNJ (نیم‌فاصله) per standard orthography.
 
 " +{count} more" = " +{count} مورد دیگر"
+"Refresh a task's activity without changing its progress" = "تازه کردن فعالیت یک وظیفه بدون تغییر پیشرفت آن"
 "\"English\" = \"Translation\" pairs, one file per language" = "جفت‌های \"English\" = \"Translation\"، یک فایل برای هر زبان"
 "\"{value}\" isn't a duration like 30m, 2h or 1h30m" = "\"{value}\" مدت‌زمانی مانند 30m، 2h یا 1h30m نیست"
 "%-d %B" = "%-d %B"

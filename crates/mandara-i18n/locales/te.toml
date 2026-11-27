@@ -553,6 +553,7 @@
 "Recording failed" = "రికార్డింగ్ విఫలమైంది"
 "Recording saved" = "రికార్డింగ్ భద్రమైంది"
 "Reduce motion" = "చలనం తగ్గించు"
+"Refresh a task's activity without changing its progress" = "పురోగతి మార్చకుండా పని కార్యకలాపాన్ని రిఫ్రెష్ చేయండి"
 "Refusing to signal init (PID 1)" = "initకు సిగ్నల్ పంపడం నిరాకరించబడింది (PID 1)"
 "Regenerate" = "మళ్ళీ రూపొందించండి"
 "Regenerate the drop-in (rules, binds, border colors) and reload" = "డ్రాప్-ఇన్‌ను మళ్ళీ రూపొందించండి (నియమాలు, బైండ్‌లు, అంచు రంగులు) మరియు రీలోడ్ చేయండి"

@@ -2,6 +2,7 @@
 # Modern Korean UI style: short noun labels for controls, polite 합니다/하세요 for sentences.
 
 " +{count} more" = " 외 {count}개"
+"Refresh a task's activity without changing its progress" = "진행률을 변경하지 않고 작업 활동 새로 고침"
 "\"English\" = \"Translation\" pairs, one file per language" = "\"English\" = \"번역\" 쌍, 언어마다 파일 하나"
 "\"{value}\" isn't a duration like 30m, 2h or 1h30m" = "\"{value}\"은(는) 30m, 2h, 1h30m 같은 기간 형식이 아닙니다"
 "%-d %B" = "%-m월 %-d일"

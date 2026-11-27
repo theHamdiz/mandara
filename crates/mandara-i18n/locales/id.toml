@@ -2,6 +2,7 @@
 # Modern Bahasa Indonesia (EYD, KBBI), concise UI style; "Anda" for you.
 
 " +{count} more" = " +{count} lagi"
+"Refresh a task's activity without changing its progress" = "Segarkan aktivitas tugas tanpa mengubah progresnya"
 "\"English\" = \"Translation\" pairs, one file per language" = "Pasangan \"English\" = \"Terjemahan\", satu file per bahasa"
 "\"{value}\" isn't a duration like 30m, 2h or 1h30m" = "\"{value}\" bukan durasi seperti 30m, 2h, atau 1h30m"
 "%-d %B" = "%-d %B"

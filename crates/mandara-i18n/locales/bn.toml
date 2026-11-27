@@ -2,6 +2,7 @@
 # Modern standard Bengali (চলিত), concise UI style; "আপনি" for you.
 
 " +{count} more" = " আরও +{count}টি"
+"Refresh a task's activity without changing its progress" = "অগ্রগতি না বদলে কাজের কার্যকলাপ রিফ্রেশ করুন"
 "\"English\" = \"Translation\" pairs, one file per language" = "\"English\" = \"অনুবাদ\" জোড়া, প্রতিটি ভাষার জন্য একটি ফাইল"
 "\"{value}\" isn't a duration like 30m, 2h or 1h30m" = "\"{value}\" 30m, 2h বা 1h30m-এর মতো কোনো সময়কাল নয়"
 "%-d %B" = "%-d %B"

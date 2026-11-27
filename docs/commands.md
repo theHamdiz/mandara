@@ -355,6 +355,7 @@ Task progress plugin:
 ```bash
 mandara msg progress start build Building the release
 mandara msg progress set build 40%           # or 3/10; an optional new label after it
+mandara msg progress touch build "Still compiling"  # refresh activity, keep progress and elapsed
 mandara msg progress done build "All green"  # fail build "3 tests failed"; remove <id>; list; clear
 ```
 

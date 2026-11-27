@@ -188,6 +188,22 @@ impl Board {
         Ok(task)
     }
 
+    /// Refreshes a running task's activity stamp without changing its amount
+    /// or start time. Unlike [`Self::start`] it keeps the elapsed time and the
+    /// indeterminate light; unlike [`Self::set`] it does not invent a value.
+    pub fn touch(&mut self, id: &str, label: &str, now_ms: i64) -> Result<&Task, String> {
+        let id = Self::check_id(id)?;
+        let task = self.get_mut(&id).ok_or_else(|| format!("no task {id:?}"))?;
+        if task.status != Status::Running {
+            return Err(format!("task {id:?} is not running"));
+        }
+        task.updated_ms = now_ms;
+        if !label.trim().is_empty() {
+            task.label = clip(label, MAX_LABEL);
+        }
+        Ok(task)
+    }
+
     fn finish(&mut self, id: &str, status: Status, message: &str, now_ms: i64) -> Result<Task, String> {
         let id = Self::check_id(id)?;
         if self.get_mut(&id).is_none() {
@@ -316,6 +332,30 @@ mod tests {
         assert_eq!(b.clear_finished(), 2);
         assert!(b.remove("build").is_err());
         assert!(b.start("  ", "x", 0).is_err());
+    }
+
+    #[test]
+    fn touch_refreshes_activity_without_changing_progress() {
+        let mut b = Board::default();
+        b.start("build", "Building", 1_000).unwrap();
+        assert_eq!(b.tasks[0].fraction(), None);
+        b.touch("build", "Still building", 600_000).unwrap();
+        let t = &b.tasks[0];
+        assert_eq!(t.started_ms, 1_000);
+        assert_eq!(t.updated_ms, 600_000);
+        assert_eq!(t.fraction(), None, "an indeterminate task stays indeterminate");
+        assert_eq!(t.label, "Still building");
+        assert!(!t.stalled(600_000 + STALL_AFTER_MS - 1));
+        assert!(t.stalled(600_000 + STALL_AFTER_MS));
+        b.touch("build", "", 700_000).unwrap();
+        assert_eq!(b.tasks[0].label, "Still building", "an empty label keeps the old one");
+        b.set("build", parse_amount("40%").unwrap(), "", 800_000).unwrap();
+        b.touch("build", "", 900_000).unwrap();
+        assert_eq!(b.tasks[0].fraction(), Some(0.4));
+        assert_eq!(b.tasks[0].updated_ms, 900_000);
+        b.done("build", "Done", 1_000_000).unwrap();
+        assert!(b.touch("build", "", 1_100_000).is_err(), "finished tasks cannot be touched");
+        assert!(b.touch("missing", "", 1_100_000).is_err());
     }
 
     #[test]

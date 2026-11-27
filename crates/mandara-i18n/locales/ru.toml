@@ -551,6 +551,7 @@
 "Recording failed" = "Ошибка записи"
 "Recording saved" = "Запись сохранена"
 "Reduce motion" = "Уменьшить движение"
+"Refresh a task's activity without changing its progress" = "Обновить активность задачи, не меняя её прогресс"
 "Refusing to signal init (PID 1)" = "Отказ отправить сигнал init (PID 1)"
 "Regenerate" = "Пересоздать"
 "Regenerate the drop-in (rules, binds, border colors) and reload" = "Пересоздать подключаемый файл (правила, привязки, цвета рамок) и перезагрузить"

@@ -13,6 +13,10 @@ The task progress light redraws with less work each frame.
 - **Task progress redraws do less work.** The animated bar light reuses its
   size and brightness settings and its gradient fills between frames instead
   of reading and rebuilding them on every frame.
+- **Progress tasks can report activity without faking progress.** Scripts and
+  agents can call `mandara msg progress touch <id> [label]` to show they are
+  still working: the running light keeps animating and elapsed time keeps
+  counting, without a stall warning.
 
 ## 0.40.0 — 2026-11-26
 

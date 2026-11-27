@@ -22,7 +22,8 @@
 //! default off).
 //!
 //! Commands: `progress start <id> [label…]`, `progress set <id> <value>
-//! [label…]` (`40`, `40%` or `3/10`), `progress done <id> [message…]`,
+//! [label…]` (`40`, `40%` or `3/10`), `progress touch <id> [label…]` (refresh
+//! activity without changing progress), `progress done <id> [message…]`,
 //! `progress fail <id> [message…]`, `progress remove <id>`, `progress list`,
 //! `progress clear`.
 
@@ -637,6 +638,18 @@ pub fn register(r: &mut PluginRegistry) {
         .arg(ArgSpec::optional("label", ArgKind::String, tk("new label")))
         .example("progress set build 40%")
         .example("progress set tests 120/300 Running tests"),
+    );
+    r.command(
+        ID,
+        CommandSpec::new("progress touch", tk("Refresh a task's activity without changing its progress"), |a, cx| {
+            let id = a.str(0)?.to_string();
+            let label = a.rest(1);
+            let task = change(cx, |b, now| b.touch(&id, &label, now).cloned())?;
+            Ok(task_json(&task, now_ms()))
+        })
+        .arg(id_arg())
+        .arg(ArgSpec::optional("label", ArgKind::String, tk("what it is doing")))
+        .example("progress touch build Still compiling"),
     );
     r.command(
         ID,

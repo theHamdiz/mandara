@@ -551,6 +551,7 @@
 "Recording failed" = "录制失败"
 "Recording saved" = "录制已保存"
 "Reduce motion" = "减弱动态效果"
+"Refresh a task's activity without changing its progress" = "刷新任务的活动状态而不改变其进度"
 "Refusing to signal init (PID 1)" = "拒绝向 init（PID 1）发送信号"
 "Regenerate" = "重新生成"
 "Regenerate the drop-in (rules, binds, border colors) and reload" = "重新生成附加配置（规则、快捷键、边框颜色）并重新加载"

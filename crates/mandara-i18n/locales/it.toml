@@ -553,6 +553,7 @@
 "Recording failed" = "Registrazione non riuscita"
 "Recording saved" = "Registrazione salvata"
 "Reduce motion" = "Riduci le animazioni"
+"Refresh a task's activity without changing its progress" = "Aggiorna l'attività di un compito senza cambiarne l'avanzamento"
 "Refusing to signal init (PID 1)" = "Rifiuto di inviare un segnale a init (PID 1)"
 "Regenerate" = "Rigenera"
 "Regenerate the drop-in (rules, binds, border colors) and reload" = "Rigenera il drop-in (regole, associazioni, colori dei bordi) e ricarica"

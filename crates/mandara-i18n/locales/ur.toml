@@ -2,6 +2,7 @@
 # Modern Urdu (اردو), concise UI style; polite آپ form, Urdu punctuation (۔ ، ؟).
 
 " +{count} more" = " +{count} مزید"
+"Refresh a task's activity without changing its progress" = "پیش رفتی بدلے بغیر کسی کام کی سرگرمی تازہ کریں"
 "\"English\" = \"Translation\" pairs, one file per language" = "\"English\" = \"Translation\" جوڑے، ہر زبان کے لیے ایک فائل"
 "\"{value}\" isn't a duration like 30m, 2h or 1h30m" = "\"{value}\" درست دورانیہ نہیں ہے (جیسے 30m، 2h یا 1h30m)"
 "%-d %B" = "%-d %B"

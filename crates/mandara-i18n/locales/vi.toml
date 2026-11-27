@@ -553,6 +553,7 @@
 "Recording failed" = "Ghi hình thất bại"
 "Recording saved" = "Đã lưu bản ghi"
 "Reduce motion" = "Giảm chuyển động"
+"Refresh a task's activity without changing its progress" = "Làm mới hoạt động của tác vụ mà không thay đổi tiến độ"
 "Refusing to signal init (PID 1)" = "Từ chối gửi tín hiệu tới init (PID 1)"
 "Regenerate" = "Tạo lại"
 "Regenerate the drop-in (rules, binds, border colors) and reload" = "Tạo lại drop-in (quy tắc, phím tắt, màu viền) rồi tải lại"

@@ -553,6 +553,7 @@
 "Recording failed" = "रेकॉर्डिंग अयशस्वी"
 "Recording saved" = "रेकॉर्डिंग जतन झाली"
 "Reduce motion" = "गती कमी करा"
+"Refresh a task's activity without changing its progress" = "कार्याची प्रगती न बदलता त्याची क्रियाकलाप ताजी करा"
 "Refusing to signal init (PID 1)" = "init (PID 1) ला सिग्नल नाकारला"
 "Regenerate" = "पुन्हा तयार करा"
 "Regenerate the drop-in (rules, binds, border colors) and reload" = "ड्रॉप-इन पुन्हा तयार करा (नियम, बाइंड, किनारी रंग) आणि रीलोड करा"

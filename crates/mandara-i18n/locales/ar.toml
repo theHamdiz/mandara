@@ -90,6 +90,7 @@
 "Puts one page back to its defaults. Click twice to confirm; Undo is under Recent changes." = "تعيد صفحة واحدة إلى إعداداتها الافتراضية. انقر مرتين للتأكيد؛ التراجع موجود في التغييرات الأخيرة."
 "Read it, build it, fork it" = "اقرأه، ابنِه، انسخه"
 "Recent changes, saved profiles, export and import" = "التغييرات الأخيرة وملفات التعريف المحفوظة والتصدير والاستيراد"
+"Refresh a task's activity without changing its progress" = "تحديث نشاط المهمة دون تغيير تقدّمها"
 "Resolution, scale and the arrangement of your screens" = "الدقة والمقياس وترتيب شاشاتك"
 "Saved setups you can switch between with one click." = "إعدادات محفوظة تبدّل بينها بنقرة واحدة."
 "Scrolling strip direction for scroll_all / scroll_occupied (MangoWM 0.19+)" = "اتجاه شريط التمرير لـ scroll_all / scroll_occupied (MangoWM 0.19+)"
