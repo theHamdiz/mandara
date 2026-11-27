@@ -262,7 +262,7 @@ impl Board {
     /// Drops finished tasks; returns how many.
     pub fn clear_finished(&mut self) -> usize {
         let before = self.tasks.len();
-        self.tasks.retain(|t| t.status == Status::Running);
+        self.tasks.retain(|t| matches!(t.status, Status::Running | Status::Waiting));
         before - self.tasks.len()
     }
 
@@ -277,7 +277,7 @@ impl Board {
     /// Keeps the board bounded: the oldest finished tasks go first.
     fn trim(&mut self) {
         while self.tasks.len() > MAX_TASKS {
-            match self.tasks.iter().rposition(|t| t.status != Status::Running) {
+            match self.tasks.iter().rposition(|t| !matches!(t.status, Status::Running | Status::Waiting)) {
                 Some(i) => {
                     self.tasks.remove(i);
                 }
@@ -409,6 +409,19 @@ mod tests {
         b.wait("build", "Needs confirmation", 5_000).unwrap();
         b.done("build", "All green", 6_000).unwrap();
         assert_eq!(b.tasks[0].status, Status::Done);
+    }
+
+    #[test]
+    fn clearing_finished_keeps_waiting_tasks() {
+        let mut b = Board::default();
+        b.start("build", "Building", 1).unwrap();
+        b.wait("build", "Needs confirmation", 2).unwrap();
+        b.start("done", "Done", 3).unwrap();
+        b.done("done", "All green", 4).unwrap();
+        assert_eq!(b.clear_finished(), 1);
+        assert_eq!(b.tasks.len(), 1);
+        assert_eq!(b.tasks[0].id, "build");
+        assert_eq!(b.tasks[0].status, Status::Waiting);
     }
 
     #[test]

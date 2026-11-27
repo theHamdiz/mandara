@@ -266,7 +266,7 @@ fn row_text(task: &Task, now: i64) -> RowText {
         // Only a running task without a value shimmers; a finished one sits still.
         fraction: task.fraction().or((task.status != Status::Running).then_some(0.0)),
         state: TaskState::from(task),
-        finished: task.status != Status::Running,
+        finished: matches!(task.status, Status::Done | Status::Failed),
     }
 }
 
@@ -353,22 +353,26 @@ impl PanelView {
     fn render(&self, palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyElement {
         let now = now_ms();
         let m = model(cx);
-        let (rows, more, running, finished, any_unknown, next) = {
+        let (rows, more, running, waiting, finished, any_unknown, next) = {
             let pr = m.read(cx);
             let b = &pr.board;
             let more = b.tasks.len().saturating_sub(MAX_ROWS);
             let rows = self.cache.borrow_mut().get(b, pr.rev, now);
             let running = b.running().count();
+            let waiting = b.waiting().count();
             // A cached row with no fraction is an indeterminate (shimmering)
             // task. The rows are already the ordered, visible ones, so this
             // avoids a second scan over the whole board every render.
             let any_unknown = rows.iter().any(|r| r.fraction.is_none());
-            (rows, more, running, b.tasks.len() - running, any_unknown, b.next_change(now))
+            (rows, more, running, waiting, b.tasks.len() - running - waiting, any_unknown, b.next_change(now))
         };
         if self.p.progress() > 0.0 {
             if any_unknown {
                 redraw_in(ANIMATION_FRAME, window, cx);
-            } else if running > 0 {
+            } else if running > 0 || waiting > 0 {
+                // A waiting task has no stall deadline, so `next` cannot keep
+                // its elapsed-second text fresh. Refresh once per second; the
+                // waiting light and progress track stay stationary.
                 redraw_in(SECOND, window, cx);
             }
             if let Some(at) = next {
@@ -382,6 +386,11 @@ impl PanelView {
             (r, 0) => tf("{n} running", &[("n", &r)]),
             (0, f) => tf("{n} finished", &[("n", &f)]),
             (r, f) => tf("{running} running · {finished} finished", &[("running", &r), ("finished", &f)]),
+        };
+        let subtitle = if waiting > 0 {
+            format!("{} · {}", subtitle, tf("{n} waiting", &[("n", &waiting)]))
+        } else {
+            subtitle
         };
         let trailing = (finished > 0).then(|| {
             pill_button("progress-clear", Some("trash"), t("Clear finished"), accent, palette, |_, cx| {

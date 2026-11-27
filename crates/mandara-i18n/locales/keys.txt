@@ -10533,6 +10533,7 @@ your default
 {n} things to look at
 {n} unread
 {n} verses
+{n} waiting
 {n} windows
 {n} · {name} · {count} ayahs
 {n}d
