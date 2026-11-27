@@ -8,6 +8,7 @@ use mandara_theme::{Color, MandaraPalette};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum TaskState {
     Running { stalls_at: i64 },
+    Waiting,
     Done,
     Failed,
 }
@@ -16,6 +17,7 @@ impl From<&Task> for TaskState {
     fn from(task: &Task) -> Self {
         match task.status {
             Status::Running => Self::Running { stalls_at: task.stalls_at().expect("running task has a stall deadline") },
+            Status::Waiting => Self::Waiting,
             Status::Done => Self::Done,
             Status::Failed => Self::Failed,
         }
@@ -28,6 +30,7 @@ impl TaskState {
         match self {
             Self::Running { stalls_at } if now >= stalls_at => palette.warning_amber,
             Self::Running { .. } => palette.primary,
+            Self::Waiting => palette.warning_amber,
             Self::Done => palette.success_emerald,
             Self::Failed => palette.urgent_coral,
         }
@@ -38,6 +41,7 @@ impl TaskState {
         match self {
             Self::Running { stalls_at } if now >= stalls_at => t("Stalled"),
             Self::Running { .. } => t("Running"),
+            Self::Waiting => t("Waiting"),
             Self::Done => t("Done"),
             Self::Failed => t("Failed"),
         }
@@ -62,6 +66,7 @@ mod tests {
             assert_eq!(state.color(1, &palette), palette.primary);
             assert_eq!(state.color(STALL_AFTER_MS, &palette), palette.primary);
             assert_eq!(state.color(STALL_AFTER_MS + 1, &palette), palette.warning_amber);
+            assert_eq!(TaskState::Waiting.color(1, &palette), palette.warning_amber);
             assert_eq!(TaskState::Done.color(1, &palette), palette.success_emerald);
             assert_eq!(TaskState::Failed.color(1, &palette), palette.urgent_coral);
         }
@@ -69,6 +74,7 @@ mod tests {
             let _language = scoped(Some(language));
             assert_eq!(state.label(STALL_AFTER_MS), t_in(language, "Running"));
             assert_eq!(state.label(STALL_AFTER_MS + 1), t_in(language, "Stalled"));
+            assert_eq!(TaskState::Waiting.label(1), t_in(language, "Waiting"));
         }
     }
 }

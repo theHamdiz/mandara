@@ -493,7 +493,7 @@ enum LightMode {
     Idle,
     /// Soft brightness ripple while a task is active.
     Pulse,
-    /// All cells bright and steady: done (green) or failed (red).
+    /// All cells bright and steady: waiting (amber), done (green) or failed (red).
     Solid,
 }
 
@@ -536,13 +536,15 @@ fn running_light(color: Color, mode: LightMode, look: &LightLook) -> AnyElement 
 }
 
 /// The bar chip: an animated running light for an indeterminate task (a ring
-/// once it has a value), `+N` for the others, a solid green / red light for
-/// 30 s after the last task finished, and — when `show_when_idle` is on — a
-/// quiet dim light while nothing is running.
+/// once it has a value), `+N` for the others, a solid amber light while a task
+/// waits for the user, a solid green / red light for 30 s after the last task
+/// finished, and — when `show_when_idle` is on — a quiet dim light while nothing
+/// is running.
 fn bar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyElement {
     /// What the chip shows.
     enum Show {
         Running { fraction: Option<f64>, tint: Color, others: usize },
+        Waiting { tint: Color, others: usize },
         Finished(bool),
         Nothing,
     }
@@ -552,9 +554,16 @@ fn bar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyE
     let (show, next) = {
         let b = &m.read(cx).board;
         let mut running = b.running();
-        let show = match running.next() {
-            Some(task) => Show::Running { fraction: task.fraction(), tint: tint(task, now, palette), others: running.count() },
-            None => b.tasks.iter().find(|t| t.in_bar(now)).map_or(Show::Nothing, |t| Show::Finished(t.status == Status::Done)),
+        let first = running.next();
+        // A decision takes priority over background work: the light holds
+        // steady amber until the user answers instead of breathing on.
+        let show = if let Some(task) = b.waiting().next() {
+            Show::Waiting { tint: tint(task, now, palette), others: running.count() + b.waiting().count() - 1 }
+        } else {
+            match first {
+                Some(task) => Show::Running { fraction: task.fraction(), tint: tint(task, now, palette), others: running.count() },
+                None => b.tasks.iter().find(|t| t.in_bar(now)).map_or(Show::Nothing, |t| Show::Finished(t.status == Status::Done)),
+            }
         };
         (show, b.next_change(now))
     };
@@ -576,6 +585,14 @@ fn bar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyE
             };
             chip.child(ring_el)
                 .when_some(fraction, |el, f| el.child(div().font_weight(FontWeight::SEMIBOLD).child(percent_text(f as f32))))
+                .when(others > 0, |el| el.child(div().text_size(px(BAR_MORE_PX)).font_weight(FontWeight::SEMIBOLD).text_color(palette.on_surface_variant.hsla()).child(format!("+{others}"))))
+                .into_any_element()
+        }
+        Show::Waiting { tint, others } => {
+            // Hold the light steady: the agent is blocked on a decision, so
+            // breathing would wrongly read as active work.
+            let color = readable(tint, palette);
+            chip.child(running_light(color, LightMode::Solid, &look))
                 .when(others > 0, |el| el.child(div().text_size(px(BAR_MORE_PX)).font_weight(FontWeight::SEMIBOLD).text_color(palette.on_surface_variant.hsla()).child(format!("+{others}"))))
                 .into_any_element()
         }
@@ -641,7 +658,7 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         ID,
-        CommandSpec::new("progress touch", tk("Refresh a task's activity without changing its progress"), |a, cx| {
+        CommandSpec::new("progress touch", tk("Refresh a task's activity, resuming a waiting task, without changing its progress"), |a, cx| {
             let id = a.str(0)?.to_string();
             let label = a.rest(1);
             let task = change(cx, |b, now| b.touch(&id, &label, now).cloned())?;
@@ -650,6 +667,18 @@ pub fn register(r: &mut PluginRegistry) {
         .arg(id_arg())
         .arg(ArgSpec::optional("label", ArgKind::String, tk("what it is doing")))
         .example("progress touch build Still compiling"),
+    );
+    r.command(
+        ID,
+        CommandSpec::new("progress wait", tk("Mark a task as waiting for the user (steady amber light, no stall); touch resumes it"), |a, cx| {
+            let id = a.str(0)?.to_string();
+            let label = a.rest(1);
+            let task = change(cx, |b, now| b.wait(&id, &label, now).cloned())?;
+            Ok(task_json(&task, now_ms()))
+        })
+        .arg(id_arg())
+        .arg(ArgSpec::optional("label", ArgKind::String, tk("what it is waiting for")))
+        .example("progress wait build Needs confirmation"),
     );
     r.command(
         ID,
