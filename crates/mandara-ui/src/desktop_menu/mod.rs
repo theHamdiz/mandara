@@ -1026,11 +1026,16 @@ mod tests {
         assert!(height(&e) > e.len() as f32 * ROW_H);
     }
 
-    /// Every built-in "Add widget" kind (all plugins on).
+    /// Every built-in "Add widget" kind (all plugins on). Third-party or
+    /// development plugins installed on the machine are not built-ins: they
+    /// belong to `More` by design and must not change this test.
     fn builtin_rows() -> Vec<(AddCategory, Entry)> {
         let mut r = mandara_plugins::PluginRegistry::default();
         crate::plugins::register_builtin(&mut r);
-        add_rows(r.desktop_widgets().iter(), |t| t.name.clone())
+        add_rows(
+            r.desktop_widgets().iter().filter(|t| r.get(&t.plugin).is_none_or(|f| f.manifest.origin == mandara_plugins::PluginOrigin::Builtin)),
+            |t| t.name.clone(),
+        )
     }
 
     fn distinct(entries: &[&Entry]) -> bool {
