@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.41.1 — 2026-11-28
+
 The progress board keeps active work when it needs to drop a task.
 
 ### Fixed
