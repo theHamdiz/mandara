@@ -6,6 +6,14 @@ About → What's new shows it too.
 
 ## Unreleased
 
+The progress board keeps active work when it needs to drop a task.
+
+### Fixed
+
+- **A full progress board no longer evicts active work before waiting tasks.**
+  When every task is active, a task waiting for the user is trimmed before a
+  running one; an all-running board still drops the oldest task.
+
 ## 0.41.0 — 2026-11-28
 
 The task progress light redraws with less work each frame.

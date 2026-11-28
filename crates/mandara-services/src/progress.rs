@@ -277,13 +277,15 @@ impl Board {
     /// Keeps the board bounded: the oldest finished tasks go first.
     fn trim(&mut self) {
         while self.tasks.len() > MAX_TASKS {
-            match self.tasks.iter().rposition(|t| !matches!(t.status, Status::Running | Status::Waiting)) {
-                Some(i) => {
-                    self.tasks.remove(i);
-                }
-                None => {
-                    self.tasks.pop();
-                }
+            let victim = self
+                .tasks
+                .iter()
+                .rposition(|t| matches!(t.status, Status::Done | Status::Failed))
+                .or_else(|| self.tasks.iter().rposition(|t| t.status != Status::Running));
+            if let Some(i) = victim {
+                self.tasks.remove(i);
+            } else {
+                self.tasks.pop();
             }
         }
     }
@@ -435,5 +437,20 @@ mod tests {
             b.start(&format!("t{i}"), "", i as i64).unwrap();
         }
         assert_eq!(b.tasks.len(), MAX_TASKS);
+        assert!(b.tasks.iter().all(|t| t.id != "t0"), "the oldest running task is evicted when all tasks are active");
+        assert!(b.tasks.iter().any(|t| t.id == format!("t{}", MAX_TASKS + 4)));
+    }
+
+    #[test]
+    fn trimming_full_board_evicts_waiting_before_running() {
+        let mut b = Board::default();
+        for i in 0..MAX_TASKS {
+            b.start(&format!("run{i}"), "", i as i64).unwrap();
+        }
+        b.wait("run1", "Needs confirmation", MAX_TASKS as i64 + 1).unwrap();
+        b.start("new", "", MAX_TASKS as i64 + 2).unwrap();
+        assert_eq!(b.tasks.len(), MAX_TASKS);
+        assert!(b.tasks.iter().all(|t| t.id != "run1"), "the waiting task is evicted first");
+        assert!(b.tasks.iter().any(|t| t.id == "run0"), "an older running task stays");
     }
 }
