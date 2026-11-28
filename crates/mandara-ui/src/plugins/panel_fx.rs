@@ -323,12 +323,33 @@ const READABLE_LIGHT_CHROMA: f32 = 1.05;
 
 /// An accent nudged into a band that reads on the current surface: luminous
 /// on dark glass, deep and saturated on light paper.
-pub fn readable(c: Color, palette: &MandaraPalette) -> Color {
+fn readable_uncached(c: Color, palette: &MandaraPalette) -> Color {
     if palette.is_dark {
         c.with_lightness(c.lightness().clamp(READABLE_DARK_L.0, READABLE_DARK_L.1))
     } else {
         c.with_lightness(c.lightness().clamp(READABLE_LIGHT_L.0, READABLE_LIGHT_L.1)).scale_chroma(READABLE_LIGHT_CHROMA)
     }
+}
+
+/// Palette roles are fixed for a theme; gamut mapping them on every frame is
+/// wasted work, so keep the few results seen so far.
+pub fn readable(c: Color, palette: &MandaraPalette) -> Color {
+    thread_local! {
+        static CACHE: RefCell<Vec<((Color, bool), Color)>> = const { RefCell::new(Vec::new()) };
+    }
+    let key = (c, palette.is_dark);
+    CACHE.with(|cell| {
+        let mut cache = cell.borrow_mut();
+        if let Some((_, out)) = cache.iter().find(|(k, _)| *k == key) {
+            return *out;
+        }
+        let out = readable_uncached(c, palette);
+        if cache.len() >= 16 {
+            cache.remove(0);
+        }
+        cache.push((key, out));
+        out
+    })
 }
 
 /// Hue rotation (degrees) from an accent to its gradient partner.
@@ -337,8 +358,27 @@ pub const PARTNER_HUE_DEG: f32 = 25.0;
 const PARTNER_CHROMA: f32 = 1.12;
 
 /// The hue-rotated partner of an accent used as a gradient end.
-pub fn partner(c: Color) -> Color {
+fn partner_uncached(c: Color) -> Color {
     c.rotate_hue(PARTNER_HUE_DEG).scale_chroma(PARTNER_CHROMA)
+}
+
+/// The accent roles repeat across bars and frames; memoise the hue rotation.
+pub fn partner(c: Color) -> Color {
+    thread_local! {
+        static CACHE: RefCell<Vec<(Color, Color)>> = const { RefCell::new(Vec::new()) };
+    }
+    CACHE.with(|cell| {
+        let mut cache = cell.borrow_mut();
+        if let Some((_, out)) = cache.iter().find(|(key, _)| *key == c) {
+            return *out;
+        }
+        let out = partner_uncached(c);
+        if cache.len() >= 16 {
+            cache.remove(0);
+        }
+        cache.push((c, out));
+        out
+    })
 }
 
 /// Specular rim alphas `(light edge, shade edge)` on dark glass.

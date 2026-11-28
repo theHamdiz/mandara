@@ -4,8 +4,8 @@ use mandara_services::progress::{Status, Task};
 
 /// Keeps each status group's snapshot order; callers apply their visible row limit.
 pub(super) fn ordered_tasks(tasks: &[Task]) -> impl Iterator<Item = &Task> + Clone {
-    tasks.iter().filter(|task| task.status == Status::Running)
-        .chain(tasks.iter().filter(|task| task.status != Status::Running))
+    tasks.iter().filter(|task| matches!(task.status, Status::Running | Status::Waiting))
+        .chain(tasks.iter().filter(|task| !matches!(task.status, Status::Running | Status::Waiting)))
 }
 
 #[cfg(test)]

@@ -553,6 +553,7 @@
 "Recording failed" = "Urekodi umeshindwa"
 "Recording saved" = "Urekodi umehifadhiwa"
 "Reduce motion" = "Punguza mwendo"
+"Refresh a task's activity without changing its progress" = "Sasisha shughuli ya kazi bila kubadilisha maendeleo yake"
 "Refusing to signal init (PID 1)" = "Inakataa kutuma ishara kwa init (PID 1)"
 "Regenerate" = "Tengeneza upya"
 "Regenerate the drop-in (rules, binds, border colors) and reload" = "Tengeneza upya faili-jalizi (kanuni, vifungo, rangi za mpaka) kisha pakia upya"
@@ -11072,3 +11073,4 @@
 "Brightest brightness while the task light breathes, from 0 to 1" = "Brightest brightness while the task light breathes, from 0 to 1"
 "Idle brightness" = "Idle brightness"
 "Brightness of the light row when nothing is running, from 0 to 1" = "Brightness of the light row when nothing is running, from 0 to 1"
+"{n} waiting" = "{n} inasubiri"

@@ -66,6 +66,8 @@ pub fn parse_amount(raw: &str) -> Result<Amount, String> {
 #[serde(rename_all = "kebab-case")]
 pub enum Status {
     Running,
+    /// Blocked on the user (a question or permission request), not finished.
+    Waiting,
     Done,
     Failed,
 }
@@ -173,7 +175,7 @@ impl Board {
     /// Sets the value (and label) of `id`, starting it if unknown.
     pub fn set(&mut self, id: &str, amount: Amount, label: &str, now_ms: i64) -> Result<&Task, String> {
         let id = Self::check_id(id)?;
-        if self.get_mut(&id).is_none_or(|t| t.status != Status::Running) {
+        if self.get_mut(&id).is_none_or(|t| !matches!(t.status, Status::Running | Status::Waiting)) {
             self.start(&id, label, now_ms)?;
         }
         let task = self.tasks.iter_mut().find(|t| t.id == id).ok_or_else(|| format!("no task {id:?}"))?;
@@ -184,6 +186,42 @@ impl Board {
         task.updated_ms = now_ms;
         if task.first.is_none() {
             task.first = Some((now_ms, amount.fraction()));
+        }
+        Ok(task)
+    }
+
+    /// Refreshes a task's activity stamp without changing its amount or start
+    /// time. Unlike [`Self::start`] it keeps the elapsed time and the
+    /// indeterminate light; unlike [`Self::set`] it does not invent a value.
+    /// A waiting task is resumed by a touch, so one call closes the loop opened
+    /// by [`Self::wait`].
+    pub fn touch(&mut self, id: &str, label: &str, now_ms: i64) -> Result<&Task, String> {
+        let id = Self::check_id(id)?;
+        let task = self.get_mut(&id).ok_or_else(|| format!("no task {id:?}"))?;
+        if !matches!(task.status, Status::Running | Status::Waiting) {
+            return Err(format!("task {id:?} is not active"));
+        }
+        task.status = Status::Running;
+        task.updated_ms = now_ms;
+        if !label.trim().is_empty() {
+            task.label = clip(label, MAX_LABEL);
+        }
+        Ok(task)
+    }
+
+    /// Marks a task as waiting for the user. The task stays on the board with
+    /// its amount and elapsed time intact, but stops animating as work; a
+    /// later [`Self::touch`] resumes it.
+    pub fn wait(&mut self, id: &str, label: &str, now_ms: i64) -> Result<&Task, String> {
+        let id = Self::check_id(id)?;
+        if self.get_mut(&id).is_none_or(|t| t.finished_ms.is_some()) {
+            self.start(&id, label, now_ms)?;
+        }
+        let task = self.get_mut(&id).ok_or_else(|| format!("no task {id:?}"))?;
+        task.status = Status::Waiting;
+        task.updated_ms = now_ms;
+        if !label.trim().is_empty() {
+            task.label = clip(label, MAX_LABEL);
         }
         Ok(task)
     }
@@ -224,7 +262,7 @@ impl Board {
     /// Drops finished tasks; returns how many.
     pub fn clear_finished(&mut self) -> usize {
         let before = self.tasks.len();
-        self.tasks.retain(|t| t.status == Status::Running);
+        self.tasks.retain(|t| matches!(t.status, Status::Running | Status::Waiting));
         before - self.tasks.len()
     }
 
@@ -232,10 +270,14 @@ impl Board {
         self.tasks.iter().filter(|t| t.status == Status::Running)
     }
 
+    pub fn waiting(&self) -> impl Iterator<Item = &Task> {
+        self.tasks.iter().filter(|t| t.status == Status::Waiting)
+    }
+
     /// Keeps the board bounded: the oldest finished tasks go first.
     fn trim(&mut self) {
         while self.tasks.len() > MAX_TASKS {
-            match self.tasks.iter().rposition(|t| t.status != Status::Running) {
+            match self.tasks.iter().rposition(|t| !matches!(t.status, Status::Running | Status::Waiting)) {
                 Some(i) => {
                     self.tasks.remove(i);
                 }
@@ -316,6 +358,70 @@ mod tests {
         assert_eq!(b.clear_finished(), 2);
         assert!(b.remove("build").is_err());
         assert!(b.start("  ", "x", 0).is_err());
+    }
+
+    #[test]
+    fn touch_refreshes_activity_without_changing_progress() {
+        let mut b = Board::default();
+        b.start("build", "Building", 1_000).unwrap();
+        assert_eq!(b.tasks[0].fraction(), None);
+        b.touch("build", "Still building", 600_000).unwrap();
+        let t = &b.tasks[0];
+        assert_eq!(t.started_ms, 1_000);
+        assert_eq!(t.updated_ms, 600_000);
+        assert_eq!(t.fraction(), None, "an indeterminate task stays indeterminate");
+        assert_eq!(t.label, "Still building");
+        assert!(!t.stalled(600_000 + STALL_AFTER_MS - 1));
+        assert!(t.stalled(600_000 + STALL_AFTER_MS));
+        b.touch("build", "", 700_000).unwrap();
+        assert_eq!(b.tasks[0].label, "Still building", "an empty label keeps the old one");
+        b.set("build", parse_amount("40%").unwrap(), "", 800_000).unwrap();
+        b.touch("build", "", 900_000).unwrap();
+        assert_eq!(b.tasks[0].fraction(), Some(0.4));
+        assert_eq!(b.tasks[0].updated_ms, 900_000);
+        b.done("build", "Done", 1_000_000).unwrap();
+        assert!(b.touch("build", "", 1_100_000).is_err(), "finished tasks cannot be touched");
+        assert!(b.touch("missing", "", 1_100_000).is_err());
+    }
+
+    #[test]
+    fn waiting_keeps_progress_and_touch_resumes() {
+        let mut b = Board::default();
+        b.start("build", "Building", 1_000).unwrap();
+        b.set("build", parse_amount("40%").unwrap(), "", 2_000).unwrap();
+        b.wait("build", "Needs confirmation", 3_000).unwrap();
+        let t = &b.tasks[0];
+        assert_eq!(t.status, Status::Waiting);
+        assert_eq!(t.started_ms, 1_000, "waiting keeps the elapsed time");
+        assert_eq!(t.fraction(), Some(0.4), "waiting keeps the value");
+        assert_eq!(t.finished_ms, None, "waiting is not finished");
+        assert!(!t.stalled(3_000 + STALL_AFTER_MS), "waiting never stalls");
+        assert_eq!(b.waiting().count(), 1);
+        assert_eq!(b.running().count(), 0);
+        // A touch from the resolved decision resumes the same task.
+        b.touch("build", "Building", 4_000).unwrap();
+        let t = &b.tasks[0];
+        assert_eq!(t.status, Status::Running);
+        assert_eq!(t.started_ms, 1_000);
+        assert_eq!(t.fraction(), Some(0.4));
+        assert_eq!(b.waiting().count(), 0);
+        assert_eq!(b.running().count(), 1);
+        b.wait("build", "Needs confirmation", 5_000).unwrap();
+        b.done("build", "All green", 6_000).unwrap();
+        assert_eq!(b.tasks[0].status, Status::Done);
+    }
+
+    #[test]
+    fn clearing_finished_keeps_waiting_tasks() {
+        let mut b = Board::default();
+        b.start("build", "Building", 1).unwrap();
+        b.wait("build", "Needs confirmation", 2).unwrap();
+        b.start("done", "Done", 3).unwrap();
+        b.done("done", "All green", 4).unwrap();
+        assert_eq!(b.clear_finished(), 1);
+        assert_eq!(b.tasks.len(), 1);
+        assert_eq!(b.tasks[0].id, "build");
+        assert_eq!(b.tasks[0].status, Status::Waiting);
     }
 
     #[test]

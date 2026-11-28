@@ -594,6 +594,7 @@ fn init_language_with_font(cx: &mut App, arabic: fn(&ShellConfig) -> &str) {
     langpacks::install_hooks();
     let store = config(cx);
     let mut last = store.read(cx).get().general.locale;
+    let mut last_settings = store.read(cx).get().plugins.settings.clone();
     let mut in_use = langpacks::plugin_languages(store.read(cx).get());
     mandara_i18n::set_language(last.lang());
     // The font fallback chain follows the language (Urdu's Nastaliq, the
@@ -607,13 +608,18 @@ fn init_language_with_font(cx: &mut App, arabic: fn(&ShellConfig) -> &str) {
     })
     .detach();
     cx.observe(&store, move |store, cx| {
-        let locale = store.read(cx).get().general.locale;
-        // Cheap (a few plugin tables): config changes arrive per slider step.
-        let now = langpacks::plugin_languages(store.read(cx).get());
-        for lang in now.iter().filter(|l| !in_use.contains(l)) {
-            langpacks::selected(*lang);
+        let current = store.read(cx).get();
+        let locale = current.general.locale;
+        // Plugin languages only depend on plugin settings; skip the scan (and
+        // its allocation/sort) on unrelated slider steps.
+        if current.plugins.settings != last_settings {
+            last_settings = current.plugins.settings.clone();
+            let now = langpacks::plugin_languages(current);
+            for lang in now.iter().filter(|l| !in_use.contains(l)) {
+                langpacks::selected(*lang);
+            }
+            in_use = now;
         }
-        in_use = now;
         if locale != last {
             last = locale;
             mandara_i18n::set_language(locale.lang());

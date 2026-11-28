@@ -553,6 +553,7 @@
 "Recording failed" = "Kayıt başarısız"
 "Recording saved" = "Kayıt kaydedildi"
 "Reduce motion" = "Hareketi azalt"
+"Refresh a task's activity without changing its progress" = "İlerlemeyi değiştirmeden bir görevin etkinliğini yenile"
 "Refusing to signal init (PID 1)" = "init'e (PID 1) sinyal gönderilmiyor"
 "Regenerate" = "Yeniden oluştur"
 "Regenerate the drop-in (rules, binds, border colors) and reload" = "Drop-in dosyasını yeniden oluştur (kurallar, kısayollar, kenarlık renkleri) ve yeniden yükle"
@@ -11413,3 +11414,4 @@
 "Brightest brightness while the task light breathes, from 0 to 1" = "Brightest brightness while the task light breathes, from 0 to 1"
 "Idle brightness" = "Idle brightness"
 "Brightness of the light row when nothing is running, from 0 to 1" = "Brightness of the light row when nothing is running, from 0 to 1"
+"{n} waiting" = "{n} bekliyor"

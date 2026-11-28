@@ -160,6 +160,10 @@ pub struct ThemeEngine {
     from: MandaraPalette,
     /// Adjusted target palette.
     to: MandaraPalette,
+    /// Last `(base, adjustments, result)`; both inputs are `Copy`-comparable,
+    /// so repeated slider frames reuse the derivation instead of gamut-mapping
+    /// every token again.
+    cached_adjusted: Option<(MandaraPalette, PaletteAdjustments, MandaraPalette)>,
     started: Option<Instant>,
     duration: Duration,
 }
@@ -192,6 +196,7 @@ impl ThemeEngine {
             seeds: resolved.seeds,
             from: to.clone(),
             to,
+            cached_adjusted: None,
             started: None,
             duration: THEME_TRANSITION,
         }
@@ -246,10 +251,24 @@ impl ThemeEngine {
         if animate {
             self.retarget(now);
         } else {
-            self.to = self.base.adjusted(&self.adjustments);
+            self.to = self.adjusted();
             self.from = self.to.clone();
             self.started = None;
         }
+    }
+
+    /// Derive the adjusted palette, reusing the last result when neither the
+    /// base nor the adjustments changed (common during a Studio slider drag).
+    fn adjusted(&mut self) -> MandaraPalette {
+        if let Some((base, adjustments, out)) = &self.cached_adjusted
+            && *base == self.base
+            && *adjustments == self.adjustments
+        {
+            return out.clone();
+        }
+        let out = self.base.adjusted(&self.adjustments);
+        self.cached_adjusted = Some((self.base.clone(), self.adjustments, out.clone()));
+        out
     }
 
     fn retarget(&mut self, now: Instant) {
@@ -257,7 +276,7 @@ impl ThemeEngine {
         // transitions never jump.
         let (current, _) = self.sample(now);
         self.from = current;
-        self.to = self.base.adjusted(&self.adjustments);
+        self.to = self.adjusted();
         self.started = Some(now);
     }
 
@@ -293,6 +312,22 @@ impl ThemeEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn adjusted_palette_cache_tracks_its_inputs() {
+        let mut engine = ThemeEngine::new(ThemeSource::default(), false, PaletteAdjustments::default());
+        let plain = engine.adjusted();
+        assert_eq!(plain, *engine.target());
+
+        let shifted = PaletteAdjustments { lightness_shift: 0.08, ..Default::default() };
+        engine.adjustments = shifted;
+        let lightened = engine.adjusted();
+        assert_ne!(lightened.primary.to_hex(), plain.primary.to_hex());
+        assert_eq!(lightened, engine.adjusted(), "unchanged inputs must reuse the cached derivation");
+
+        engine.adjustments = PaletteAdjustments::default();
+        assert_eq!(engine.adjusted(), plain, "a reverted adjustment must invalidate the cache");
+    }
 
     #[test]
     fn bezier_endpoints_and_monotonic() {

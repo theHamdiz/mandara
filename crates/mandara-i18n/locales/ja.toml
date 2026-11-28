@@ -551,6 +551,7 @@
 "Recording failed" = "録画に失敗しました"
 "Recording saved" = "録画を保存しました"
 "Reduce motion" = "動きを減らす"
+"Refresh a task's activity without changing its progress" = "進捗を変えずにタスクのアクティビティを更新"
 "Refusing to signal init (PID 1)" = "init（PID 1）へのシグナル送信は拒否されました"
 "Regenerate" = "再生成"
 "Regenerate the drop-in (rules, binds, border colors) and reload" = "ドロップイン（ルール、キーバインド、枠線の色）を再生成して再読み込み"
@@ -11415,3 +11416,4 @@
 "Brightest brightness while the task light breathes, from 0 to 1" = "Brightest brightness while the task light breathes, from 0 to 1"
 "Idle brightness" = "Idle brightness"
 "Brightness of the light row when nothing is running, from 0 to 1" = "Brightness of the light row when nothing is running, from 0 to 1"
+"{n} waiting" = "{n} 待機中"

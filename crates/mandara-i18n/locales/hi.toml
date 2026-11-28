@@ -551,6 +551,7 @@
 "Recording failed" = "रिकॉर्डिंग विफल"
 "Recording saved" = "रिकॉर्डिंग सेव की गई"
 "Reduce motion" = "मोशन कम करें"
+"Refresh a task's activity without changing its progress" = "कार्य की गतिविधि ताज़ा करें, उसकी प्रगति बदले बिना"
 "Refusing to signal init (PID 1)" = "init (PID 1) को सिग्नल भेजने से इनकार"
 "Regenerate" = "फिर से बनाएं"
 "Regenerate the drop-in (rules, binds, border colors) and reload" = "ड्रॉप-इन (नियम, बाइंड, बॉर्डर रंग) फिर से बनाएं और रीलोड करें"
@@ -11416,3 +11417,4 @@
 "Brightest brightness while the task light breathes, from 0 to 1" = "Brightest brightness while the task light breathes, from 0 to 1"
 "Idle brightness" = "Idle brightness"
 "Brightness of the light row when nothing is running, from 0 to 1" = "Brightness of the light row when nothing is running, from 0 to 1"
+"{n} waiting" = "{n} प्रतीक्षा में"

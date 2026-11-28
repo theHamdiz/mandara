@@ -6322,6 +6322,7 @@ Refraction
 Refresh
 Refresh Bluetooth state without restarting the shell
 Refresh a feed now and return its articles, or every feed when no address is given
+Refresh a task's activity without changing its progress
 Refresh an open list
 Refresh calendars
 Refresh every
@@ -10532,6 +10533,7 @@ your default
 {n} things to look at
 {n} unread
 {n} verses
+{n} waiting
 {n} windows
 {n} · {name} · {count} ayahs
 {n}d

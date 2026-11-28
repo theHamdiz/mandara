@@ -553,6 +553,7 @@
 "Recording failed" = "A gravação falhou"
 "Recording saved" = "Gravação salva"
 "Reduce motion" = "Reduzir movimento"
+"Refresh a task's activity without changing its progress" = "Atualizar a atividade de uma tarefa sem alterar o progresso"
 "Refusing to signal init (PID 1)" = "Recusando sinalizar o init (PID 1)"
 "Regenerate" = "Gerar de novo"
 "Regenerate the drop-in (rules, binds, border colors) and reload" = "Gerar de novo o drop-in (regras, atalhos, cores de borda) e recarregar"
@@ -11071,3 +11072,4 @@
 "Brightest brightness while the task light breathes, from 0 to 1" = "Brightest brightness while the task light breathes, from 0 to 1"
 "Idle brightness" = "Idle brightness"
 "Brightness of the light row when nothing is running, from 0 to 1" = "Brightness of the light row when nothing is running, from 0 to 1"
+"{n} waiting" = "{n} aguardando"
