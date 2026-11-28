@@ -447,10 +447,10 @@ mod tests {
         for i in 0..MAX_TASKS {
             b.start(&format!("run{i}"), "", i as i64).unwrap();
         }
-        b.wait("run0", "Needs confirmation", MAX_TASKS as i64 + 1).unwrap();
+        b.wait("run1", "Needs confirmation", MAX_TASKS as i64 + 1).unwrap();
         b.start("new", "", MAX_TASKS as i64 + 2).unwrap();
         assert_eq!(b.tasks.len(), MAX_TASKS);
-        assert!(b.tasks.iter().all(|t| t.id != "run0"), "the waiting task is evicted first");
-        assert!(b.tasks.iter().any(|t| t.id == format!("run{}", MAX_TASKS - 1)), "the oldest running task stays");
+        assert!(b.tasks.iter().all(|t| t.id != "run1"), "the waiting task is evicted first");
+        assert!(b.tasks.iter().any(|t| t.id == "run0"), "an older running task stays");
     }
 }
