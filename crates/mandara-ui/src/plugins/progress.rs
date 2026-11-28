@@ -667,7 +667,7 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         ID,
-        CommandSpec::new("progress touch", tk("Refresh a task's activity, resuming a waiting task, without changing its progress"), |a, cx| {
+        CommandSpec::new("progress touch", tk("Refresh a task's activity without changing its progress"), |a, cx| {
             let id = a.str(0)?.to_string();
             let label = a.rest(1);
             let task = change(cx, |b, now| b.touch(&id, &label, now).cloned())?;
@@ -679,14 +679,14 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         ID,
-        CommandSpec::new("progress wait", tk("Mark a task as waiting for the user (steady amber light, no stall); touch resumes it"), |a, cx| {
+        CommandSpec::new("progress wait", tk("Waiting"), |a, cx| {
             let id = a.str(0)?.to_string();
             let label = a.rest(1);
             let task = change(cx, |b, now| b.wait(&id, &label, now).cloned())?;
             Ok(task_json(&task, now_ms()))
         })
         .arg(id_arg())
-        .arg(ArgSpec::optional("label", ArgKind::String, tk("what it is waiting for")))
+        .arg(ArgSpec::optional("label", ArgKind::String, tk("what it is doing")))
         .example("progress wait build Needs confirmation"),
     );
     r.command(

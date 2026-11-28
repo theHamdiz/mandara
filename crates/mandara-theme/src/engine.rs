@@ -319,8 +319,7 @@ mod tests {
         let plain = engine.adjusted();
         assert_eq!(plain, *engine.target());
 
-        let mut shifted = PaletteAdjustments::default();
-        shifted.lightness_shift = 0.08;
+        let shifted = PaletteAdjustments { lightness_shift: 0.08, ..Default::default() };
         engine.adjustments = shifted;
         let lightened = engine.adjusted();
         assert_ne!(lightened.primary.to_hex(), plain.primary.to_hex());

@@ -11410,3 +11410,4 @@
 "Brightest brightness while the task light breathes, from 0 to 1" = "任务灯呼吸时最亮的亮度，范围 0 到 1"
 "Idle brightness" = "空闲亮度"
 "Brightness of the light row when nothing is running, from 0 to 1" = "没有运行任务时灯行的亮度，范围 0 到 1"
+"{n} waiting" = "{n} 等待中"
