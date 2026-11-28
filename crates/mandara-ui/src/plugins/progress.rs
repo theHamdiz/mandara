@@ -567,7 +567,7 @@ fn bar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyE
         // A decision takes priority over background work: the light holds
         // steady amber until the user answers instead of breathing on.
         let show = if let Some(task) = b.waiting().next() {
-            Show::Waiting { tint: tint(task, now, palette), others: running.count() + b.waiting().count() - 1 }
+            Show::Waiting { tint: tint(task, now, palette), others: b.running().count() + b.waiting().count() - 1 }
         } else {
             match first {
                 Some(task) => Show::Running { fraction: task.fraction(), tint: tint(task, now, palette), others: running.count() },
