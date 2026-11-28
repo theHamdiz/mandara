@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.41.0 — 2026-11-28
+
 The task progress light redraws with less work each frame.
 
 ### Improved
